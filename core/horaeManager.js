@@ -134,12 +134,12 @@ class HoraeManager {
     }
 
     /** 聚合所有消息元数据，获取最新状态 */
-    getLatestState() {
+    getLatestState(skipLast = 0) {
         const chat = this.getChat();
         const state = createEmptyMeta();
+        const end = Math.max(0, chat.length - skipLast);
         
-        // 从头到尾遍历，后面的覆盖前面的
-        for (let i = 0; i < chat.length; i++) {
+        for (let i = 0; i < end; i++) {
             const meta = chat[i].horae_meta;
             if (!meta) continue;
             
@@ -409,11 +409,12 @@ class HoraeManager {
     }
 
     /** 获取事件列表（用于时间线显示） */
-    getEvents(limit = 50, filterLevel = 'all') {
+    getEvents(limit = 50, filterLevel = 'all', skipLast = 0) {
         const chat = this.getChat();
+        const end = Math.max(0, chat.length - skipLast);
         const events = [];
         
-        for (let i = 0; i < chat.length && events.length < limit; i++) {
+        for (let i = 0; i < end && events.length < limit; i++) {
             const meta = chat[i].horae_meta;
             
             // 支持新格式（events数组）和旧格式（单个event）
@@ -446,9 +447,9 @@ class HoraeManager {
         return this.getEvents(limit, 'all');
     }
 
-    /** 生成紧凑的上下文注入内容 */
-    generateCompactPrompt() {
-        const state = this.getLatestState();
+    /** 生成紧凑的上下文注入内容（skipLast: swipe时跳过末尾N条消息） */
+    generateCompactPrompt(skipLast = 0) {
+        const state = this.getLatestState(skipLast);
         const lines = [];
         
         // 状态快照头
@@ -576,9 +577,10 @@ class HoraeManager {
                 seenTexts.add(item.text);
             }
         }
-        // AI写入的
+        // AI写入的（swipe时跳过末尾消息）
+        const agendaEnd = Math.max(0, (chatForAgenda?.length || 0) - skipLast);
         if (chatForAgenda) {
-            for (let i = 1; i < chatForAgenda.length; i++) {
+            for (let i = 1; i < agendaEnd; i++) {
                 const msgAgenda = chatForAgenda[i].horae_meta?.agenda;
                 if (msgAgenda?.length > 0) {
                     for (const item of msgAgenda) {
@@ -601,7 +603,7 @@ class HoraeManager {
         
         // 剧情轨迹
         if (sendTimeline) {
-            const events = this.getEvents(100, 'all');  // 获取更多事件
+            const events = this.getEvents(100, 'all', skipLast);
             if (events.length > 0) {
                 lines.push('\n[剧情轨迹]');
                 
@@ -670,9 +672,12 @@ class HoraeManager {
                 const criticalAndImportant = sortedEvents.filter(e => 
                     e.event?.level === '关键' || e.event?.level === '重要'
                 );
-                const normalEvents = sortedEvents.filter(e => 
+                const contextDepth = this.settings?.contextDepth ?? 15;
+                const normalAll = sortedEvents.filter(e => 
                     e.event?.level === '一般' || !e.event?.level
-                ).slice(-30);  // 只取最近30条一般事件
+                );
+                // contextDepth=0时不发送一般事件，>0时取最近N条
+                const normalEvents = contextDepth === 0 ? [] : normalAll.slice(-contextDepth);
                 
                 // 合并后按楼层排序
                 const allToShow = [...criticalAndImportant, ...normalEvents]
@@ -1488,20 +1493,20 @@ event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键
     ★ 功能/用途
     ★ 来源（谁给的/如何获得）
        - 示例（以下内容中若有示例仅为示范，勿直接原句用于正文！）：
-         - 示例1：item!:🌹永生花束|深红色玫瑰永生花，黑色缎带束扎，艾伦赠送给莉莉的情人节礼物=莉莉@莉莉房间书桌上
-         - 示例2：item!:🎫幸运十连抽券|闪着金光的纸质奖券，可在系统奖池进行一次十连抽的新手福利=莉莉丝@空间戒指
-         - 示例3：item!!:🏧位面货币自动兑换机|看起来像个小型的ATM机，能按即时汇率兑换各位面货币=莉莉丝@酒馆吧台
+         - 示例1：item!:🌹永生花束|深红色玫瑰永生花，黑色缎带束扎，艾伦赠送给莉的情人节礼物=莉@莉房间书桌上
+         - 示例2：item!:🎫幸运十连抽券|闪着金光的纸质奖券，可在系统奖池进行一次十连抽的新手福利=莉@空间戒指
+         - 示例3：item!!:🏧位面货币自动兑换机|看起来像个小型的ATM机，能按即时汇率兑换各位面货币=莉@酒馆吧台
   · 数量：单件不写(1)/(1个)/(1把)等，只有计量单位才写括号如(5斤)(1L)(1箱)
   · 位置：必须是精确固定地点
     ❌ 某某人身前地上、某某人脚边、某某人旁边、地板、桌子上
-    ✅ 酒馆大厅地板、餐厅吧台上、家中厨房、背包里、莉莉丝的房间桌子上
+    ✅ 酒馆大厅地板、餐厅吧台上、家中厨房、背包里、莉的房间桌子上
   · 禁止将固定家具和建筑设施计入物品
   · 临时借用≠归属转移
 
 
 示例（麦酒生命周期）：
-  获得：item:🍺陈酿麦酒(50L)|杂物间翻出的麦酒，口感酸涩=莉莉丝@酒馆后厨食材柜
-  量变：item:🍺陈酿麦酒(25L)=莉莉丝@酒馆后厨食材柜
+  获得：item:🍺陈酿麦酒(50L)|杂物间翻出的麦酒，口感酸涩=莉@酒馆后厨食材柜
+  量变：item:🍺陈酿麦酒(25L)=莉@酒馆后厨食材柜
   用完：item-:陈酿麦酒
 
 ═══ 【NPC】触发条件与规则 ═══
@@ -1522,12 +1527,12 @@ event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键
     ❌ "肌肉发达/满身战斗伤痕"→"肌肉强壮/伤疤"（换词≠更新）
     ✅ "肌肉发达/满身战斗伤痕/重伤"→"肌肉发达/满身战斗伤痕"（伤愈，移除过时状态）
 
-【增量更新示例】（以NPC沃尔夫冈为例）
-  首次：npc:沃尔夫冈|银灰狼兽人/身高220cm/满身战斗伤痕=沉默寡言的重装佣兵@${userName}的第一个客人~性别:男~年龄:约35~种族:狼兽人~职业:佣兵
-  只更新关系：npc:沃尔夫冈|=@${userName}的男朋友
-  只追加外貌：npc:沃尔夫冈|银灰狼兽人/身高220cm/满身战斗伤痕/左臂绷带
-  只更新性格：npc:沃尔夫冈|=不再沉默/偶尔微笑
-  只改职业：npc:沃尔夫冈|~职业:退役佣兵
+【增量更新示例】（以NPC沃尔为例）
+  首次：npc:沃尔|银灰色披毛/绿眼睛/身高220cm/满身战斗伤痕=沉默寡言的重装佣兵@${userName}的第一个客人~性别:男~年龄:约35~种族:狼兽人~职业:佣兵
+  只更新关系：npc:沃尔|=@${userName}的男朋友
+  只追加外貌：npc:沃尔|银灰色披毛/绿眼睛/身高220cm/满身战斗伤痕/左臂绷带
+  只更新性格：npc:沃尔|=不再沉默/偶尔微笑
+  只改职业：npc:沃尔|~职业:退役佣兵
 （注意：未变化的字段和~扩展字段完全不写！系统自动保留原有数据！）
 
 【关系描述规范】

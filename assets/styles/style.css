@@ -32,6 +32,33 @@
     color: var(--horae-text);
 }
 
+/* 强制隔离：防止外部美化主题污染插件内的输入框、选择器等元素 */
+#horae_drawer input:not([type="checkbox"]):not([type="radio"]),
+#horae_drawer textarea,
+#horae_drawer select,
+.horae-message-panel input:not([type="checkbox"]):not([type="radio"]),
+.horae-message-panel textarea,
+.horae-message-panel select,
+.horae-modal input:not([type="checkbox"]):not([type="radio"]),
+.horae-modal textarea,
+.horae-modal select {
+    background: var(--horae-bg) !important;
+    color: var(--horae-text) !important;
+    border-color: var(--horae-border) !important;
+}
+
+#horae_drawer input[type="checkbox"],
+.horae-message-panel input[type="checkbox"],
+.horae-modal input[type="checkbox"] {
+    background: white !important;
+}
+
+#horae_drawer label,
+.horae-message-panel label,
+.horae-modal label {
+    color: var(--horae-text-muted) !important;
+}
+
 /* ============================================
    抽屉面板样式
    ============================================ */

@@ -10,7 +10,7 @@
                 <i class="fa-regular fa-clock"></i>
                 Horae 时光记忆
             </div>
-            <span class="horae-version">v1.0.0</span>
+            <span class="horae-version">v1.1.0</span>
         </div>
         
         <!-- 标签页导航 -->
@@ -272,14 +272,14 @@
                     <div class="horae-setting-item">
                         <label>
                             上下文深度
-                            <input type="number" id="horae-setting-context-depth" min="5" max="100" value="15">
+                            <input type="number" id="horae-setting-context-depth" min="0" max="999" value="15">
                         </label>
                         <span class="horae-setting-hint">
                             <i class="fa-solid fa-circle-info"></i>
-                            读取最近 N 条消息的元数据来：<br>
-                            ① 计算相对时间（如"3天前"）<br>
-                            ② 汇总状态（服装、物品、好感度等）<br>
-                            ③ 收集剧情轨迹发给AI
+                            控制发送给AI的"一般"级别剧情轨迹数量：<br>
+                            0 = 不发送一般事件（重要/关键照发）<br>
+                            15 = 发送最近15条一般事件（默认）<br>
+                            数字越大发送越多，Token消耗越高
                         </span>
                     </div>
                     
@@ -334,6 +334,10 @@
                         <i class="fa-solid fa-circle-info"></i>
                         控制哪些信息会随提示词发送给AI。关闭可节省Token，但AI将无法"记住"这些内容。
                     </span>
+                    <div id="horae-token-counter" style="margin-bottom: 12px; padding: 8px 12px; background: var(--horae-bg); border: 1px solid var(--horae-border); border-radius: var(--horae-radius-sm); font-size: 12px; color: var(--horae-text-muted); display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-microchip" style="color: var(--horae-primary-light);"></i>
+                        当前注入 Token：<strong id="horae-token-value" style="color: var(--horae-primary-light);">计算中...</strong>
+                    </div>
                     
                     <div class="horae-setting-item">
                         <label>
@@ -367,9 +371,13 @@
                     </div>
                     
                     <div class="horae-data-buttons-grid">
-                        <button id="horae-btn-scan-history" class="horae-data-btn primary">
+                        <button id="horae-btn-scan-history" class="horae-data-btn primary" title="扫描所有消息中的&lt;horae&gt;和&lt;horaeevent&gt;标签，补全缺失的元数据（不消耗生成次数）">
                             <i class="fa-solid fa-magnifying-glass-chart"></i>
-                            <span>扫描历史</span>
+                            <span>扫描标签</span>
+                        </button>
+                        <button id="horae-btn-ai-scan" class="horae-data-btn primary" title="用AI分析历史消息，提取剧情事件和物品（自动分批，可撤销）">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            <span>AI智能摘要</span>
                         </button>
                         <button id="horae-btn-export" class="horae-data-btn">
                             <i class="fa-solid fa-file-export"></i>
@@ -379,6 +387,10 @@
                             <i class="fa-solid fa-file-import"></i>
                             <span>导入</span>
                         </button>
+                        <button id="horae-btn-undo-ai-scan" class="horae-data-btn danger" title="清除AI智能摘要生成的所有事件和物品数据">
+                            <i class="fa-solid fa-rotate-left"></i>
+                            <span>撤销摘要</span>
+                        </button>
                         <button id="horae-btn-clear" class="horae-data-btn danger">
                             <i class="fa-solid fa-trash-can"></i>
                             <span>清除</span>
@@ -387,7 +399,7 @@
                 </div>
                 
                 <div class="horae-about">
-                    <p>Horae v1.0.0 | 作者: SenriYuki</p>
+                    <p>Horae v1.1.0 | 作者: SenriYuki</p>
                     <p>基于时间锚点的AI记忆增强系统</p>
                 </div>
             </div>

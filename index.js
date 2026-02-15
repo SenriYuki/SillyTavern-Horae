@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.0.0
+ * 版本: 1.1.0
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -19,7 +19,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -42,14 +42,14 @@ const HORAE_REGEX_RULES = [
     {
         id: 'horae_event_display_only',
         scriptName: 'Horae - 隐藏事件标签',
-        description: '隐藏<horaeevent>事件标签的显示，但仍发送给AI用于追溯剧情',
+        description: '隐藏<horaeevent>事件标签的显示，不发送给AI',
         findRegex: '/<horaeevent>[\\s\\S]*?<\\/horaeevent>/gim',
         replaceString: '',
         trimStrings: [],
         placement: [2],
         disabled: false,
         markdownOnly: true,
-        promptOnly: false,
+        promptOnly: true,
         runOnEdit: true,
         substituteRegex: 0,
         minDepth: null,
@@ -2496,6 +2496,22 @@ function refreshAllDisplays() {
     updateTimelineDisplay();
     updateCharactersDisplay();
     updateItemsDisplay();
+    updateTokenCounter();
+}
+
+/** 计算并显示当前注入prompt的token数 */
+function updateTokenCounter() {
+    const el = document.getElementById('horae-token-value');
+    if (!el) return;
+    try {
+        const dataPrompt = horaeManager.generateCompactPrompt();
+        const rulesPrompt = horaeManager.generateSystemPromptAddition();
+        const combined = `${dataPrompt}\n${rulesPrompt}`;
+        const tokens = estimateTokens(combined);
+        el.textContent = `≈ ${tokens.toLocaleString()}`;
+    } catch {
+        el.textContent = '--';
+    }
 }
 
 /**
@@ -3558,8 +3574,11 @@ function initSettingsEvents() {
     });
     
     $('#horae-setting-context-depth').on('change', function() {
-        settings.contextDepth = parseInt(this.value) || 15;
+        settings.contextDepth = parseInt(this.value);
+        if (isNaN(settings.contextDepth) || settings.contextDepth < 0) settings.contextDepth = 15;
         saveSettings();
+        horaeManager.init(getContext(), settings);
+        updateTokenCounter();
     });
     
     $('#horae-setting-injection-position').on('change', function() {
@@ -3568,6 +3587,8 @@ function initSettingsEvents() {
     });
     
     $('#horae-btn-scan-all, #horae-btn-scan-history').on('click', scanHistoryWithProgress);
+    $('#horae-btn-ai-scan').on('click', batchAIScan);
+    $('#horae-btn-undo-ai-scan').on('click', undoAIScan);
     
     $('#horae-timeline-filter').on('change', updateTimelineDisplay);
     $('#horae-timeline-search').on('input', updateTimelineDisplay);
@@ -3595,18 +3616,21 @@ function initSettingsEvents() {
         settings.sendTimeline = this.checked;
         saveSettings();
         horaeManager.init(getContext(), settings);
+        updateTokenCounter();
     });
     
     $('#horae-setting-send-characters').on('change', function() {
         settings.sendCharacters = this.checked;
         saveSettings();
         horaeManager.init(getContext(), settings);
+        updateTokenCounter();
     });
     
     $('#horae-setting-send-items').on('change', function() {
         settings.sendItems = this.checked;
         saveSettings();
         horaeManager.init(getContext(), settings);
+        updateTokenCounter();
     });
     
     $('#horae-btn-refresh').on('click', refreshAllDisplays);
@@ -3690,6 +3714,262 @@ async function scanHistoryWithProgress() {
     } finally {
         overlay.remove();
     }
+}
+
+/** 估算文本的 token 数 */
+function estimateTokens(text) {
+    if (!text) return 0;
+    const cjk = (text.match(/[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/g) || []).length;
+    const rest = text.length - cjk;
+    return Math.ceil(cjk * 1.5 + rest * 0.4);
+}
+
+/** AI智能摘要 — 批量分析历史消息，提取剧情事件和物品 */
+async function batchAIScan() {
+    const chat = horaeManager.getChat();
+    if (!chat || chat.length === 0) {
+        showToast('当前没有聊天记录', 'warning');
+        return;
+    }
+
+    // 收集待分析消息
+    const targets = [];
+    for (let i = 0; i < chat.length; i++) {
+        const msg = chat[i];
+        if (msg.is_user || !msg.mes || msg.mes.trim().length < 20) continue;
+        const meta = msg.horae_meta;
+        if (meta?.events?.length > 0 && !meta?._aiScanned) continue;
+        targets.push({ index: i, text: msg.mes });
+    }
+
+    if (targets.length === 0) {
+        showToast('所有消息已有记忆数据，无需扫描', 'info');
+        return;
+    }
+
+    // 用户配置分批token上限
+    const tokenLimit = await showAIScanConfigDialog(targets.length);
+    if (!tokenLimit) return;
+
+    // 按token量自动分批
+    const batches = [];
+    let currentBatch = [];
+    let currentTokens = 0;
+    for (const t of targets) {
+        const tokens = estimateTokens(t.text);
+        if (currentBatch.length > 0 && currentTokens + tokens > tokenLimit) {
+            batches.push(currentBatch);
+            currentBatch = [];
+            currentTokens = 0;
+        }
+        currentBatch.push(t);
+        currentTokens += tokens;
+    }
+    if (currentBatch.length > 0) batches.push(currentBatch);
+
+    // 最终确认
+    const confirmMsg = `预计分 ${batches.length} 批处理，消耗 ${batches.length} 次生成\n\n· 再次扫描会覆盖上次的AI摘要结果\n· 扫描后可「撤销摘要」还原\n\n是否继续？`;
+    if (!confirm(confirmMsg)) return;
+
+    // 进度UI
+    const overlay = document.createElement('div');
+    overlay.className = 'horae-progress-overlay';
+    overlay.innerHTML = `
+        <div class="horae-progress-container">
+            <div class="horae-progress-title">AI 智能摘要中...</div>
+            <div class="horae-progress-bar">
+                <div class="horae-progress-fill" style="width: 0%"></div>
+            </div>
+            <div class="horae-progress-text">准备中...</div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    const fillEl = overlay.querySelector('.horae-progress-fill');
+    const textEl = overlay.querySelector('.horae-progress-text');
+
+    const context = getContext();
+    const userName = context?.name1 || '主角';
+    let totalProcessed = 0;
+    let totalFailed = 0;
+
+    try {
+        for (let b = 0; b < batches.length; b++) {
+            const batch = batches[b];
+            textEl.textContent = `第 ${b + 1}/${batches.length} 批（${batch.length} 条消息）...`;
+            fillEl.style.width = `${Math.round((b / batches.length) * 100)}%`;
+
+            const messagesBlock = batch.map(t =>
+                `【消息#${t.index}】\n${t.text}`
+            ).join('\n\n');
+
+            const batchPrompt = `你是剧情分析助手。请逐条分析以下对话记录，为每条消息提取【时间】【剧情事件】和【物品变化】。
+
+核心原则：
+- 只提取文本中明确出现的信息，禁止编造
+- 每条消息独立分析，用 ===消息#编号=== 分隔
+- 严格只输出 time、item、event 三种标签，禁止输出 agenda/npc/affection/costume/location/atmosphere/characters 等其他任何标签
+
+${messagesBlock}
+
+【输出格式】每条消息按以下格式输出：
+
+===消息#编号===
+<horae>
+time:日期 时间（从文本中提取，如 2026/2/4 15:00 或 霜降月第三日 黄昏）
+item:emoji物品名(数量)|描述=持有者@位置（新获得的物品，普通物品可省描述）
+item!:emoji物品名(数量)|描述=持有者@位置（重要物品，描述必填）
+item-:物品名（消耗/丢失/用完的物品）
+</horae>
+<horaeevent>
+event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键）
+</horaeevent>
+
+【规则】
+· time：从文本中提取当前场景的日期时间，必填（没有明确时间则根据上下文推断）
+· event：本条消息中发生的关键剧情，每条消息至少一个 event
+· 物品仅在获得、消耗、状态改变时记录，无变化则不写 item 行
+· item格式：emoji前缀如🔑🍞，单件不写(1)，位置需精确（❌地上 ✅酒馆大厅桌上）
+· 重要程度判断：日常对话=一般，推动剧情=重要，关键转折=关键
+· ${userName} 是主角名
+· 再次强调：只允许 time/item/event，禁止输出其他标签`;
+
+            try {
+                const response = await context.generateRaw(batchPrompt, null, false, false);
+                if (response) {
+                    const segments = response.split(/===消息#(\d+)===/);
+                    for (let s = 1; s < segments.length; s += 2) {
+                        const msgIndex = parseInt(segments[s]);
+                        const content = segments[s + 1] || '';
+                        if (isNaN(msgIndex)) continue;
+                        const parsed = horaeManager.parseHoraeTag(content);
+                        if (parsed) {
+                            // 只保留 time/item/event，过滤其他标签
+                            parsed.costumes = {};
+                            parsed.affection = {};
+                            parsed.npcs = {};
+                            parsed.scene = {};
+                            parsed.agenda = [];
+                            parsed.deletedAgenda = [];
+                            parsed.deletedItems = [];
+
+                            const existingMeta = horaeManager.getMessageMeta(msgIndex) || createEmptyMeta();
+                            const newMeta = horaeManager.mergeParsedToMeta(existingMeta, parsed);
+                            if (newMeta._tableUpdates) {
+                                newMeta.tableContributions = newMeta._tableUpdates;
+                                delete newMeta._tableUpdates;
+                            }
+                            newMeta._aiScanned = true;
+                            horaeManager.setMessageMeta(msgIndex, newMeta);
+                            totalProcessed++;
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error(`[Horae] 第 ${b + 1} 批摘要失败:`, err);
+                totalFailed += batch.length;
+            }
+
+            if (b < batches.length - 1) {
+                textEl.textContent = `第 ${b + 1} 批完成，等待中...`;
+                await new Promise(r => setTimeout(r, 2000));
+            }
+        }
+
+        fillEl.style.width = '100%';
+        textEl.textContent = '保存中...';
+        horaeManager.rebuildTableData();
+        await getContext().saveChat();
+
+        const msg = `AI智能摘要完成！处理 ${totalProcessed} 条` + (totalFailed > 0 ? `，${totalFailed} 条失败` : '');
+        showToast(msg, totalFailed > 0 ? 'warning' : 'success');
+        refreshAllDisplays();
+        renderCustomTablesList();
+    } catch (error) {
+        console.error('[Horae] AI智能摘要失败:', error);
+        showToast('AI智能摘要失败: ' + error.message, 'error');
+    } finally {
+        overlay.remove();
+    }
+}
+
+/** AI摘要配置弹窗，及token上限*/
+function showAIScanConfigDialog(targetCount) {
+    return new Promise(resolve => {
+        const modal = document.createElement('div');
+        modal.className = 'horae-modal';
+        modal.innerHTML = `
+            <div class="horae-modal-content" style="max-width: 400px;">
+                <div class="horae-modal-header">
+                    <span>AI 智能摘要</span>
+                </div>
+                <div class="horae-modal-body" style="padding: 16px;">
+                    <p style="margin: 0 0 12px; color: var(--horae-text-muted); font-size: 13px;">
+                        检测到 <strong style="color: var(--horae-primary-light);">${targetCount}</strong> 条待分析消息
+                    </p>
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--horae-text);">
+                        每批 Token 上限
+                        <input type="number" id="horae-ai-scan-token-limit" value="80000" min="10000" max="1000000" step="10000"
+                            style="flex:1; padding: 6px 10px; background: var(--horae-bg); border: 1px solid var(--horae-border); border-radius: 4px; color: var(--horae-text); font-size: 13px;">
+                    </label>
+                    <p style="margin: 8px 0 0; color: var(--horae-text-muted); font-size: 11px;">
+                        值越大每批消息越多、生成次数越少，但可能超出模型限制。<br>
+                        Claude ≈ 80K~200K · Gemini ≈ 100K~1000K · GPT-4o ≈ 80K~128K
+                    </p>
+                </div>
+                <div class="horae-modal-footer">
+                    <button class="menu_button" id="horae-ai-scan-cancel">取消</button>
+                    <button class="menu_button primary" id="horae-ai-scan-confirm">继续</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        modal.querySelector('#horae-ai-scan-confirm').addEventListener('click', () => {
+            const val = parseInt(modal.querySelector('#horae-ai-scan-token-limit').value) || 80000;
+            modal.remove();
+            resolve(Math.max(10000, val));
+        });
+        modal.querySelector('#horae-ai-scan-cancel').addEventListener('click', () => {
+            modal.remove();
+            resolve(null);
+        });
+        modal.addEventListener('click', e => {
+            if (e.target === modal) { modal.remove(); resolve(null); }
+        });
+    });
+}
+
+/** 撤销AI摘要 — 清除所有 _aiScanned 标记的数据 */
+async function undoAIScan() {
+    const chat = horaeManager.getChat();
+    if (!chat || chat.length === 0) return;
+
+    let count = 0;
+    for (let i = 0; i < chat.length; i++) {
+        if (chat[i].horae_meta?._aiScanned) count++;
+    }
+
+    if (count === 0) {
+        showToast('没有找到AI摘要数据', 'info');
+        return;
+    }
+
+    if (!confirm(`将清除 ${count} 条消息的AI摘要数据（事件和物品）。\n手动编辑的数据不受影响。\n\n是否继续？`)) return;
+
+    for (let i = 0; i < chat.length; i++) {
+        const meta = chat[i].horae_meta;
+        if (!meta?._aiScanned) continue;
+        meta.events = [];
+        meta.items = {};
+        delete meta._aiScanned;
+        horaeManager.setMessageMeta(i, meta);
+    }
+
+    horaeManager.rebuildTableData();
+    await getContext().saveChat();
+    showToast(`已撤销 ${count} 条消息的AI摘要数据`, 'success');
+    refreshAllDisplays();
+    renderCustomTablesList();
 }
 
 /**
@@ -3892,7 +4172,6 @@ function onMessageEdited(messageId) {
     
     console.log(`[Horae] 检测到消息 #${messageId} 编辑，重新解析...`);
     
-    // 重新解析这条消息
     horaeManager.processAIResponse(messageId, message.mes);
     
     horaeManager.rebuildTableData();
@@ -3902,28 +4181,43 @@ function onMessageEdited(messageId) {
     renderCustomTablesList();
 }
 
-/**
- * 准备注入上下文
- */
+/** 注入上下文（数据+规则合并注入） */
 async function onPromptReady(eventData) {
     if (!settings.enabled || !settings.injectContext) return;
     if (eventData.dryRun) return;
     
     try {
-        const prompt = horaeManager.generateCompactPrompt();
-        const systemAddition = horaeManager.generateSystemPromptAddition();
-        
-        const combinedPrompt = `${prompt}\n${systemAddition}`;
-        
-        // 注入到上下文
+        // swipe/regenerate检测
+        let skipLast = 0;
+        const chat = horaeManager.getChat();
+        if (chat && chat.length > 0) {
+            const lastMsg = chat[chat.length - 1];
+            if (lastMsg && !lastMsg.is_user && lastMsg.horae_meta && (
+                lastMsg.horae_meta.timestamp?.story_date ||
+                lastMsg.horae_meta.scene?.location ||
+                Object.keys(lastMsg.horae_meta.items || {}).length > 0 ||
+                Object.keys(lastMsg.horae_meta.costumes || {}).length > 0 ||
+                Object.keys(lastMsg.horae_meta.affection || {}).length > 0 ||
+                Object.keys(lastMsg.horae_meta.npcs || {}).length > 0 ||
+                (lastMsg.horae_meta.events || []).length > 0
+            )) {
+                skipLast = 1;
+                console.log('[Horae] 检测到swipe/regenerate，跳过末尾消息的旧记忆');
+            }
+        }
+
+        const dataPrompt = horaeManager.generateCompactPrompt(skipLast);
+        const rulesPrompt = horaeManager.generateSystemPromptAddition();
+        const combinedPrompt = `${dataPrompt}\n${rulesPrompt}`;
+
         const position = settings.injectionPosition;
         if (position === 0) {
             eventData.chat.push({ role: 'system', content: combinedPrompt });
-    } else {
+        } else {
             eventData.chat.splice(-position, 0, { role: 'system', content: combinedPrompt });
         }
         
-        console.log(`[Horae] 已注入上下文，位置: -${position}`);
+        console.log(`[Horae] 已注入上下文，位置: -${position}${skipLast ? '（已跳过末尾消息）' : ''}`);
     } catch (error) {
         console.error('[Horae] 注入上下文失败:', error);
     }
@@ -3954,9 +4248,7 @@ async function onChatChanged() {
     }, 500);
 }
 
-/**
- * 消息渲染时触发
- */
+/** 消息渲染时触发 */
 function onMessageRendered(messageId) {
     if (!settings.enabled || !settings.showMessagePanel) return;
     
@@ -3972,6 +4264,39 @@ function onMessageRendered(messageId) {
     }, 100);
 }
 
+/** swipe切换分页时触发 — 从当前mes重新解析并刷新底部栏 */
+function onSwipePanel(messageId) {
+    if (!settings.enabled || !settings.showMessagePanel) return;
+    
+    setTimeout(() => {
+        const messageEl = document.querySelector(`.mes[mesid="${messageId}"]`);
+        if (!messageEl) return;
+        
+        const msg = horaeManager.getChat()[messageId];
+        if (!msg || msg.is_user) return;
+        
+        const parsed = horaeManager.parseHoraeTag(msg.mes || '');
+        if (parsed) {
+            const newMeta = createEmptyMeta();
+            newMeta.timestamp = parsed.timestamp || {};
+            newMeta.scene = parsed.scene || {};
+            newMeta.costumes = parsed.costumes || {};
+            newMeta.items = parsed.items || {};
+            newMeta.deletedItems = parsed.deletedItems || [];
+            newMeta.events = parsed.events || (parsed.event ? [parsed.event] : []);
+            newMeta.affection = parsed.affection || {};
+            newMeta.npcs = parsed.npcs || {};
+            newMeta.agenda = parsed.agenda || [];
+            horaeManager.setMessageMeta(messageId, newMeta);
+        }
+        
+        // 移除旧面板并重建
+        const oldPanel = messageEl.querySelector('.horae-message-panel');
+        if (oldPanel) oldPanel.remove();
+        addMessagePanel(messageEl, messageId);
+    }, 150);
+}
+
 // ============================================
 // 初始化
 // ============================================
@@ -3982,7 +4307,7 @@ jQuery(async () => {
     await initNavbarFunction();
     loadSettings();
     ensureRegexRules();
-    
+
     $('#extensions-settings-button').after(await getTemplate('drawer'));
 
     await initDrawer();
@@ -3996,9 +4321,9 @@ jQuery(async () => {
     eventSource.on(event_types.CHAT_COMPLETION_PROMPT_READY, onPromptReady);
     eventSource.on(event_types.CHAT_CHANGED, onChatChanged);
     eventSource.on(event_types.MESSAGE_RENDERED, onMessageRendered);
-    eventSource.on(event_types.MESSAGE_SWIPED, onMessageRendered); // 修复滑动分页后面板消失
-    eventSource.on(event_types.MESSAGE_DELETED, onMessageDeleted); // 消息删除时重建表格数据
-    eventSource.on(event_types.MESSAGE_EDITED, onMessageEdited);   // 消息编辑时重建表格数据
+    eventSource.on(event_types.MESSAGE_SWIPED, onSwipePanel);
+    eventSource.on(event_types.MESSAGE_DELETED, onMessageDeleted);
+    eventSource.on(event_types.MESSAGE_EDITED, onMessageEdited); 
     
     refreshAllDisplays();
     
