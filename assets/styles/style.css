@@ -4,9 +4,11 @@
  */
 
 /* ============================================
-   CSS 变量定义
+   CSS 变量定义（挂在插件容器上，防止外部美化主题覆盖）
    ============================================ */
-:root {
+#horae_drawer,
+.horae-message-panel,
+.horae-modal {
     --horae-primary: #7c3aed;
     --horae-primary-light: #a78bfa;
     --horae-primary-dark: #5b21b6;
@@ -26,6 +28,8 @@
     --horae-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     --horae-radius: 8px;
     --horae-radius-sm: 4px;
+    
+    color: var(--horae-text);
 }
 
 /* ============================================
