@@ -1,0 +1,12 @@
+{
+    "display_name": "Horae - 时光记忆",
+    "loading_order": 100,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "assets/styles/style.css",
+    "author": "SenriYuki",
+    "version": "1.0.0",
+    "homePage": "",
+    "auto_update": false
+}

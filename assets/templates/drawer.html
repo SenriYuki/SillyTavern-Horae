@@ -1,0 +1,396 @@
+<!-- Horae 主抽屉面板 -->
+<div id="horae_drawer" class="drawer">
+    <div class="drawer-toggle">
+        <div id="horae_drawer_icon" class="drawer-icon fa-regular fa-clock fa-fw closedIcon interactable" title="Horae - 时光记忆" tabindex="0"></div>
+    </div>
+    <div id="horae_drawer_content" class="drawer-content closedDrawer">
+        <!-- 头部 -->
+        <div class="drawer-header">
+            <div class="horae-title">
+                <i class="fa-regular fa-clock"></i>
+                Horae 时光记忆
+            </div>
+            <span class="horae-version">v1.0.0</span>
+        </div>
+        
+        <!-- 标签页导航 -->
+        <div class="horae-tabs">
+            <button class="horae-tab active" data-tab="status">
+                <i class="fa-solid fa-gauge"></i>
+                <span>状态</span>
+            </button>
+            <button class="horae-tab" data-tab="timeline">
+                <i class="fa-solid fa-timeline"></i>
+                <span>时间线</span>
+            </button>
+            <button class="horae-tab" data-tab="characters">
+                <i class="fa-solid fa-users"></i>
+                <span>角色</span>
+            </button>
+            <button class="horae-tab" data-tab="items">
+                <i class="fa-solid fa-box-open"></i>
+                <span>物品</span>
+            </button>
+            <button class="horae-tab" data-tab="settings">
+                <i class="fa-solid fa-gear"></i>
+                <span>设置</span>
+            </button>
+        </div>
+        
+        <!-- 标签页内容 -->
+        <div class="horae-tab-contents">
+            <!-- 状态页 -->
+            <div id="horae-tab-status" class="horae-tab-content active">
+                <div class="horae-state-section">
+                    <div class="horae-section-header">
+                        <i class="fa-regular fa-clock"></i>
+                        当前时间
+                    </div>
+                    <div class="horae-time-display">
+                        <span id="horae-current-date">--/--</span>
+                        <span id="horae-current-time">--:--</span>
+                    </div>
+                </div>
+                
+                <div class="horae-state-section">
+                    <div class="horae-section-header">
+                        <i class="fa-solid fa-location-dot"></i>
+                        当前地点
+                    </div>
+                    <div class="horae-location-display">
+                        <span id="horae-current-location">未设置</span>
+                        <span id="horae-current-atmosphere" class="horae-atmosphere-badge"></span>
+                    </div>
+                </div>
+                
+                <div class="horae-state-section">
+                    <div class="horae-section-header">
+                        <i class="fa-solid fa-shirt"></i>
+                        角色服装
+                    </div>
+                    <div id="horae-costumes-list" class="horae-costume-list">
+                        <div class="horae-empty-hint">暂无服装记录</div>
+                    </div>
+                </div>
+                
+                <div class="horae-state-section">
+                    <div class="horae-section-header">
+                        <i class="fa-solid fa-cube"></i>
+                        物品追踪
+                    </div>
+                    <div id="horae-items-quick" class="horae-items-quick">
+                        <div class="horae-empty-hint">暂无物品追踪</div>
+                    </div>
+                </div>
+                
+                <div class="horae-action-buttons">
+                    <button id="horae-btn-refresh" class="menu_button">
+                        <i class="fa-solid fa-rotate"></i> 刷新
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 时间线页 -->
+            <div id="horae-tab-timeline" class="horae-tab-content">
+                <!-- 待办事项区域 -->
+                <div class="horae-agenda-section">
+                    <div class="horae-agenda-header">
+                        <span><i class="fa-solid fa-list-check"></i> 待办事项</span>
+                        <button id="horae-btn-add-agenda" class="horae-icon-btn small" title="添加待办">
+                            <i class="fa-solid fa-plus"></i>
+                        </button>
+                    </div>
+                    <!-- 待办多选模式工具栏 -->
+                    <div id="horae-agenda-multiselect-bar" class="horae-multiselect-bar" style="display: none;">
+                        <div class="horae-multiselect-info">
+                            <span id="horae-agenda-selected-count">0</span> 项已选
+                        </div>
+                        <div class="horae-multiselect-actions">
+                            <button id="horae-btn-agenda-select-all" class="horae-icon-btn small" title="全选">
+                                <i class="fa-solid fa-check-double"></i>
+                            </button>
+                            <button id="horae-btn-agenda-delete" class="horae-icon-btn small danger" title="删除选中">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                            <button id="horae-btn-agenda-cancel-select" class="horae-icon-btn small" title="取消多选">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="horae-agenda-list" class="horae-agenda-list">
+                        <div class="horae-empty-hint">暂无待办事项</div>
+                    </div>
+                </div>
+                
+                <!-- 事件时间线区域 -->
+                <div class="horae-timeline-header">
+                    <span>事件时间线</span>
+                    <div class="horae-timeline-controls">
+                        <select id="horae-timeline-filter" class="horae-select" title="筛选事件级别">
+                            <option value="all">全部</option>
+                            <option value="关键">关键</option>
+                            <option value="重要">重要</option>
+                            <option value="一般">一般</option>
+                        </select>
+                        <button id="horae-btn-scan-all" class="menu_button" title="刷新时间线">
+                            <i class="fa-solid fa-rotate"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="horae-timeline-search-row">
+                    <i class="fa-solid fa-magnifying-glass horae-search-icon"></i>
+                    <input type="text" id="horae-timeline-search" class="horae-search-input" placeholder="搜索事件关键字...">
+                </div>
+                <div id="horae-timeline-list" class="horae-timeline-list">
+                    <div class="horae-empty-state">
+                        <i class="fa-regular fa-clock"></i>
+                        <span>暂无记录的事件</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 角色页 -->
+            <div id="horae-tab-characters" class="horae-tab-content">
+                <div class="horae-subsection">
+                    <div class="horae-subsection-title">在场角色</div>
+                    <div id="horae-present-characters" class="horae-character-list">
+                        <div class="horae-empty-hint">暂无记录</div>
+                    </div>
+                </div>
+                
+                <div class="horae-subsection">
+                    <div class="horae-subsection-title">好感度</div>
+                    <div id="horae-affection-list" class="horae-affection-list">
+                        <div class="horae-empty-hint">暂无好感度记录</div>
+                    </div>
+                </div>
+                
+                <div class="horae-subsection">
+                    <div class="horae-subsection-title">角色</div>
+                    <div id="horae-npc-list" class="horae-npc-list">
+                        <div class="horae-empty-hint">暂无角色记录</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 物品页 -->
+            <div id="horae-tab-items" class="horae-tab-content">
+                <div class="horae-items-toolbar">
+                    <div class="horae-items-header">
+                        <span>物品追踪列表</span>
+                        <div class="horae-items-controls">
+                            <select id="horae-items-holder-filter" class="horae-select" title="筛选持有人">
+                                <option value="all">所有人</option>
+                            </select>
+                            <select id="horae-items-filter" class="horae-select" title="筛选物品级别">
+                                <option value="all">全部</option>
+                                <option value="关键">关键</option>
+                                <option value="重要">重要</option>
+                                <option value="一般">一般</option>
+                            </select>
+                            <button id="horae-btn-items-refresh" class="horae-icon-btn" title="刷新物品列表">
+                                <i class="fa-solid fa-rotate"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="horae-items-search-row">
+                        <i class="fa-solid fa-magnifying-glass horae-search-icon"></i>
+                        <input type="text" id="horae-items-search" class="horae-search-input" placeholder="搜索物品名、持有者、位置...">
+                    </div>
+                </div>
+                <!-- 多选模式工具栏 -->
+                <div id="horae-items-multiselect-bar" class="horae-multiselect-bar" style="display: none;">
+                    <div class="horae-multiselect-info">
+                        <span id="horae-items-selected-count">0</span> 项已选
+                    </div>
+                    <div class="horae-multiselect-actions">
+                        <button id="horae-btn-items-select-all" class="horae-icon-btn small" title="全选">
+                            <i class="fa-solid fa-check-double"></i>
+                        </button>
+                        <button id="horae-btn-items-delete" class="horae-icon-btn small danger" title="删除选中">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                        <button id="horae-btn-items-cancel-select" class="horae-icon-btn small" title="取消多选">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="horae-items-hint">
+                    <i class="fa-solid fa-hand-pointer"></i> 长按物品进入多选模式
+                </div>
+                <div id="horae-items-full-list" class="horae-items-full-list">
+                    <div class="horae-empty-state">
+                        <i class="fa-solid fa-box-open"></i>
+                        <span>暂无追踪的物品</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 设置页 -->
+            <div id="horae-tab-settings" class="horae-tab-content">
+                <div class="horae-settings-section">
+                    <div class="horae-section-header">
+                        <i class="fa-solid fa-toggle-on"></i>
+                        基本设置
+                    </div>
+                    
+                    <div class="horae-setting-item">
+                        <label>
+                            <input type="checkbox" id="horae-setting-enabled" checked>
+                            启用 Horae
+                        </label>
+                    </div>
+                    
+                    <div class="horae-setting-item">
+                        <label>
+                            <input type="checkbox" id="horae-setting-auto-parse" checked>
+                            自动解析AI回复中的标签
+                        </label>
+                    </div>
+                    
+                    <div class="horae-setting-item">
+                        <label>
+                            <input type="checkbox" id="horae-setting-inject-context" checked>
+                            自动注入状态上下文
+                        </label>
+                    </div>
+                    
+                    <div class="horae-setting-item">
+                        <label>
+                            <input type="checkbox" id="horae-setting-show-panel" checked>
+                            显示消息元数据面板
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="horae-settings-section">
+                    <div class="horae-section-header">
+                        <i class="fa-solid fa-sliders"></i>
+                        高级设置
+                    </div>
+                    
+                    <div class="horae-setting-item">
+                        <label>
+                            上下文深度
+                            <input type="number" id="horae-setting-context-depth" min="5" max="100" value="15">
+                        </label>
+                        <span class="horae-setting-hint">
+                            <i class="fa-solid fa-circle-info"></i>
+                            读取最近 N 条消息的元数据来：<br>
+                            ① 计算相对时间（如"3天前"）<br>
+                            ② 汇总状态（服装、物品、好感度等）<br>
+                            ③ 收集剧情轨迹发给AI
+                        </span>
+                    </div>
+                    
+                    <div class="horae-setting-item">
+                        <label>
+                            注入位置
+                            <input type="number" id="horae-setting-injection-position" min="0" max="10" value="1">
+                        </label>
+                        <span class="horae-setting-hint">
+                            <i class="fa-solid fa-circle-info"></i>
+                            Horae状态信息插入到AI提示词的哪个位置：<br>
+                            0 = 最末尾（紧贴最新消息）<br>
+                            1 = 倒数第二（推荐，给AI留思考空间）<br>
+                            数字越大越靠前
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="horae-settings-section">
+                    <div class="horae-section-header">
+                        <i class="fa-solid fa-table-cells"></i>
+                        自定义表格
+                    </div>
+                    <span class="horae-setting-hint" style="margin-bottom: 12px;">
+                        <i class="fa-solid fa-circle-info"></i>
+                        创建Excel风格表格，让AI按你的需求填写特定信息。<br>
+                        长按表头可添加/删除行列。每个表格可设置提示词指导AI如何填写。<br>
+                        <strong>表格跟随当前对话保存</strong>，切换对话不会丢失。可导出/导入在其他对话复用。
+                    </span>
+                    
+                    <div id="horae-custom-tables-list" class="horae-custom-tables-list">
+                        <!-- 动态生成 -->
+                    </div>
+                    
+                    <div class="horae-table-buttons">
+                        <button id="horae-btn-add-table" class="horae-btn-add-table">
+                            <i class="fa-solid fa-plus"></i> 添加 2×2 表格
+                        </button>
+                        <button id="horae-btn-import-table" class="horae-btn-import-table">
+                            <i class="fa-solid fa-upload"></i> 导入表格
+                        </button>
+                        <input type="file" id="horae-import-table-file" accept=".json" style="display:none;">
+                    </div>
+                </div>
+                
+                <div class="horae-settings-section">
+                    <div class="horae-section-header">
+                        <i class="fa-solid fa-paper-plane"></i>
+                        发送给AI的内容
+                    </div>
+                    <span class="horae-setting-hint" style="margin-bottom: 12px;">
+                        <i class="fa-solid fa-circle-info"></i>
+                        控制哪些信息会随提示词发送给AI。关闭可节省Token，但AI将无法"记住"这些内容。
+                    </span>
+                    
+                    <div class="horae-setting-item">
+                        <label>
+                            <input type="checkbox" id="horae-setting-send-timeline" checked>
+                            剧情轨迹
+                        </label>
+                        <span class="horae-setting-sub-hint">历史事件摘要、相对时间计算。关闭后AI无法知道"几天前"发生了什么。</span>
+                    </div>
+                    
+                    <div class="horae-setting-item">
+                        <label>
+                            <input type="checkbox" id="horae-setting-send-characters" checked>
+                            角色信息
+                        </label>
+                        <span class="horae-setting-sub-hint">在场角色、服装描述、好感度、角色信息。关闭后AI可能描写错误的服装。</span>
+                    </div>
+                    
+                    <div class="horae-setting-item">
+                        <label>
+                            <input type="checkbox" id="horae-setting-send-items" checked>
+                            物品栏
+                        </label>
+                        <span class="horae-setting-sub-hint">当前持有的物品及位置。关闭后AI可能"凭空"取出不存在的物品。</span>
+                    </div>
+                </div>
+                
+                <div class="horae-settings-section">
+                    <div class="horae-section-header">
+                        <i class="fa-solid fa-database"></i>
+                        数据管理
+                    </div>
+                    
+                    <div class="horae-data-buttons-grid">
+                        <button id="horae-btn-scan-history" class="horae-data-btn primary">
+                            <i class="fa-solid fa-magnifying-glass-chart"></i>
+                            <span>扫描历史</span>
+                        </button>
+                        <button id="horae-btn-export" class="horae-data-btn">
+                            <i class="fa-solid fa-file-export"></i>
+                            <span>导出</span>
+                        </button>
+                        <button id="horae-btn-import" class="horae-data-btn">
+                            <i class="fa-solid fa-file-import"></i>
+                            <span>导入</span>
+                        </button>
+                        <button id="horae-btn-clear" class="horae-data-btn danger">
+                            <i class="fa-solid fa-trash-can"></i>
+                            <span>清除</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="horae-about">
+                    <p>Horae v1.0.0 | 作者: SenriYuki</p>
+                    <p>基于时间锚点的AI记忆增强系统</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,117 @@
+<!-- Horae 消息元数据面板模板 -->
+<div class="horae-message-panel" data-message-id="{{messageId}}">
+    <div class="horae-panel-toggle">
+        <div class="horae-panel-icon">
+            <i class="fa-regular fa-clock"></i>
+        </div>
+        <div class="horae-panel-summary">
+            <span class="horae-summary-time">{{time}}</span>
+            <span class="horae-summary-divider">|</span>
+            <span class="horae-summary-event">{{eventSummary}}</span>
+            <span class="horae-summary-divider">|</span>
+            <span class="horae-summary-chars">{{characterCount}}人在场</span>
+        </div>
+        <div class="horae-panel-actions">
+            <button class="horae-btn-edit" title="编辑">
+                <i class="fa-solid fa-pen"></i>
+            </button>
+            <button class="horae-btn-expand" title="展开/收起">
+                <i class="fa-solid fa-chevron-down"></i>
+            </button>
+        </div>
+    </div>
+    <div class="horae-panel-content" style="display: none;">
+        <div class="horae-panel-grid">
+            <!-- 时间行 -->
+            <div class="horae-panel-row">
+                <label><i class="fa-regular fa-clock"></i> 时间</label>
+                <div class="horae-panel-value">
+                    <input type="text" class="horae-input-datetime" placeholder="日期 时间（如 2026/2/4 15:00）" value="{{storyDate}}{{#storyTime}} {{storyTime}}{{/storyTime}}">
+                </div>
+            </div>
+
+            <!-- 地点行 -->
+            <div class="horae-panel-row">
+                <label><i class="fa-solid fa-location-dot"></i> 地点</label>
+                <div class="horae-panel-value">
+                    <input type="text" class="horae-input-location" placeholder="如: 咖啡馆 > 二楼" value="{{location}}">
+                </div>
+            </div>
+
+            <!-- 氛围行 -->
+            <div class="horae-panel-row">
+                <label><i class="fa-solid fa-cloud"></i> 氛围</label>
+                <div class="horae-panel-value">
+                    <input type="text" class="horae-input-atmosphere" placeholder="如: 轻松、紧张" value="{{atmosphere}}">
+                </div>
+            </div>
+
+            <!-- 在场角色 -->
+            <div class="horae-panel-row">
+                <label><i class="fa-solid fa-users"></i> 在场</label>
+                <div class="horae-panel-value">
+                    <input type="text" class="horae-input-characters" placeholder="用逗号分隔" value="{{characters}}">
+                </div>
+            </div>
+
+            <!-- 服装列表 -->
+            <div class="horae-panel-row full-width">
+                <label><i class="fa-solid fa-shirt"></i> 服装变化</label>
+                <div class="horae-costume-editor" id="horae-costumes-{{messageId}}">
+                    {{costumeEditors}}
+                </div>
+                <button class="horae-btn-add-costume" title="添加服装记录">
+                    <i class="fa-solid fa-plus"></i> 添加
+                </button>
+            </div>
+
+            <!-- 物品列表 -->
+            <div class="horae-panel-row full-width">
+                <label><i class="fa-solid fa-box-open"></i> 物品变化</label>
+                <div class="horae-items-editor" id="horae-items-{{messageId}}">
+                    {{itemEditors}}
+                </div>
+                <button class="horae-btn-add-item" title="添加物品记录">
+                    <i class="fa-solid fa-plus"></i> 添加
+                </button>
+            </div>
+
+            <!-- 事件标记 -->
+            <div class="horae-panel-row full-width">
+                <label><i class="fa-solid fa-bookmark"></i> 事件标记</label>
+                <div class="horae-event-editor">
+                    <select class="horae-input-event-level">
+                        <option value="">无</option>
+                        <option value="一般" {{eventLevelNormal}}>一般</option>
+                        <option value="重要" {{eventLevelImportant}}>重要</option>
+                        <option value="关键" {{eventLevelCritical}}>关键</option>
+                    </select>
+                    <input type="text" class="horae-input-event-summary" placeholder="事件摘要（20字以内）" value="{{eventSummaryText}}">
+                </div>
+            </div>
+
+            <!-- 好感度变化 -->
+            <div class="horae-panel-row full-width">
+                <label><i class="fa-solid fa-heart"></i> 好感度变化</label>
+                <div class="horae-affection-editor" id="horae-affection-{{messageId}}">
+                    {{affectionEditors}}
+                </div>
+                <button class="horae-btn-add-affection" title="添加好感度变化">
+                    <i class="fa-solid fa-plus"></i> 添加
+                </button>
+            </div>
+        </div>
+
+        <div class="horae-panel-footer">
+            <button class="horae-btn-save menu_button">
+                <i class="fa-solid fa-check"></i> 保存
+            </button>
+            <button class="horae-btn-cancel menu_button">
+                <i class="fa-solid fa-xmark"></i> 取消
+            </button>
+            <button class="horae-btn-goto menu_button" title="跳转到此消息">
+                <i class="fa-solid fa-arrow-right"></i> 跳转
+            </button>
+        </div>
+    </div>
+</div>
