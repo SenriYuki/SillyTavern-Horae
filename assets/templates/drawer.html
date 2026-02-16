@@ -159,7 +159,12 @@
                 </div>
                 
                 <div class="horae-subsection">
-                    <div class="horae-subsection-title">好感度</div>
+                    <div class="horae-subsection-title">
+                        好感度
+                        <button id="horae-affection-toggle" class="horae-eye-toggle" title="显示/隐藏好感度">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
+                    </div>
                     <div id="horae-affection-list" class="horae-affection-list">
                         <div class="horae-empty-hint">暂无好感度记录</div>
                     </div>
@@ -365,6 +370,59 @@
                 </div>
                 
                 <div class="horae-settings-section">
+                    <div class="horae-section-header horae-collapse-header" id="horae-prompt-collapse-toggle">
+                        <i class="fa-solid fa-scroll"></i>
+                        自定义提示词
+                        <i class="fa-solid fa-chevron-down horae-collapse-icon collapsed"></i>
+                    </div>
+                    <div id="horae-prompt-collapse-body" style="display: none;">
+                        <span class="horae-setting-hint" style="margin-bottom: 12px;">
+                            <i class="fa-solid fa-circle-info"></i>
+                            自定义发送给AI的规则提示词。修改后AI将按你的规则输出标签。
+                        </span>
+                        
+                        <div class="horae-prompt-editor-group">
+                            <div class="horae-prompt-editor-header">
+                                <span>系统注入提示词</span>
+                                <button id="horae-btn-reset-system-prompt" class="horae-btn-reset-prompt" title="恢复默认">
+                                    <i class="fa-solid fa-rotate-left"></i> 恢复默认
+                                </button>
+                            </div>
+                            <textarea id="horae-custom-system-prompt" class="horae-prompt-textarea" rows="6" placeholder="留空使用默认提示词..."></textarea>
+                            <div class="horae-prompt-char-count">
+                                <span id="horae-system-prompt-count">0</span> 字符
+                            </div>
+                        </div>
+                        
+                        <div class="horae-prompt-editor-group" style="margin-top: 12px;">
+                            <div class="horae-prompt-editor-header">
+                                <span>AI 智能摘要提示词</span>
+                                <button id="horae-btn-reset-batch-prompt" class="horae-btn-reset-prompt" title="恢复默认">
+                                    <i class="fa-solid fa-rotate-left"></i> 恢复默认
+                                </button>
+                            </div>
+                            <textarea id="horae-custom-batch-prompt" class="horae-prompt-textarea" rows="6" placeholder="留空使用默认提示词..."></textarea>
+                            <div class="horae-prompt-char-count">
+                                <span id="horae-batch-prompt-count">0</span> 字符
+                            </div>
+                        </div>
+
+                        <div class="horae-prompt-editor-group" style="margin-top: 12px;">
+                            <div class="horae-prompt-editor-header">
+                                <span>AI 分析提示词</span>
+                                <button id="horae-btn-reset-analysis-prompt" class="horae-btn-reset-prompt" title="恢复默认">
+                                    <i class="fa-solid fa-rotate-left"></i> 恢复默认
+                                </button>
+                            </div>
+                            <textarea id="horae-custom-analysis-prompt" class="horae-prompt-textarea" rows="6" placeholder="留空使用默认提示词..."></textarea>
+                            <div class="horae-prompt-char-count">
+                                <span id="horae-analysis-prompt-count">0</span> 字符
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="horae-settings-section">
                     <div class="horae-section-header">
                         <i class="fa-solid fa-database"></i>
                         数据管理
@@ -399,7 +457,7 @@
                 </div>
                 
                 <div class="horae-about">
-                    <p>Horae v1.1.0 | 作者: SenriYuki</p>
+                    <p>Horae v1.2.0 | 作者: SenriYuki</p>
                     <p>基于时间锚点的AI记忆增强系统</p>
                 </div>
             </div>

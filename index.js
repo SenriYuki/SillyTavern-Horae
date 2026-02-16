@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.1.0
+ * 版本: 1.2.0
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -19,7 +19,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -91,7 +91,12 @@ const DEFAULT_SETTINGS = {
     sendTimeline: true,    // 发送剧情轨迹（关闭则无法计算相对时间）
     sendCharacters: true,  // 发送角色信息（服装、好感度）
     sendItems: true,       // 发送物品栏
-    customTables: []       // 自定义表格 [{id, name, rows, cols, data, prompt}]
+    customTables: [],      // 自定义表格 [{id, name, rows, cols, data, prompt}]
+    customSystemPrompt: '',      // 自定义系统注入提示词（空=使用默认）
+    customBatchPrompt: '',       // 自定义AI摘要提示词（空=使用默认）
+    customAnalysisPrompt: '',    // 自定义AI分析提示词（空=使用默认）
+    aiScanIncludeNpc: false,     // AI摘要是否提取NPC
+    aiScanIncludeAffection: false  // AI摘要是否提取好感度
 };
 
 // ============================================
@@ -111,7 +116,7 @@ let agendaLongPressTimer = null;   // 待办长按计时器
 // 工具函数
 // ============================================
 
-/** 自动注入配套正则到ST原生正则系统（首次安装时自动执行，用户可在正则面板管理） */
+/** 自动注入配套正则到ST原生正则系统 */
 function ensureRegexRules() {
     if (!extension_settings.regex) extension_settings.regex = [];
 
@@ -972,7 +977,7 @@ function updateCharactersDisplay() {
         if (entries.length === 0) {
             npcEl.innerHTML = '<div class="horae-empty-hint">暂无角色记录</div>';
         } else {
-            // 判断是否为重要角色（角色卡主角 或 用户手动标记）
+            // 判断是否为重要角色（角色卡主角 或 手动标记）
             const isMainChar = (name) => {
                 if (pinnedNpcs.includes(name)) return true;
                 if (mainCharName && name.includes(mainCharName)) return true;
@@ -998,7 +1003,7 @@ function updateCharactersDisplay() {
                     descHtml = '<span class="horae-npc-legacy">无描述</span>';
                 }
                 
-                // 扩展信息行（年龄/种族/职业，紧凑显示）
+                // 扩展信息行（年龄/种族/职业）
                 const extraTags = [];
                 if (info.race) extraTags.push(info.race);
                 if (info.age) {
@@ -1447,6 +1452,9 @@ function openAffectionEditModal(charName) {
                     <button id="edit-modal-save" class="menu_button primary">
                         <i class="fa-solid fa-check"></i> 保存
                     </button>
+                    <button id="edit-modal-delete" class="menu_button danger">
+                        <i class="fa-solid fa-trash"></i> 删除
+                    </button>
                     <button id="edit-modal-cancel" class="menu_button">
                         <i class="fa-solid fa-xmark"></i> 取消
                     </button>
@@ -1470,11 +1478,9 @@ function openAffectionEditModal(charName) {
         e.stopImmediatePropagation();
         const newValue = parseInt(document.getElementById('edit-affection-value').value) || 0;
         
-        // 更新所有消息中的好感度（设为绝对值）
         const chat = horaeManager.getChat();
         let lastMessageWithAffection = -1;
         
-        // 找到最后一条有该角色好感度的消息
         for (let i = chat.length - 1; i >= 0; i--) {
             const meta = chat[i].horae_meta;
             if (meta?.affection?.[charName] !== undefined) {
@@ -1484,13 +1490,11 @@ function openAffectionEditModal(charName) {
         }
         
         if (lastMessageWithAffection >= 0) {
-            // 更新最后一条消息的好感度为绝对值
             chat[lastMessageWithAffection].horae_meta.affection[charName] = { 
                 type: 'absolute', 
                 value: newValue 
             };
         } else {
-            // 如果没有找到，在最后一条消息添加
             const lastMeta = chat[chat.length - 1]?.horae_meta;
             if (lastMeta) {
                 if (!lastMeta.affection) lastMeta.affection = {};
@@ -1502,6 +1506,26 @@ function openAffectionEditModal(charName) {
         closeEditModal();
         updateCharactersDisplay();
         showToast('好感度已更新', 'success');
+    });
+
+    // 删除该角色的全部好感度记录
+    document.getElementById('edit-modal-delete').addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        if (!confirm(`确定删除「${charName}」的好感度记录？将从所有消息中移除。`)) return;
+        const chat = horaeManager.getChat();
+        let removed = 0;
+        for (let i = 0; i < chat.length; i++) {
+            const meta = chat[i].horae_meta;
+            if (meta?.affection?.[charName] !== undefined) {
+                delete meta.affection[charName];
+                removed++;
+            }
+        }
+        getContext().saveChat();
+        closeEditModal();
+        updateCharactersDisplay();
+        showToast(`已删除「${charName}」的好感度（${removed} 条记录）`, 'info');
     });
     
     document.getElementById('edit-modal-cancel').addEventListener('click', (e) => {
@@ -3651,6 +3675,87 @@ function initSettingsEvents() {
     $('#horae-btn-export').on('click', exportData);
     $('#horae-btn-import').on('click', importData);
     $('#horae-btn-clear').on('click', clearAllData);
+    
+    // 好感度显示/隐藏（不可用hidden类名，酒馆全局有display:none规则）
+    $('#horae-affection-toggle').on('click', function() {
+        const list = $('#horae-affection-list');
+        const icon = $(this).find('i');
+        if (list.is(':visible')) {
+            list.hide();
+            icon.removeClass('fa-eye').addClass('fa-eye-slash');
+            $(this).addClass('horae-eye-off');
+        } else {
+            list.show();
+            icon.removeClass('fa-eye-slash').addClass('fa-eye');
+            $(this).removeClass('horae-eye-off');
+        }
+    });
+    
+    // 自定义提示词
+    $('#horae-custom-system-prompt').on('input', function() {
+        const val = this.value;
+        // 与默认一致时视为未自定义
+        settings.customSystemPrompt = (val.trim() === horaeManager.getDefaultSystemPrompt().trim()) ? '' : val;
+        $('#horae-system-prompt-count').text(val.length);
+        saveSettings();
+        horaeManager.init(getContext(), settings);
+        updateTokenCounter();
+    });
+    
+    $('#horae-custom-batch-prompt').on('input', function() {
+        const val = this.value;
+        settings.customBatchPrompt = (val.trim() === getDefaultBatchPrompt().trim()) ? '' : val;
+        $('#horae-batch-prompt-count').text(val.length);
+        saveSettings();
+    });
+    
+    $('#horae-btn-reset-system-prompt').on('click', () => {
+        if (!confirm('确定恢复系统注入提示词为默认值？')) return;
+        settings.customSystemPrompt = '';
+        saveSettings();
+        const def = horaeManager.getDefaultSystemPrompt();
+        $('#horae-custom-system-prompt').val(def);
+        $('#horae-system-prompt-count').text(def.length);
+        horaeManager.init(getContext(), settings);
+        updateTokenCounter();
+        showToast('已恢复默认提示词', 'success');
+    });
+    
+    $('#horae-btn-reset-batch-prompt').on('click', () => {
+        if (!confirm('确定恢复AI摘要提示词为默认值？')) return;
+        settings.customBatchPrompt = '';
+        saveSettings();
+        const def = getDefaultBatchPrompt();
+        $('#horae-custom-batch-prompt').val(def);
+        $('#horae-batch-prompt-count').text(def.length);
+        showToast('已恢复默认提示词', 'success');
+    });
+
+    // AI分析提示词
+    $('#horae-custom-analysis-prompt').on('input', function() {
+        const val = this.value;
+        settings.customAnalysisPrompt = (val.trim() === getDefaultAnalysisPrompt().trim()) ? '' : val;
+        $('#horae-analysis-prompt-count').text(val.length);
+        saveSettings();
+    });
+
+    $('#horae-btn-reset-analysis-prompt').on('click', () => {
+        if (!confirm('确定恢复AI分析提示词为默认值？')) return;
+        settings.customAnalysisPrompt = '';
+        saveSettings();
+        const def = getDefaultAnalysisPrompt();
+        $('#horae-custom-analysis-prompt').val(def);
+        $('#horae-analysis-prompt-count').text(def.length);
+        showToast('已恢复默认提示词', 'success');
+    });
+
+    // 提示词区域折叠切换
+    $('#horae-prompt-collapse-toggle').on('click', function() {
+        const body = $('#horae-prompt-collapse-body');
+        const icon = $(this).find('.horae-collapse-icon');
+        body.slideToggle(200);
+        icon.toggleClass('collapsed');
+    });
 }
 
 /**
@@ -3666,6 +3771,17 @@ function syncSettingsToUI() {
     $('#horae-setting-send-timeline').prop('checked', settings.sendTimeline);
     $('#horae-setting-send-characters').prop('checked', settings.sendCharacters);
     $('#horae-setting-send-items').prop('checked', settings.sendItems);
+    
+    // 自定义提示词（空则填入默认值供用户查看和微调）
+    const sysPrompt = settings.customSystemPrompt || horaeManager.getDefaultSystemPrompt();
+    const batchPromptVal = settings.customBatchPrompt || getDefaultBatchPrompt();
+    const analysisPromptVal = settings.customAnalysisPrompt || getDefaultAnalysisPrompt();
+    $('#horae-custom-system-prompt').val(sysPrompt);
+    $('#horae-custom-batch-prompt').val(batchPromptVal);
+    $('#horae-custom-analysis-prompt').val(analysisPromptVal);
+    $('#horae-system-prompt-count').text(sysPrompt.length);
+    $('#horae-batch-prompt-count').text(batchPromptVal.length);
+    $('#horae-analysis-prompt-count').text(analysisPromptVal.length);
 }
 
 // ============================================
@@ -3716,100 +3832,15 @@ async function scanHistoryWithProgress() {
     }
 }
 
-/** 估算文本的 token 数 */
-function estimateTokens(text) {
-    if (!text) return 0;
-    const cjk = (text.match(/[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/g) || []).length;
-    const rest = text.length - cjk;
-    return Math.ceil(cjk * 1.5 + rest * 0.4);
-}
-
-/** AI智能摘要 — 批量分析历史消息，提取剧情事件和物品 */
-async function batchAIScan() {
-    const chat = horaeManager.getChat();
-    if (!chat || chat.length === 0) {
-        showToast('当前没有聊天记录', 'warning');
-        return;
-    }
-
-    // 收集待分析消息
-    const targets = [];
-    for (let i = 0; i < chat.length; i++) {
-        const msg = chat[i];
-        if (msg.is_user || !msg.mes || msg.mes.trim().length < 20) continue;
-        const meta = msg.horae_meta;
-        if (meta?.events?.length > 0 && !meta?._aiScanned) continue;
-        targets.push({ index: i, text: msg.mes });
-    }
-
-    if (targets.length === 0) {
-        showToast('所有消息已有记忆数据，无需扫描', 'info');
-        return;
-    }
-
-    // 用户配置分批token上限
-    const tokenLimit = await showAIScanConfigDialog(targets.length);
-    if (!tokenLimit) return;
-
-    // 按token量自动分批
-    const batches = [];
-    let currentBatch = [];
-    let currentTokens = 0;
-    for (const t of targets) {
-        const tokens = estimateTokens(t.text);
-        if (currentBatch.length > 0 && currentTokens + tokens > tokenLimit) {
-            batches.push(currentBatch);
-            currentBatch = [];
-            currentTokens = 0;
-        }
-        currentBatch.push(t);
-        currentTokens += tokens;
-    }
-    if (currentBatch.length > 0) batches.push(currentBatch);
-
-    // 最终确认
-    const confirmMsg = `预计分 ${batches.length} 批处理，消耗 ${batches.length} 次生成\n\n· 再次扫描会覆盖上次的AI摘要结果\n· 扫描后可「撤销摘要」还原\n\n是否继续？`;
-    if (!confirm(confirmMsg)) return;
-
-    // 进度UI
-    const overlay = document.createElement('div');
-    overlay.className = 'horae-progress-overlay';
-    overlay.innerHTML = `
-        <div class="horae-progress-container">
-            <div class="horae-progress-title">AI 智能摘要中...</div>
-            <div class="horae-progress-bar">
-                <div class="horae-progress-fill" style="width: 0%"></div>
-            </div>
-            <div class="horae-progress-text">准备中...</div>
-        </div>
-    `;
-    document.body.appendChild(overlay);
-    const fillEl = overlay.querySelector('.horae-progress-fill');
-    const textEl = overlay.querySelector('.horae-progress-text');
-
-    const context = getContext();
-    const userName = context?.name1 || '主角';
-    let totalProcessed = 0;
-    let totalFailed = 0;
-
-    try {
-        for (let b = 0; b < batches.length; b++) {
-            const batch = batches[b];
-            textEl.textContent = `第 ${b + 1}/${batches.length} 批（${batch.length} 条消息）...`;
-            fillEl.style.width = `${Math.round((b / batches.length) * 100)}%`;
-
-            const messagesBlock = batch.map(t =>
-                `【消息#${t.index}】\n${t.text}`
-            ).join('\n\n');
-
-            const batchPrompt = `你是剧情分析助手。请逐条分析以下对话记录，为每条消息提取【时间】【剧情事件】和【物品变化】。
+/** 默认的批量摘要提示词模板 */
+function getDefaultBatchPrompt() {
+    return `你是剧情分析助手。请逐条分析以下对话记录，为每条消息提取【时间】【剧情事件】和【物品变化】。
 
 核心原则：
 - 只提取文本中明确出现的信息，禁止编造
 - 每条消息独立分析，用 ===消息#编号=== 分隔
-- 严格只输出 time、item、event 三种标签，禁止输出 agenda/npc/affection/costume/location/atmosphere/characters 等其他任何标签
 
-${messagesBlock}
+{{messages}}
 
 【输出格式】每条消息按以下格式输出：
 
@@ -3830,75 +3861,568 @@ event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键
 · 物品仅在获得、消耗、状态改变时记录，无变化则不写 item 行
 · item格式：emoji前缀如🔑🍞，单件不写(1)，位置需精确（❌地上 ✅酒馆大厅桌上）
 · 重要程度判断：日常对话=一般，推动剧情=重要，关键转折=关键
-· ${userName} 是主角名
-· 再次强调：只允许 time/item/event，禁止输出其他标签`;
+· {{user}} 是主角名`;
+}
 
-            try {
-                const response = await context.generateRaw(batchPrompt, null, false, false);
-                if (response) {
-                    const segments = response.split(/===消息#(\d+)===/);
-                    for (let s = 1; s < segments.length; s += 2) {
-                        const msgIndex = parseInt(segments[s]);
-                        const content = segments[s + 1] || '';
-                        if (isNaN(msgIndex)) continue;
-                        const parsed = horaeManager.parseHoraeTag(content);
-                        if (parsed) {
-                            // 只保留 time/item/event，过滤其他标签
-                            parsed.costumes = {};
-                            parsed.affection = {};
-                            parsed.npcs = {};
-                            parsed.scene = {};
-                            parsed.agenda = [];
-                            parsed.deletedAgenda = [];
-                            parsed.deletedItems = [];
+/** 默认的AI分析提示词模板 */
+function getDefaultAnalysisPrompt() {
+    return `请分析以下文本，提取关键信息并以指定格式输出。核心原则：只提取文本中明确提到的信息，没有的字段不写，禁止编造。
 
-                            const existingMeta = horaeManager.getMessageMeta(msgIndex) || createEmptyMeta();
-                            const newMeta = horaeManager.mergeParsedToMeta(existingMeta, parsed);
-                            if (newMeta._tableUpdates) {
-                                newMeta.tableContributions = newMeta._tableUpdates;
-                                delete newMeta._tableUpdates;
-                            }
-                            newMeta._aiScanned = true;
-                            horaeManager.setMessageMeta(msgIndex, newMeta);
-                            totalProcessed++;
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error(`[Horae] 第 ${b + 1} 批摘要失败:`, err);
-                totalFailed += batch.length;
+【文本内容】
+{{content}}
+
+【输出格式】
+<horae>
+time:日期 时间（必填，如 2026/2/4 15:00 或 霜降月第一日 19:50）
+location:当前地点（必填）
+atmosphere:氛围
+characters:在场角色,逗号分隔（必填）
+costume:角色名=完整服装描述（必填，每人一行，禁止分号合并）
+item:emoji物品名(数量)|描述=持有者@精确位置（仅新获得或有变化的物品）
+item!:emoji物品名(数量)|描述=持有者@精确位置（重要物品，描述必填）
+item!!:emoji物品名(数量)|描述=持有者@精确位置（关键道具，描述必须详细）
+item-:物品名（消耗/丢失的物品）
+affection:角色名=好感度数值（仅NPC对{{user}}的好感，禁止记录{{user}}自己，禁止数值后加注解）
+npc:角色名|外貌=性格@与{{user}}的关系~性别:男或女~年龄:数字~种族:种族名~职业:职业名
+agenda:订立日期|待办内容（仅在出现新约定/计划/伏笔时写入，相对时间须括号标注绝对日期）
+agenda-:内容关键词（待办已完成/失效/取消时写入，系统自动移除匹配的待办）
+</horae>
+<horaeevent>
+event:重要程度|事件简述（30-50字，一般/重要/关键）
+</horaeevent>
+
+【触发条件】只在满足条件时才输出对应字段：
+· 物品：仅新获得、数量/归属/位置改变、消耗丢失时写。无变化不写。单件不写(1)。emoji前缀如🔑🍞。
+· NPC：首次出场必须完整（含~性别/年龄/种族/职业）。之后仅变化的字段写，无变化不写。
+  分隔符：| 分名字，= 分外貌和性格，@ 分关系，~ 分扩展字段
+· 好感度：首次按关系判定（陌生0-20/熟人30-50/朋友50-70），之后仅变化时写。
+· 待办：仅出现新约定/计划/伏笔时写。已完成/失效的待办用 agenda-: 移除。
+  新增：agenda:2026/02/10|艾伦邀请{{user}}情人节晚上约会(2026/02/14 18:00)
+  完成：agenda-:艾伦邀请{{user}}情人节晚上约会
+· event：放在<horaeevent>内，不放在<horae>内。`;
+}
+
+/** 估算文本的token数（CJK按1.5、其余按0.4） */
+function estimateTokens(text) {
+    if (!text) return 0;
+    const cjk = (text.match(/[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/g) || []).length;
+    const rest = text.length - cjk;
+    return Math.ceil(cjk * 1.5 + rest * 0.4);
+}
+
+/** AI智能摘要 — 批量分析历史消息，暂存结果后弹出审阅视窗 */
+async function batchAIScan() {
+    const chat = horaeManager.getChat();
+    if (!chat || chat.length === 0) {
+        showToast('当前没有聊天记录', 'warning');
+        return;
+    }
+
+    const targets = [];
+    for (let i = 0; i < chat.length; i++) {
+        const msg = chat[i];
+        if (msg.is_user || !msg.mes || msg.mes.trim().length < 20) continue;
+        const meta = msg.horae_meta;
+        if (meta?.events?.length > 0 && !meta?._aiScanned) continue;
+        targets.push({ index: i, text: msg.mes });
+    }
+
+    if (targets.length === 0) {
+        showToast('所有消息已有记忆数据，无需扫描', 'info');
+        return;
+    }
+
+    const scanConfig = await showAIScanConfigDialog(targets.length);
+    if (!scanConfig) return;
+    const { tokenLimit, includeNpc, includeAffection } = scanConfig;
+
+    const batches = [];
+    let currentBatch = [], currentTokens = 0;
+    for (const t of targets) {
+        const tokens = estimateTokens(t.text);
+        if (currentBatch.length > 0 && currentTokens + tokens > tokenLimit) {
+            batches.push(currentBatch);
+            currentBatch = [];
+            currentTokens = 0;
+        }
+        currentBatch.push(t);
+        currentTokens += tokens;
+    }
+    if (currentBatch.length > 0) batches.push(currentBatch);
+
+    const confirmMsg = `预计分 ${batches.length} 批处理，消耗 ${batches.length} 次生成\n\n· 再次扫描会覆盖上次的AI摘要结果\n· 扫描后可「撤销摘要」还原\n\n是否继续？`;
+    if (!confirm(confirmMsg)) return;
+
+    const scanResults = await executeBatchScan(batches, { includeNpc, includeAffection });
+    if (scanResults.length === 0) {
+        showToast('未提取到任何摘要数据', 'warning');
+        return;
+    }
+    showScanReviewModal(scanResults, { includeNpc, includeAffection });
+}
+
+/** 执行批量扫描，返回暂存结果（不写入chat） */
+async function executeBatchScan(batches, options = {}) {
+    const { includeNpc, includeAffection } = options;
+    let cancelled = false;
+    let cancelResolve = null;
+    const cancelPromise = new Promise(resolve => { cancelResolve = resolve; });
+
+    // 用于真正中止HTTP请求的AbortController（fetch层面）
+    const fetchAbort = new AbortController();
+    const _origFetch = window.fetch;
+    window.fetch = function(input, init = {}) {
+        if (!cancelled) {
+            const ourSignal = fetchAbort.signal;
+            if (init.signal && typeof AbortSignal.any === 'function') {
+                init.signal = AbortSignal.any([init.signal, ourSignal]);
+            } else {
+                init.signal = ourSignal;
+            }
+        }
+        return _origFetch.call(this, input, init);
+    };
+
+    const overlay = document.createElement('div');
+    overlay.className = 'horae-progress-overlay';
+    overlay.innerHTML = `
+        <div class="horae-progress-container">
+            <div class="horae-progress-title">AI 智能摘要中...</div>
+            <div class="horae-progress-bar">
+                <div class="horae-progress-fill" style="width: 0%"></div>
+            </div>
+            <div class="horae-progress-text">准备中...</div>
+            <button class="horae-progress-cancel"><i class="fa-solid fa-xmark"></i> 取消摘要</button>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    const fillEl = overlay.querySelector('.horae-progress-fill');
+    const textEl = overlay.querySelector('.horae-progress-text');
+    const context = getContext();
+    const userName = context?.name1 || '主角';
+
+    // 取消：中止fetch请求 + stopGeneration + Promise.race跳出
+    overlay.querySelector('.horae-progress-cancel').addEventListener('click', () => {
+        if (cancelled) return;
+        if (!confirm('取消后已完成的摘要将不会保存，确定取消？')) return;
+        cancelled = true;
+        fetchAbort.abort();
+        try { context.stopGeneration(); } catch (_) {}
+        cancelResolve();
+        overlay.remove();
+        showToast('已取消摘要生成', 'info');
+    });
+    const scanResults = [];
+
+    // 动态构建允许的标签
+    let allowedTags = 'time、item、event';
+    let forbiddenNote = '禁止输出 agenda/costume/location/atmosphere/characters';
+    if (!includeNpc) forbiddenNote += '/npc';
+    if (!includeAffection) forbiddenNote += '/affection';
+    forbiddenNote += ' 等其他标签';
+    if (includeNpc) allowedTags += '、npc';
+    if (includeAffection) allowedTags += '、affection';
+
+    for (let b = 0; b < batches.length; b++) {
+        if (cancelled) break;
+        const batch = batches[b];
+        textEl.textContent = `第 ${b + 1}/${batches.length} 批（${batch.length} 条消息）...`;
+        fillEl.style.width = `${Math.round((b / batches.length) * 100)}%`;
+
+        const messagesBlock = batch.map(t => `【消息#${t.index}】\n${t.text}`).join('\n\n');
+
+        // 自定义摘要prompt或默认
+        let batchPrompt;
+        if (settings.customBatchPrompt) {
+            batchPrompt = settings.customBatchPrompt
+                .replace(/\{\{user\}\}/gi, userName)
+                .replace(/\{\{messages\}\}/gi, messagesBlock);
+        } else {
+            let extraFormat = '';
+            let extraRules = '';
+            if (includeNpc) {
+                extraFormat += `\nnpc:角色名|外貌=性格@与${userName}的关系~性别:值~年龄:值~种族:值~职业:值（仅首次出场或信息变化时）`;
+                extraRules += `\n· NPC：首次出场完整记录（含~扩展字段），之后仅变化时写`;
+            }
+            if (includeAffection) {
+                extraFormat += `\naffection:角色名=好感度数值（仅NPC对${userName}的好感，从文本中提取已有数值）`;
+                extraRules += `\n· 好感度：仅从文本中提取明确出现的好感度数值，禁止自行推断`;
             }
 
-            if (b < batches.length - 1) {
-                textEl.textContent = `第 ${b + 1} 批完成，等待中...`;
-                await new Promise(r => setTimeout(r, 2000));
+            batchPrompt = `你是剧情分析助手。请逐条分析以下对话记录，为每条消息提取【${allowedTags}】。
+
+核心原则：
+- 只提取文本中明确出现的信息，禁止编造
+- 每条消息独立分析，用 ===消息#编号=== 分隔
+- 严格只输出 ${allowedTags} 标签，${forbiddenNote}
+
+${messagesBlock}
+
+【输出格式】每条消息按以下格式输出：
+
+===消息#编号===
+<horae>
+time:日期 时间（从文本中提取，如 2026/2/4 15:00 或 霜降月第三日 黄昏）
+item:emoji物品名(数量)|描述=持有者@位置（新获得的物品，普通物品可省描述）
+item!:emoji物品名(数量)|描述=持有者@位置（重要物品，描述必填）
+item-:物品名（消耗/丢失/用完的物品）${extraFormat}
+</horae>
+<horaeevent>
+event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键）
+</horaeevent>
+
+【规则】
+· time：从文本中提取当前场景的日期时间，必填（没有明确时间则根据上下文推断）
+· event：本条消息中发生的关键剧情，每条消息至少一个 event
+· 物品仅在获得、消耗、状态改变时记录，无变化则不写 item 行
+· item格式：emoji前缀如🔑🍞，单件不写(1)，位置需精确（❌地上 ✅酒馆大厅桌上）
+· 重要程度判断：日常对话=一般，推动剧情=重要，关键转折=关键
+· ${userName} 是主角名${extraRules}
+· 再次强调：只允许 ${allowedTags}，${forbiddenNote}`;
+        }
+
+        try {
+            const response = await Promise.race([
+                context.generateRaw(batchPrompt, null, false, false),
+                cancelPromise.then(() => null)
+            ]);
+            if (cancelled) break;
+            if (response) {
+                const segments = response.split(/===消息#(\d+)===/);
+                for (let s = 1; s < segments.length; s += 2) {
+                    const msgIndex = parseInt(segments[s]);
+                    const content = segments[s + 1] || '';
+                    if (isNaN(msgIndex)) continue;
+                    const parsed = horaeManager.parseHoraeTag(content);
+                    if (parsed) {
+                        parsed.costumes = {};
+                        parsed.scene = {};
+                        parsed.agenda = [];
+                        parsed.deletedAgenda = [];
+                        parsed.deletedItems = [];
+                        if (!includeNpc) parsed.npcs = {};
+                        if (!includeAffection) parsed.affection = {};
+
+                        const existingMeta = horaeManager.getMessageMeta(msgIndex) || createEmptyMeta();
+                        const newMeta = horaeManager.mergeParsedToMeta(existingMeta, parsed);
+                        if (newMeta._tableUpdates) {
+                            newMeta.tableContributions = newMeta._tableUpdates;
+                            delete newMeta._tableUpdates;
+                        }
+                        newMeta._aiScanned = true;
+
+                        const chatRef = horaeManager.getChat();
+                        const preview = (chatRef[msgIndex]?.mes || '').substring(0, 60);
+                        scanResults.push({ msgIndex, newMeta, preview, _deleted: false });
+                    }
+                }
+            }
+        } catch (err) {
+            if (cancelled || err?.name === 'AbortError') break;
+            console.error(`[Horae] 第 ${b + 1} 批摘要失败:`, err);
+        }
+
+        if (b < batches.length - 1 && !cancelled) {
+            textEl.textContent = `第 ${b + 1} 批完成，等待中...`;
+            await Promise.race([
+                new Promise(r => setTimeout(r, 2000)),
+                cancelPromise
+            ]);
+        }
+    }
+    // 恢复原生fetch
+    window.fetch = _origFetch;
+    if (!cancelled) overlay.remove();
+    return cancelled ? [] : scanResults;
+}
+
+/** 从暂存结果中按分类提取审阅条目 */
+function extractReviewCategories(scanResults) {
+    const categories = { events: [], items: [], npcs: [], affection: [] };
+
+    for (let ri = 0; ri < scanResults.length; ri++) {
+        const r = scanResults[ri];
+        if (r._deleted) continue;
+        const meta = r.newMeta;
+
+        if (meta.events?.length > 0) {
+            for (let ei = 0; ei < meta.events.length; ei++) {
+                categories.events.push({
+                    resultIndex: ri, field: 'events', subIndex: ei,
+                    msgIndex: r.msgIndex,
+                    time: meta.timestamp?.story_date || '',
+                    level: meta.events[ei].level || '一般',
+                    text: meta.events[ei].summary || ''
+                });
             }
         }
 
-        fillEl.style.width = '100%';
-        textEl.textContent = '保存中...';
+        for (const [name, info] of Object.entries(meta.items || {})) {
+            const desc = info.description || '';
+            const loc = [info.holder, info.location ? `@${info.location}` : ''].filter(Boolean).join('');
+            categories.items.push({
+                resultIndex: ri, field: 'items', key: name,
+                msgIndex: r.msgIndex,
+                text: `${info.icon || ''}${name}`,
+                sub: loc,
+                desc: desc
+            });
+        }
+
+        for (const [name, info] of Object.entries(meta.npcs || {})) {
+            categories.npcs.push({
+                resultIndex: ri, field: 'npcs', key: name,
+                msgIndex: r.msgIndex,
+                text: name,
+                sub: [info.appearance, info.personality, info.relationship].filter(Boolean).join(' / ')
+            });
+        }
+
+        for (const [name, val] of Object.entries(meta.affection || {})) {
+            categories.affection.push({
+                resultIndex: ri, field: 'affection', key: name,
+                msgIndex: r.msgIndex,
+                text: name,
+                sub: `${typeof val === 'object' ? val.value : val}`
+            });
+        }
+    }
+
+    // 好感度去重：同名NPC只保留最后一次（最终值）
+    const affMap = new Map();
+    for (const item of categories.affection) {
+        affMap.set(item.text, item);
+    }
+    categories.affection = [...affMap.values()];
+
+    categories.events.sort((a, b) => (a.time || '').localeCompare(b.time || '') || a.msgIndex - b.msgIndex);
+    return categories;
+}
+
+/** 审阅条目唯一标识 */
+function makeReviewKey(item) {
+    if (item.field === 'events') return `${item.resultIndex}-events-${item.subIndex}`;
+    return `${item.resultIndex}-${item.field}-${item.key}`;
+}
+
+/** 摘要审阅弹窗 — 按分类展示，支持逐条删除和补充摘要 */
+function showScanReviewModal(scanResults, scanOptions) {
+    const categories = extractReviewCategories(scanResults);
+    const deletedSet = new Set();
+
+    const tabs = [
+        { id: 'events', label: '剧情轨迹', icon: 'fa-clock-rotate-left', items: categories.events },
+        { id: 'items', label: '物品', icon: 'fa-box-open', items: categories.items },
+        { id: 'npcs', label: '角色', icon: 'fa-user', items: categories.npcs },
+        { id: 'affection', label: '好感度', icon: 'fa-heart', items: categories.affection }
+    ].filter(t => t.items.length > 0);
+
+    if (tabs.length === 0) {
+        showToast('未提取到任何摘要数据', 'warning');
+        return;
+    }
+
+    const modal = document.createElement('div');
+    modal.className = 'horae-modal horae-review-modal';
+
+    const activeTab = tabs[0].id;
+    const tabsHtml = tabs.map(t =>
+        `<button class="horae-review-tab ${t.id === activeTab ? 'active' : ''}" data-tab="${t.id}">
+            <i class="fa-solid ${t.icon}"></i> ${t.label} <span class="tab-count">${t.items.length}</span>
+        </button>`
+    ).join('');
+
+    const panelsHtml = tabs.map(t => {
+        const itemsHtml = t.items.map(item => {
+            const itemKey = escapeHtml(makeReviewKey(item));
+            const levelAttr = item.level ? ` data-level="${escapeHtml(item.level)}"` : '';
+            const levelBadge = item.level ? `<span class="horae-level-badge ${item.level === '关键' ? 'critical' : item.level === '重要' ? 'important' : ''}" style="font-size:10px;margin-right:4px;">${escapeHtml(item.level)}</span>` : '';
+            const descHtml = item.desc ? `<div class="horae-review-item-sub" style="font-style:italic;opacity:0.8;">📝 ${escapeHtml(item.desc)}</div>` : '';
+            return `<div class="horae-review-item" data-key="${itemKey}"${levelAttr}>
+                <div class="horae-review-item-body">
+                    <div class="horae-review-item-title">${levelBadge}${escapeHtml(item.text)}</div>
+                    ${item.sub ? `<div class="horae-review-item-sub">${escapeHtml(item.sub)}</div>` : ''}
+                    ${descHtml}
+                    ${item.time ? `<div class="horae-review-item-sub">${escapeHtml(item.time)}</div>` : ''}
+                    <div class="horae-review-item-msg">#${item.msgIndex}</div>
+                </div>
+                <button class="horae-review-delete-btn" data-key="${itemKey}" title="删除/恢复">
+                    <i class="fa-solid fa-trash-can"></i>
+                </button>
+            </div>`;
+        }).join('');
+        return `<div class="horae-review-panel ${t.id === activeTab ? 'active' : ''}" data-panel="${t.id}">
+            ${itemsHtml || '<div class="horae-review-empty">暂无数据</div>'}
+        </div>`;
+    }).join('');
+
+    const totalCount = tabs.reduce((s, t) => s + t.items.length, 0);
+
+    modal.innerHTML = `
+        <div class="horae-modal-content">
+            <div class="horae-modal-header">
+                <span>摘要审阅</span>
+                <span style="font-size:12px;color:var(--horae-text-muted);">共 ${totalCount} 条</span>
+            </div>
+            <div class="horae-review-tabs">${tabsHtml}</div>
+            <div class="horae-review-body">${panelsHtml}</div>
+            <div class="horae-modal-footer horae-review-footer">
+                <div class="horae-review-stats">已删除 <strong id="horae-review-del-count">0</strong> 条</div>
+                <div class="horae-review-actions">
+                    <button class="menu_button" id="horae-review-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+                    <button class="menu_button primary" id="horae-review-rescan" disabled style="opacity:0.5;"><i class="fa-solid fa-wand-magic-sparkles"></i> 补充摘要</button>
+                    <button class="menu_button primary" id="horae-review-confirm"><i class="fa-solid fa-check"></i> 确认保存</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    // tab 切换
+    modal.querySelectorAll('.horae-review-tab').forEach(tabBtn => {
+        tabBtn.addEventListener('click', () => {
+            modal.querySelectorAll('.horae-review-tab').forEach(t => t.classList.remove('active'));
+            modal.querySelectorAll('.horae-review-panel').forEach(p => p.classList.remove('active'));
+            tabBtn.classList.add('active');
+            modal.querySelector(`.horae-review-panel[data-panel="${tabBtn.dataset.tab}"]`)?.classList.add('active');
+        });
+    });
+
+    // 删除/恢复切换
+    modal.querySelectorAll('.horae-review-delete-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const key = btn.dataset.key;
+            const itemEl = btn.closest('.horae-review-item');
+            if (deletedSet.has(key)) {
+                deletedSet.delete(key);
+                itemEl.classList.remove('deleted');
+                btn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+            } else {
+                deletedSet.add(key);
+                itemEl.classList.add('deleted');
+                btn.innerHTML = '<i class="fa-solid fa-rotate-left"></i>';
+            }
+            updateReviewStats();
+        });
+    });
+
+    function updateReviewStats() {
+        const count = deletedSet.size;
+        modal.querySelector('#horae-review-del-count').textContent = count;
+        const rescanBtn = modal.querySelector('#horae-review-rescan');
+        rescanBtn.disabled = count === 0;
+        rescanBtn.style.opacity = count === 0 ? '0.5' : '1';
+        for (const t of tabs) {
+            const remain = t.items.filter(i => !deletedSet.has(makeReviewKey(i))).length;
+            const badge = modal.querySelector(`.horae-review-tab[data-tab="${t.id}"] .tab-count`);
+            if (badge) badge.textContent = remain;
+        }
+    }
+
+    // 确认保存
+    modal.querySelector('#horae-review-confirm').addEventListener('click', async () => {
+        applyDeletedToResults(scanResults, deletedSet, categories);
+        let saved = 0;
+        for (const r of scanResults) {
+            if (r._deleted) continue;
+            const m = r.newMeta;
+            const hasData = (m.events?.length > 0) || Object.keys(m.items || {}).length > 0 ||
+                Object.keys(m.npcs || {}).length > 0 || Object.keys(m.affection || {}).length > 0 ||
+                m.timestamp?.story_date;
+            if (!hasData) continue;
+            m._aiScanned = true;
+            horaeManager.setMessageMeta(r.msgIndex, m);
+            saved++;
+        }
         horaeManager.rebuildTableData();
         await getContext().saveChat();
-
-        const msg = `AI智能摘要完成！处理 ${totalProcessed} 条` + (totalFailed > 0 ? `，${totalFailed} 条失败` : '');
-        showToast(msg, totalFailed > 0 ? 'warning' : 'success');
+        modal.remove();
+        showToast(`已保存 ${saved} 条摘要`, 'success');
         refreshAllDisplays();
         renderCustomTablesList();
-    } catch (error) {
-        console.error('[Horae] AI智能摘要失败:', error);
-        showToast('AI智能摘要失败: ' + error.message, 'error');
-    } finally {
-        overlay.remove();
+    });
+
+    // 取消
+    const closeModal = () => { if (confirm('取消将丢弃所有摘要结果，是否继续？')) modal.remove(); };
+    modal.querySelector('#horae-review-cancel').addEventListener('click', closeModal);
+    modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+    // 补充摘要 — 对已删除条目所在楼层重跑
+    modal.querySelector('#horae-review-rescan').addEventListener('click', async () => {
+        const deletedMsgIndices = new Set();
+        for (const key of deletedSet) {
+            const ri = parseInt(key.split('-')[0]);
+            if (!isNaN(ri) && scanResults[ri]) deletedMsgIndices.add(scanResults[ri].msgIndex);
+        }
+        if (deletedMsgIndices.size === 0) return;
+        if (!confirm(`将对 ${deletedMsgIndices.size} 条消息重新生成摘要，消耗至少 1 次生成。\n\n是否继续？`)) return;
+
+        applyDeletedToResults(scanResults, deletedSet, categories);
+
+        const chat = horaeManager.getChat();
+        const rescanTargets = [];
+        for (const idx of deletedMsgIndices) {
+            if (chat[idx]?.mes) rescanTargets.push({ index: idx, text: chat[idx].mes });
+        }
+        if (rescanTargets.length === 0) return;
+
+        modal.remove();
+
+        const tokenLimit = 80000;
+        const rescanBatches = [];
+        let cb = [], ct = 0;
+        for (const t of rescanTargets) {
+            const tk = estimateTokens(t.text);
+            if (cb.length > 0 && ct + tk > tokenLimit) { rescanBatches.push(cb); cb = []; ct = 0; }
+            cb.push(t); ct += tk;
+        }
+        if (cb.length > 0) rescanBatches.push(cb);
+
+        const newResults = await executeBatchScan(rescanBatches, scanOptions);
+        const merged = scanResults.filter(r => !r._deleted).concat(newResults);
+        showScanReviewModal(merged, scanOptions);
+    });
+}
+
+/** 将删除标记应用到 scanResults 的实际数据 */
+function applyDeletedToResults(scanResults, deletedSet, categories) {
+    const deleteMap = new Map();
+    const allItems = [...categories.events, ...categories.items, ...categories.npcs, ...categories.affection];
+    for (const key of deletedSet) {
+        const item = allItems.find(i => makeReviewKey(i) === key);
+        if (!item) continue;
+        if (!deleteMap.has(item.resultIndex)) {
+            deleteMap.set(item.resultIndex, { events: new Set(), items: new Set(), npcs: new Set(), affection: new Set() });
+        }
+        const dm = deleteMap.get(item.resultIndex);
+        if (item.field === 'events') dm.events.add(item.subIndex);
+        else dm[item.field]?.add(item.key);
+    }
+
+    for (const [ri, dm] of deleteMap) {
+        const meta = scanResults[ri]?.newMeta;
+        if (!meta) continue;
+        if (dm.events.size > 0 && meta.events) {
+            const indices = [...dm.events].sort((a, b) => b - a);
+            for (const idx of indices) meta.events.splice(idx, 1);
+        }
+        for (const name of dm.items) delete meta.items?.[name];
+        for (const name of dm.npcs) delete meta.npcs?.[name];
+        for (const name of dm.affection) delete meta.affection?.[name];
+
+        const hasData = (meta.events?.length > 0) || Object.keys(meta.items || {}).length > 0 ||
+            Object.keys(meta.npcs || {}).length > 0 || Object.keys(meta.affection || {}).length > 0;
+        if (!hasData) scanResults[ri]._deleted = true;
     }
 }
 
-/** AI摘要配置弹窗，及token上限*/
+/** AI摘要配置弹窗 */
 function showAIScanConfigDialog(targetCount) {
     return new Promise(resolve => {
         const modal = document.createElement('div');
         modal.className = 'horae-modal';
         modal.innerHTML = `
-            <div class="horae-modal-content" style="max-width: 400px;">
+            <div class="horae-modal-content" style="max-width: 420px;">
                 <div class="horae-modal-header">
                     <span>AI 智能摘要</span>
                 </div>
@@ -3911,10 +4435,25 @@ function showAIScanConfigDialog(targetCount) {
                         <input type="number" id="horae-ai-scan-token-limit" value="80000" min="10000" max="1000000" step="10000"
                             style="flex:1; padding: 6px 10px; background: var(--horae-bg); border: 1px solid var(--horae-border); border-radius: 4px; color: var(--horae-text); font-size: 13px;">
                     </label>
-                    <p style="margin: 8px 0 0; color: var(--horae-text-muted); font-size: 11px;">
+                    <p style="margin: 8px 0 12px; color: var(--horae-text-muted); font-size: 11px;">
                         值越大每批消息越多、生成次数越少，但可能超出模型限制。<br>
                         Claude ≈ 80K~200K · Gemini ≈ 100K~1000K · GPT-4o ≈ 80K~128K
                     </p>
+                    <div style="border-top: 1px solid var(--horae-border); padding-top: 12px;">
+                        <p style="margin: 0 0 8px; font-size: 12px; color: var(--horae-text);">额外提取项（可选）</p>
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--horae-text); margin-bottom: 6px; cursor: pointer;">
+                            <input type="checkbox" id="horae-scan-include-npc" ${settings.aiScanIncludeNpc ? 'checked' : ''}>
+                            NPC 角色信息
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--horae-text); cursor: pointer;">
+                            <input type="checkbox" id="horae-scan-include-affection" ${settings.aiScanIncludeAffection ? 'checked' : ''}>
+                            好感度
+                        </label>
+                        <p style="margin: 6px 0 0; color: var(--horae-text-muted); font-size: 10px;">
+                            NPC 和好感度从历史文本中提取，不受世界书规则约束。<br>
+                            提取后可在审阅弹窗中逐条删除不满意的结果。
+                        </p>
+                    </div>
                 </div>
                 <div class="horae-modal-footer">
                     <button class="menu_button" id="horae-ai-scan-cancel">取消</button>
@@ -3926,8 +4465,13 @@ function showAIScanConfigDialog(targetCount) {
 
         modal.querySelector('#horae-ai-scan-confirm').addEventListener('click', () => {
             const val = parseInt(modal.querySelector('#horae-ai-scan-token-limit').value) || 80000;
+            const includeNpc = modal.querySelector('#horae-scan-include-npc').checked;
+            const includeAffection = modal.querySelector('#horae-scan-include-affection').checked;
+            settings.aiScanIncludeNpc = includeNpc;
+            settings.aiScanIncludeAffection = includeAffection;
+            saveSettings();
             modal.remove();
-            resolve(Math.max(10000, val));
+            resolve({ tokenLimit: Math.max(10000, val), includeNpc, includeAffection });
         });
         modal.querySelector('#horae-ai-scan-cancel').addEventListener('click', () => {
             modal.remove();
@@ -4058,43 +4602,18 @@ async function clearAllData() {
 /** 使用AI分析消息内容 */
 async function analyzeMessageWithAI(messageContent) {
     const context = getContext();
-    
     const userName = context?.name1 || '主角';
-    
-    const analysisPrompt = `请分析以下文本，提取关键信息并以指定格式输出。核心原则：只提取文本中明确提到的信息，没有的字段不写，禁止编造。
 
-【文本内容】
-${messageContent}
-
-【输出格式】
-<horae>
-time:日期 时间（必填，如 2026/2/4 15:00 或 霜降月第一日 19:50）
-location:当前地点（必填）
-atmosphere:氛围
-characters:在场角色,逗号分隔（必填）
-costume:角色名=完整服装描述（必填，每人一行，禁止分号合并）
-item:emoji物品名(数量)|描述=持有者@精确位置（仅新获得或有变化的物品）
-item!:emoji物品名(数量)|描述=持有者@精确位置（重要物品，描述必填）
-item!!:emoji物品名(数量)|描述=持有者@精确位置（关键道具，描述必须详细）
-item-:物品名（消耗/丢失的物品）
-affection:角色名=好感度数值（仅NPC对${userName}的好感，禁止记录${userName}自己，禁止数值后加注解）
-npc:角色名|外貌=性格@与${userName}的关系~性别:男或女~年龄:数字~种族:种族名~职业:职业名
-agenda:订立日期|待办内容（仅在出现新约定/计划/伏笔时写入，相对时间须括号标注绝对日期）
-agenda-:内容关键词（待办已完成/失效/取消时写入，系统自动移除匹配的待办）
-</horae>
-<horaeevent>
-event:重要程度|事件简述（30-50字，一般/重要/关键）
-</horaeevent>
-
-【触发条件】只在满足条件时才输出对应字段：
-· 物品：仅新获得、数量/归属/位置改变、消耗丢失时写。无变化不写。单件不写(1)。emoji前缀如🔑🍞。
-· NPC：首次出场必须完整（含~性别/年龄/种族/职业）。之后仅变化的字段写，无变化不写。
-  分隔符：| 分名字，= 分外貌和性格，@ 分关系，~ 分扩展字段
-· 好感度：首次按关系判定（陌生0-20/熟人30-50/朋友50-70），之后仅变化时写。
-· 待办：仅出现新约定/计划/伏笔时写。已完成/失效的待办用 agenda-: 移除。
-  新增：agenda:2026/02/10|艾伦邀请${userName}情人节晚上约会(2026/02/14 18:00)
-  完成：agenda-:艾伦邀请${userName}情人节晚上约会
-· event：放在<horaeevent>内，不放在<horae>内。`;
+    let analysisPrompt;
+    if (settings.customAnalysisPrompt) {
+        analysisPrompt = settings.customAnalysisPrompt
+            .replace(/\{\{user\}\}/gi, userName)
+            .replace(/\{\{content\}\}/gi, messageContent);
+    } else {
+        analysisPrompt = getDefaultAnalysisPrompt()
+            .replace(/\{\{user\}\}/gi, userName)
+            .replace(/\{\{content\}\}/gi, messageContent);
+    }
 
     try {
         const response = await context.generateRaw(analysisPrompt, null, false, false);

@@ -47,10 +47,18 @@
     border-color: var(--horae-border) !important;
 }
 
+/* 自定义checkbox渲染 */
 #horae_drawer input[type="checkbox"],
 .horae-message-panel input[type="checkbox"],
 .horae-modal input[type="checkbox"] {
     background: white !important;
+}
+
+#horae_drawer input[type="checkbox"]:checked::after,
+.horae-message-panel input[type="checkbox"]:checked::after,
+.horae-modal input[type="checkbox"]:checked::after {
+    content: '';
+    border: rgba(0, 0, 0, 0.2);
 }
 
 #horae_drawer label,
@@ -668,6 +676,30 @@
     margin-bottom: 8px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.horae-eye-toggle {
+    background: none;
+    border: none;
+    color: var(--horae-text-muted);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 4px 6px;
+    opacity: 0.7;
+    transition: opacity 0.15s, color 0.15s;
+}
+
+.horae-eye-toggle:hover {
+    opacity: 1;
+    color: var(--horae-text);
+}
+
+.horae-eye-toggle.horae-eye-off {
+    opacity: 0.5;
+    color: var(--horae-text-muted);
 }
 
 .horae-character-list {
@@ -1410,7 +1442,7 @@
         font-size: 16px;
     }
     
-    /* 手机端物品编辑器适配 - 换行显示避免横向滚动 */
+    /* 手机端物品编辑器适配 */
     .horae-item-row {
         flex-wrap: wrap;
         gap: 6px;
@@ -1802,7 +1834,7 @@
     color: #fff;
 }
 
-/* NPC 编辑弹窗紧凑行 */
+/* NPC 编辑弹窗 */
 .horae-edit-field-row {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr 1fr;
@@ -1988,7 +2020,7 @@
 }
 
 /* ============================================
-   清理无主物品按钮
+   通用图标按钮（待办新增、物品刷新、多选操作等）
    ============================================ */
 .horae-icon-btn {
     display: flex;
@@ -2011,7 +2043,7 @@
 }
 
 /* ============================================
-   清理无主物品弹窗
+   通用模态弹窗（编辑待办/物品/好感度/NPC等）
    ============================================ */
 .horae-modal {
     position: fixed;
@@ -2061,56 +2093,6 @@
     font-size: 12px;
     color: var(--horae-text-muted);
     margin-bottom: 12px;
-}
-
-.horae-cleanup-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    max-height: 40vh;
-    overflow-y: auto;
-}
-
-.horae-cleanup-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    background: var(--horae-bg-secondary);
-    border-radius: var(--horae-radius-sm);
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.horae-cleanup-item:hover {
-    background: var(--horae-bg-hover);
-}
-
-.horae-cleanup-item input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    accent-color: var(--horae-primary);
-}
-
-.horae-cleanup-item-icon {
-    font-size: 18px;
-}
-
-.horae-cleanup-item-info {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.horae-cleanup-item-name {
-    font-size: 13px;
-    color: var(--horae-text);
-}
-
-.horae-cleanup-item-location {
-    font-size: 11px;
-    color: var(--horae-text-muted);
 }
 
 .horae-modal-footer {
@@ -2807,3 +2789,323 @@
 .horae-table-prompt-row input::placeholder {
     color: var(--horae-text-muted);
 }
+
+/* ============================================
+   自定义提示词编辑器
+   ============================================ */
+.horae-prompt-editor-group {
+    background: var(--horae-bg-secondary);
+    border: 1px solid var(--horae-border);
+    border-radius: var(--horae-radius);
+    overflow: hidden;
+}
+
+.horae-prompt-editor-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--horae-bg);
+    border-bottom: 1px solid var(--horae-border);
+    font-size: 12px;
+    color: var(--horae-text);
+    font-weight: 500;
+}
+
+.horae-btn-reset-prompt {
+    background: none;
+    border: 1px solid var(--horae-border);
+    color: var(--horae-text-muted);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: var(--horae-radius-sm);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.horae-btn-reset-prompt:hover {
+    color: var(--horae-primary-light);
+    border-color: var(--horae-primary-light);
+}
+
+.horae-prompt-textarea {
+    width: 100%;
+    min-height: 120px;
+    max-height: 50vh;
+    padding: 10px 12px;
+    background: var(--horae-bg) !important;
+    color: var(--horae-text) !important;
+    border: none !important;
+    border-bottom: 1px solid var(--horae-border) !important;
+    font-size: 12px;
+    line-height: 1.5;
+    font-family: 'Consolas', 'Monaco', monospace;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+.horae-prompt-textarea:focus {
+    outline: none;
+    background: rgba(45, 45, 60, 0.95) !important;
+}
+
+.horae-prompt-textarea::placeholder {
+    color: var(--horae-text-muted);
+}
+
+.horae-prompt-char-count {
+    padding: 4px 12px;
+    font-size: 10px;
+    color: var(--horae-text-muted);
+    text-align: right;
+}
+
+/* 折叠区域 */
+.horae-collapse-header {
+    cursor: pointer;
+    user-select: none;
+}
+
+.horae-collapse-header:hover {
+    color: var(--horae-text);
+}
+
+.horae-collapse-icon {
+    margin-left: auto;
+    font-size: 11px;
+    transition: transform 0.2s;
+    color: var(--horae-text-muted) !important;
+}
+
+.horae-collapse-icon.collapsed {
+    transform: rotate(-90deg);
+}
+
+/* 进度浮层取消按钮（!important覆盖酒馆全局button样式） */
+.horae-progress-overlay .horae-progress-cancel {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    width: 100% !important;
+    margin-top: 16px !important;
+    padding: 14px 0 !important;
+    background: #7c3aed !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    opacity: 1 !important;
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    box-sizing: border-box !important;
+    min-height: 48px !important;
+}
+
+.horae-progress-overlay .horae-progress-cancel i {
+    font-size: 16px !important;
+    color: #fff !important;
+}
+
+.horae-progress-overlay .horae-progress-cancel:hover {
+    background: #8b5cf6 !important;
+    box-shadow: 0 4px 15px rgba(124, 58, 237, 0.4) !important;
+}
+
+/* ============================================
+   AI 摘要审阅弹窗
+   ============================================ */
+.horae-review-modal .horae-modal-content {
+    max-width: 600px;
+    width: 95vw;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.horae-review-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--horae-border);
+    background: var(--horae-bg);
+    overflow-x: auto;
+    flex-shrink: 0;
+}
+
+.horae-review-tab {
+    padding: 8px 14px;
+    font-size: 12px;
+    color: var(--horae-text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: all 0.15s;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+}
+
+.horae-review-tab:hover {
+    color: var(--horae-text);
+    background: var(--horae-bg-hover);
+}
+
+.horae-review-tab.active {
+    color: var(--horae-primary-light);
+    border-bottom-color: var(--horae-primary);
+}
+
+.horae-review-tab .tab-count {
+    display: inline-block;
+    min-width: 16px;
+    padding: 0 4px;
+    margin-left: 4px;
+    font-size: 10px;
+    line-height: 16px;
+    text-align: center;
+    background: var(--horae-bg-hover);
+    border-radius: 8px;
+}
+
+.horae-review-tab.active .tab-count {
+    background: var(--horae-primary);
+    color: white;
+}
+
+.horae-review-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    min-height: 0;
+}
+
+.horae-review-panel {
+    display: none;
+}
+
+.horae-review-panel.active {
+    display: block;
+}
+
+.horae-review-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    background: var(--horae-bg-secondary);
+    border-radius: var(--horae-radius-sm);
+    border-left: 3px solid var(--horae-border);
+    transition: all 0.2s;
+}
+
+.horae-review-item.deleted {
+    opacity: 0.4;
+    text-decoration: line-through;
+    border-left-color: var(--horae-danger);
+}
+
+.horae-review-item-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.horae-review-item-title {
+    font-size: 13px;
+    color: var(--horae-text);
+    word-break: break-word;
+}
+
+.horae-review-item-sub {
+    font-size: 11px;
+    color: var(--horae-text-muted);
+    margin-top: 2px;
+}
+
+.horae-review-item-msg {
+    font-size: 10px;
+    color: var(--horae-text-muted);
+    opacity: 0.7;
+    margin-top: 3px;
+}
+
+.horae-review-delete-btn {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: 1px solid var(--horae-border);
+    border-radius: var(--horae-radius-sm);
+    color: var(--horae-text-muted);
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s;
+}
+
+.horae-review-delete-btn:hover {
+    color: var(--horae-danger);
+    border-color: var(--horae-danger);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.horae-review-item.deleted .horae-review-delete-btn {
+    color: var(--horae-success);
+    border-color: var(--horae-success);
+}
+
+.horae-review-item.deleted .horae-review-delete-btn:hover {
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.horae-review-empty {
+    text-align: center;
+    padding: 24px;
+    color: var(--horae-text-muted);
+    font-size: 13px;
+}
+
+.horae-review-footer {
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.horae-review-stats {
+    font-size: 11px;
+    color: var(--horae-text-muted);
+    flex-shrink: 0;
+}
+
+.horae-review-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.horae-review-actions .menu_button {
+    min-width: auto;
+    padding: 8px 14px;
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* 事件级别标记复用 */
+.horae-review-item[data-level="关键"] {
+    border-left-color: #ef4444;
+}
+
+.horae-review-item[data-level="重要"] {
+    border-left-color: #f59e0b;
+}
+
+.horae-review-item[data-level="一般"] {
+    border-left-color: var(--horae-border);
+}
+
