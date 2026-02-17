@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.2.2
+ * 版本: 1.3.0
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -19,7 +19,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.2.2';
+const VERSION = '1.3.0';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -96,7 +96,12 @@ const DEFAULT_SETTINGS = {
     customBatchPrompt: '',       // 自定义AI摘要提示词（空=使用默认）
     customAnalysisPrompt: '',    // 自定义AI分析提示词（空=使用默认）
     aiScanIncludeNpc: false,     // AI摘要是否提取NPC
-    aiScanIncludeAffection: false  // AI摘要是否提取好感度
+    aiScanIncludeAffection: false, // AI摘要是否提取好感度
+    panelWidth: 100,               // 消息面板宽度百分比（50-100）
+    themeMode: 'dark',             // 插件主题：dark / light / custom-{index}
+    customCSS: '',                 // 用户自定义CSS
+    customThemes: [],              // 导入的美化主题 [{name, author, variables, css}]
+    globalTables: []               // 全局表格（跨角色卡共享）
 };
 
 // ============================================
@@ -111,31 +116,36 @@ let longPressTimer = null;         // 长按计时器
 let agendaMultiSelectMode = false; // 待办多选模式
 let selectedAgendaIndices = new Set(); // 选中的待办索引
 let agendaLongPressTimer = null;   // 待办长按计时器
+let timelineMultiSelectMode = false; // 时间线多选模式
+let selectedTimelineEvents = new Set(); // 选中的事件（"msgIndex-eventIndex"格式）
+let timelineLongPressTimer = null;  // 时间线长按计时器
 
 // ============================================
 // 工具函数
 // ============================================
 
-/** 自动注入配套正则到ST原生正则系统 */
+/** 自动注入配套正则到ST原生正则系统（始终置于末尾，避免与其他正则冲突） */
 function ensureRegexRules() {
     if (!extension_settings.regex) extension_settings.regex = [];
 
-    let injected = 0;
+    let changed = 0;
     for (const rule of HORAE_REGEX_RULES) {
         const idx = extension_settings.regex.findIndex(r => r.id === rule.id);
-        if (idx === -1) {
-            extension_settings.regex.push({ ...rule });
-            injected++;
-        } else {
-            // 已存在则同步更新正则内容（版本升级时自动修复），保留用户的 disabled 状态
+        if (idx !== -1) {
+            // 保留用户的 disabled 状态，移除旧位置
             const userDisabled = extension_settings.regex[idx].disabled;
-            extension_settings.regex[idx] = { ...rule, disabled: userDisabled };
+            extension_settings.regex.splice(idx, 1);
+            extension_settings.regex.push({ ...rule, disabled: userDisabled });
+            changed++;
+        } else {
+            extension_settings.regex.push({ ...rule });
+            changed++;
         }
     }
 
-    if (injected > 0) {
+    if (changed > 0) {
         saveSettingsDebounced();
-        console.log(`[Horae] 已自动注入 ${injected} 条配套正则规则`);
+        console.log(`[Horae] 配套正则已同步至列表末尾（共 ${HORAE_REGEX_RULES.length} 条）`);
     }
 }
 
@@ -231,6 +241,41 @@ function setChatTables(tables) {
     
     context.chat[0].horae_meta.customTables = tables;
     getContext().saveChat();
+}
+
+/** 获取全局表格列表 */
+function getGlobalTables() {
+    return settings.globalTables || [];
+}
+
+/** 保存全局表格列表 */
+function setGlobalTables(tables) {
+    for (const table of tables) {
+        table.baseData = JSON.parse(JSON.stringify(table.data || {}));
+        table.baseRows = table.rows || 2;
+        table.baseCols = table.cols || 2;
+    }
+    settings.globalTables = tables;
+    saveSettings();
+}
+
+/** 获取指定scope的表格 */
+function getTablesByScope(scope) {
+    return scope === 'global' ? getGlobalTables() : getChatTables();
+}
+
+/** 保存指定scope的表格 */
+function setTablesByScope(scope, tables) {
+    if (scope === 'global') {
+        setGlobalTables(tables);
+    } else {
+        setChatTables(tables);
+    }
+}
+
+/** 获取合并后的所有表格（用于提示词注入） */
+function getAllTables() {
+    return [...getGlobalTables(), ...getChatTables()];
 }
 
 // ============================================
@@ -372,20 +417,20 @@ function deleteAgendaItem(agendaItem) {
 /**
  * 导出表格为JSON
  */
-function exportTable(tableIndex) {
-    const tables = getChatTables();
+function exportTable(tableIndex, scope = 'local') {
+    const tables = getTablesByScope(scope);
     const table = tables[tableIndex];
     if (!table) return;
-    
+
     const exportData = JSON.stringify(table, null, 2);
     const blob = new Blob([exportData], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    
+
     const a = document.createElement('a');
     a.href = url;
     a.download = `horae_table_${table.name || tableIndex}.json`;
     a.click();
-    
+
     URL.revokeObjectURL(url);
     showToast('表格已导出', 'success');
 }
@@ -402,7 +447,6 @@ function importTable(file) {
                 throw new Error('无效的表格数据');
             }
             
-            // 确保有必要的字段
             const newTable = {
                 id: Date.now().toString(),
                 name: tableData.name || '导入的表格',
@@ -533,7 +577,7 @@ function updateTimelineDisplay() {
     const currentDate = state.timestamp?.story_date || getCurrentSystemTime().date;
     
     listEl.innerHTML = events.reverse().map(e => {
-            const result = calculateDetailedRelativeTime(
+        const result = calculateDetailedRelativeTime(
             e.timestamp?.story_date || '',
             currentDate
         );
@@ -542,13 +586,21 @@ function updateTimelineDisplay() {
                           e.event?.level === '重要' ? 'important' : '';
         const levelBadge = e.event?.level ? `<span class="horae-level-badge ${levelClass}">${e.event.level}</span>` : '';
         
-        // 标准日历显示周几
         const dateStr = e.timestamp?.story_date || '?';
         const parsed = parseStoryDate(dateStr);
         const displayDate = (parsed && parsed.type === 'standard') ? formatStoryDate(parsed, true) : dateStr;
         
+        // 多选模式：事件唯一标识
+        const eventKey = `${e.messageIndex}-${e.eventIndex || 0}`;
+        const isSelected = selectedTimelineEvents.has(eventKey);
+        const selectedClass = isSelected ? 'selected' : '';
+        const checkboxDisplay = timelineMultiSelectMode ? 'flex' : 'none';
+        
         return `
-            <div class="horae-timeline-item horae-editable-item ${levelClass}" data-message-id="${e.messageIndex}">
+            <div class="horae-timeline-item horae-editable-item ${levelClass} ${selectedClass}" data-message-id="${e.messageIndex}" data-event-key="${eventKey}">
+                <div class="horae-item-checkbox" style="display: ${checkboxDisplay}">
+                    <input type="checkbox" ${isSelected ? 'checked' : ''}>
+                </div>
                 <div class="horae-timeline-time">
                     <div class="date">${displayDate}</div>
                     <div>${e.timestamp?.story_time || ''}</div>
@@ -557,19 +609,37 @@ function updateTimelineDisplay() {
                     <div class="horae-timeline-summary">${levelBadge}${e.event?.summary || '未记录'}</div>
                     <div class="horae-timeline-meta">${relTime} · 消息 #${e.messageIndex}</div>
                 </div>
-                <button class="horae-item-edit-btn" data-edit-type="event" data-message-id="${e.messageIndex}" data-event-index="${e.eventIndex || 0}" title="编辑">
+                <button class="horae-item-edit-btn" data-edit-type="event" data-message-id="${e.messageIndex}" data-event-index="${e.eventIndex || 0}" title="编辑" style="${timelineMultiSelectMode ? 'display:none' : ''}">
                     <i class="fa-solid fa-pen"></i>
                 </button>
             </div>
         `;
     }).join('');
     
+    // 绑定事件
     listEl.querySelectorAll('.horae-timeline-item').forEach(item => {
-        item.addEventListener('click', (e) => {
-            if (e.target.closest('.horae-item-edit-btn')) return;
-            const messageId = item.dataset.messageId;
-            scrollToMessage(messageId);
-        });
+        const eventKey = item.dataset.eventKey;
+        
+        if (timelineMultiSelectMode) {
+            // 多选模式：点击切换选中
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (eventKey) toggleTimelineSelection(eventKey);
+            });
+        } else {
+            // 普通模式：点击跳转，长按进入多选
+            item.addEventListener('click', (e) => {
+                if (e.target.closest('.horae-item-edit-btn')) return;
+                scrollToMessage(item.dataset.messageId);
+            });
+            item.addEventListener('mousedown', (e) => startTimelineLongPress(e, eventKey));
+            item.addEventListener('touchstart', (e) => startTimelineLongPress(e, eventKey), { passive: true });
+            item.addEventListener('mouseup', cancelTimelineLongPress);
+            item.addEventListener('mouseleave', cancelTimelineLongPress);
+            item.addEventListener('touchend', cancelTimelineLongPress);
+            item.addEventListener('touchmove', cancelTimelineLongPress, { passive: true });
+            item.addEventListener('touchcancel', cancelTimelineLongPress);
+        }
     });
     
     bindEditButtons();
@@ -753,6 +823,128 @@ async function deleteSelectedAgenda() {
     exitAgendaMultiSelect();
 }
 
+// ============================================
+// 时间线多选模式
+// ============================================
+
+/** 时间线长按开始 */
+function startTimelineLongPress(e, eventKey) {
+    if (timelineMultiSelectMode) return;
+    timelineLongPressTimer = setTimeout(() => {
+        enterTimelineMultiSelect(eventKey);
+    }, 1600); // 1600ms长按触发（物品栏的两倍）
+}
+
+/** 取消时间线长按 */
+function cancelTimelineLongPress() {
+    if (timelineLongPressTimer) {
+        clearTimeout(timelineLongPressTimer);
+        timelineLongPressTimer = null;
+    }
+}
+
+/** 进入时间线多选模式 */
+function enterTimelineMultiSelect(initialKey) {
+    timelineMultiSelectMode = true;
+    selectedTimelineEvents.clear();
+    if (initialKey) selectedTimelineEvents.add(initialKey);
+    
+    const bar = document.getElementById('horae-timeline-multiselect-bar');
+    if (bar) bar.style.display = 'flex';
+    
+    updateTimelineDisplay();
+    updateTimelineSelectedCount();
+    showToast('已进入多选模式，点击选择事件', 'info');
+}
+
+/** 退出时间线多选模式 */
+function exitTimelineMultiSelect() {
+    timelineMultiSelectMode = false;
+    selectedTimelineEvents.clear();
+    
+    const bar = document.getElementById('horae-timeline-multiselect-bar');
+    if (bar) bar.style.display = 'none';
+    
+    updateTimelineDisplay();
+}
+
+/** 切换时间线事件选中状态 */
+function toggleTimelineSelection(eventKey) {
+    if (selectedTimelineEvents.has(eventKey)) {
+        selectedTimelineEvents.delete(eventKey);
+    } else {
+        selectedTimelineEvents.add(eventKey);
+    }
+    
+    const item = document.querySelector(`.horae-timeline-item[data-event-key="${eventKey}"]`);
+    if (item) {
+        const checkbox = item.querySelector('input[type="checkbox"]');
+        if (checkbox) checkbox.checked = selectedTimelineEvents.has(eventKey);
+        item.classList.toggle('selected', selectedTimelineEvents.has(eventKey));
+    }
+    updateTimelineSelectedCount();
+}
+
+/** 全选时间线事件 */
+function selectAllTimelineEvents() {
+    document.querySelectorAll('#horae-timeline-list .horae-timeline-item').forEach(item => {
+        const key = item.dataset.eventKey;
+        if (key) selectedTimelineEvents.add(key);
+    });
+    updateTimelineDisplay();
+    updateTimelineSelectedCount();
+}
+
+/** 更新时间线选中计数 */
+function updateTimelineSelectedCount() {
+    const el = document.getElementById('horae-timeline-selected-count');
+    if (el) el.textContent = selectedTimelineEvents.size;
+}
+
+/** 删除选中的时间线事件 */
+async function deleteSelectedTimelineEvents() {
+    if (selectedTimelineEvents.size === 0) {
+        showToast('没有选中任何事件', 'warning');
+        return;
+    }
+    
+    const confirmed = confirm(`确定要删除选中的 ${selectedTimelineEvents.size} 条剧情轨迹吗？\n\n此操作不可撤销。`);
+    if (!confirmed) return;
+    
+    const chat = horaeManager.getChat();
+    
+    // 按消息分组，倒序删除事件索引
+    const msgMap = new Map();
+    for (const key of selectedTimelineEvents) {
+        const [msgIdx, evtIdx] = key.split('-').map(Number);
+        if (!msgMap.has(msgIdx)) msgMap.set(msgIdx, []);
+        msgMap.get(msgIdx).push(evtIdx);
+    }
+    
+    for (const [msgIdx, evtIndices] of msgMap) {
+        const meta = chat[msgIdx]?.horae_meta;
+        if (!meta) continue;
+        
+        if (meta.events && meta.events.length > 0) {
+            // 倒序删除避免索引偏移
+            const sorted = evtIndices.sort((a, b) => b - a);
+            for (const ei of sorted) {
+                if (ei < meta.events.length) {
+                    meta.events.splice(ei, 1);
+                }
+            }
+        } else if (meta.event && evtIndices.includes(0)) {
+            // 旧格式单事件
+            delete meta.event;
+        }
+    }
+    
+    await getContext().saveChat();
+    showToast(`已删除 ${selectedTimelineEvents.size} 条剧情轨迹`, 'success');
+    exitTimelineMultiSelect();
+    updateStatusDisplay();
+}
+
 /**
  * 打开待办事项添加/编辑弹窗
  * @param {Object|null} agendaItem - 编辑时传入完整 agenda 对象，新增时传 null
@@ -766,7 +958,7 @@ function openAgendaEditModal(agendaItem = null) {
     closeEditModal();
     
     const deleteBtn = isEdit ? `
-                    <button id="agenda-modal-delete" class="menu_button danger">
+                    <button id="agenda-modal-delete" class="horae-btn danger">
                         <i class="fa-solid fa-trash"></i> 删除
                     </button>` : '';
     
@@ -787,10 +979,10 @@ function openAgendaEditModal(agendaItem = null) {
                     </div>
                 </div>
                 <div class="horae-modal-footer">
-                    <button id="agenda-modal-save" class="menu_button primary">
+                    <button id="agenda-modal-save" class="horae-btn primary">
                         <i class="fa-solid fa-check"></i> 保存
                     </button>
-                    <button id="agenda-modal-cancel" class="menu_button">
+                    <button id="agenda-modal-cancel" class="horae-btn">
                         <i class="fa-solid fa-xmark"></i> 取消
                     </button>
                     ${deleteBtn}
@@ -1360,10 +1552,10 @@ function openItemEditModal(itemName) {
                     </div>
                 </div>
                 <div class="horae-modal-footer">
-                    <button id="edit-modal-save" class="menu_button primary">
+                    <button id="edit-modal-save" class="horae-btn primary">
                         <i class="fa-solid fa-check"></i> 保存
                     </button>
-                    <button id="edit-modal-cancel" class="menu_button">
+                    <button id="edit-modal-cancel" class="horae-btn">
                         <i class="fa-solid fa-xmark"></i> 取消
                     </button>
                 </div>
@@ -1449,13 +1641,13 @@ function openAffectionEditModal(charName) {
                     </div>
                 </div>
                 <div class="horae-modal-footer">
-                    <button id="edit-modal-save" class="menu_button primary">
+                    <button id="edit-modal-save" class="horae-btn primary">
                         <i class="fa-solid fa-check"></i> 保存
                     </button>
-                    <button id="edit-modal-delete" class="menu_button danger">
+                    <button id="edit-modal-delete" class="horae-btn danger">
                         <i class="fa-solid fa-trash"></i> 删除
                     </button>
-                    <button id="edit-modal-cancel" class="menu_button">
+                    <button id="edit-modal-cancel" class="horae-btn">
                         <i class="fa-solid fa-xmark"></i> 取消
                     </button>
                 </div>
@@ -1610,13 +1802,13 @@ function openNpcEditModal(npcName) {
                     </div>
                 </div>
                 <div class="horae-modal-footer">
-                    <button id="edit-modal-delete" class="menu_button danger" style="background:#c62828;color:#fff;margin-right:auto;">
+                    <button id="edit-modal-delete" class="horae-btn danger" style="background:#c62828;color:#fff;margin-right:auto;">
                         <i class="fa-solid fa-trash"></i> 删除角色
                     </button>
-                    <button id="edit-modal-save" class="menu_button primary">
+                    <button id="edit-modal-save" class="horae-btn primary">
                         <i class="fa-solid fa-check"></i> 保存
                     </button>
-                    <button id="edit-modal-cancel" class="menu_button">
+                    <button id="edit-modal-cancel" class="horae-btn">
                         <i class="fa-solid fa-xmark"></i> 取消
                     </button>
                 </div>
@@ -1677,7 +1869,7 @@ function openNpcEditModal(npcName) {
             note: document.getElementById('edit-npc-note').value
         };
         
-        // 如果用户手动修改了年龄，更新参考日期
+        // 如果手动修改了年龄，更新参考日期
         const currentState = horaeManager.getLatestState();
         const ageChanged = newAge !== (npc.age || '');
         if (ageChanged && newAge) {
@@ -1749,13 +1941,13 @@ function openEventEditModal(messageId, eventIndex = 0) {
                     </div>
                 </div>
                 <div class="horae-modal-footer">
-                    <button id="edit-modal-delete" class="menu_button danger">
+                    <button id="edit-modal-delete" class="horae-btn danger">
                         <i class="fa-solid fa-trash"></i> 删除
                     </button>
-                    <button id="edit-modal-save" class="menu_button primary">
+                    <button id="edit-modal-save" class="horae-btn primary">
                         <i class="fa-solid fa-check"></i> 保存
                     </button>
-                    <button id="edit-modal-cancel" class="menu_button">
+                    <button id="edit-modal-cancel" class="horae-btn">
                         <i class="fa-solid fa-xmark"></i> 取消
                     </button>
                 </div>
@@ -1872,13 +2064,15 @@ function closeEditModal() {
 
 /** 阻止编辑弹窗事件冒泡 */
 function preventModalBubble() {
-    // 阻止事件冒泡
     const targets = [
         document.getElementById('horae-edit-modal'),
         ...document.querySelectorAll('.horae-edit-modal-backdrop')
     ].filter(Boolean);
-    
+
     targets.forEach(modal => {
+        // 继承主题模式
+        if (settings.themeMode === 'light') modal.classList.add('horae-light');
+
         ['click', 'mousedown', 'mouseup', 'touchstart', 'touchend'].forEach(evType => {
             modal.addEventListener(evType, (e) => {
                 e.stopPropagation();
@@ -1899,57 +2093,71 @@ let activeContextMenu = null;
 function renderCustomTablesList() {
     const listEl = document.getElementById('horae-custom-tables-list');
     if (!listEl) return;
-    
-    const tables = getChatTables();
-    
-    if (tables.length === 0) {
+
+    const globalTables = getGlobalTables();
+    const chatTables = getChatTables();
+
+    if (globalTables.length === 0 && chatTables.length === 0) {
         listEl.innerHTML = `
             <div class="horae-custom-tables-empty">
                 <i class="fa-solid fa-table-cells"></i>
                 <div>暂无自定义表格</div>
-                <div style="font-size:11px;opacity:0.7;margin-top:4px;">点击下方按钮添加（表格跟随当前对话保存）</div>
+                <div style="font-size:11px;opacity:0.7;margin-top:4px;">点击下方按钮添加表格</div>
             </div>
         `;
         return;
     }
-    
-    listEl.innerHTML = tables.map((table, tableIndex) => {
+
+    /** 渲染单个表格 */
+    function renderOneTable(table, idx, scope) {
         const rows = table.rows || 2;
         const cols = table.cols || 2;
         const data = table.data || {};
-        
-        // 生成表格HTML
+        const lockedRows = new Set(table.lockedRows || []);
+        const lockedCols = new Set(table.lockedCols || []);
+        const lockedCells = new Set(table.lockedCells || []);
+        const isGlobal = scope === 'global';
+        const scopeIcon = isGlobal ? 'fa-globe' : 'fa-bookmark';
+        const scopeLabel = isGlobal ? '全局' : '本地';
+        const scopeTitle = isGlobal ? '全局表格，所有对话共享' : '本地表格，仅当前对话';
+
         let tableHtml = '<table class="horae-excel-table">';
         for (let r = 0; r < rows; r++) {
+            const rowLocked = lockedRows.has(r);
             tableHtml += '<tr>';
             for (let c = 0; c < cols; c++) {
                 const cellKey = `${r}-${c}`;
                 const cellValue = data[cellKey] || '';
                 const isHeader = r === 0 || c === 0;
                 const tag = isHeader ? 'th' : 'td';
-                // 动态计算输入框宽度
+                const cellLocked = rowLocked || lockedCols.has(c) || lockedCells.has(cellKey);
                 const charLen = [...cellValue].reduce((sum, ch) => sum + (/[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/.test(ch) ? 2 : 1), 0);
                 const inputSize = Math.max(4, Math.min(charLen + 2, 40));
-                tableHtml += `<${tag} data-row="${r}" data-col="${c}">`;
-                tableHtml += `<input type="text" value="${escapeHtml(cellValue)}" size="${inputSize}" data-table="${tableIndex}" data-row="${r}" data-col="${c}" placeholder="${isHeader ? '表头' : ''}">`;
+                const lockedClass = cellLocked ? ' horae-cell-locked' : '';
+                tableHtml += `<${tag} data-row="${r}" data-col="${c}" class="${lockedClass}">`;
+                tableHtml += `<input type="text" value="${escapeHtml(cellValue)}" size="${inputSize}" data-scope="${scope}" data-table="${idx}" data-row="${r}" data-col="${c}" placeholder="${isHeader ? '表头' : ''}">`;
                 tableHtml += `</${tag}>`;
             }
             tableHtml += '</tr>';
         }
         tableHtml += '</table>';
-        
+
         return `
-            <div class="horae-excel-table-container" data-table-index="${tableIndex}">
+            <div class="horae-excel-table-container" data-table-index="${idx}" data-scope="${scope}">
                 <div class="horae-excel-table-header">
                     <div class="horae-excel-table-title">
-                        <i class="fa-solid fa-table"></i>
-                        <input type="text" value="${escapeHtml(table.name || '')}" placeholder="表格名称" data-table-name="${tableIndex}">
+                        <i class="fa-solid ${scopeIcon}" title="${scopeTitle}" style="color:${isGlobal ? 'var(--horae-accent)' : 'var(--horae-primary-light)'}; cursor:pointer;" data-toggle-scope="${idx}" data-scope="${scope}"></i>
+                        <span class="horae-table-scope-label" data-toggle-scope="${idx}" data-scope="${scope}" title="点击切换全局/本地">${scopeLabel}</span>
+                        <input type="text" value="${escapeHtml(table.name || '')}" placeholder="表格名称" data-table-name="${idx}" data-scope="${scope}">
                     </div>
                     <div class="horae-excel-table-actions">
-                        <button class="export-table-btn" title="导出表格" data-table-index="${tableIndex}">
+                        <button class="clear-table-data-btn" title="清空数据（保留表头）" data-table-index="${idx}" data-scope="${scope}">
+                            <i class="fa-solid fa-eraser"></i>
+                        </button>
+                        <button class="export-table-btn" title="导出表格" data-table-index="${idx}" data-scope="${scope}">
                             <i class="fa-solid fa-download"></i>
                         </button>
-                        <button class="delete-table-btn danger" title="删除表格">
+                        <button class="delete-table-btn danger" title="删除表格" data-table-index="${idx}" data-scope="${scope}">
                             <i class="fa-solid fa-trash-can"></i>
                         </button>
                     </div>
@@ -1958,12 +2166,23 @@ function renderCustomTablesList() {
                     ${tableHtml}
                 </div>
                 <div class="horae-table-prompt-row">
-                    <input type="text" value="${escapeHtml(table.prompt || '')}" placeholder="提示词：告诉AI如何填写此表格..." data-table-prompt="${tableIndex}">
+                    <input type="text" value="${escapeHtml(table.prompt || '')}" placeholder="提示词：告诉AI如何填写此表格..." data-table-prompt="${idx}" data-scope="${scope}">
                 </div>
             </div>
         `;
-    }).join('');
-    
+    }
+
+    let html = '';
+    if (globalTables.length > 0) {
+        html += `<div class="horae-tables-group-label"><i class="fa-solid fa-globe"></i> 全局表格</div>`;
+        html += globalTables.map((t, i) => renderOneTable(t, i, 'global')).join('');
+    }
+    if (chatTables.length > 0) {
+        html += `<div class="horae-tables-group-label"><i class="fa-solid fa-bookmark"></i> 本地表格（当前对话）</div>`;
+        html += chatTables.map((t, i) => renderOneTable(t, i, 'local')).join('');
+    }
+    listEl.innerHTML = html;
+
     bindExcelTableEvents();
 }
 
@@ -1983,20 +2202,23 @@ function escapeHtml(str) {
  * 绑定Excel表格事件
  */
 function bindExcelTableEvents() {
+    /** 从元素属性获取scope */
+    const getScope = (el) => el.dataset.scope || el.closest('[data-scope]')?.dataset.scope || 'local';
+
     // 单元格输入事件 - 自动保存 + 动态调整宽度
     document.querySelectorAll('.horae-excel-table input').forEach(input => {
         input.addEventListener('change', (e) => {
+            const scope = getScope(e.target);
             const tableIndex = parseInt(e.target.dataset.table);
             const row = parseInt(e.target.dataset.row);
             const col = parseInt(e.target.dataset.col);
             const value = e.target.value;
-            
-            const tables = getChatTables();
-            if (!tables[tableIndex].data) {
-                tables[tableIndex].data = {};
-            }
+
+            const tables = getTablesByScope(scope);
+            if (!tables[tableIndex]) return;
+            if (!tables[tableIndex].data) tables[tableIndex].data = {};
             tables[tableIndex].data[`${row}-${col}`] = value;
-            setChatTables(tables);
+            setTablesByScope(scope, tables);
         });
         input.addEventListener('input', (e) => {
             const val = e.target.value;
@@ -2004,136 +2226,179 @@ function bindExcelTableEvents() {
             e.target.size = Math.max(4, Math.min(charLen + 2, 40));
         });
     });
-    
+
     // 表格名称输入事件
-    document.querySelectorAll('[data-table-name]').forEach(input => {
+    document.querySelectorAll('input[data-table-name]').forEach(input => {
         input.addEventListener('change', (e) => {
+            const scope = getScope(e.target);
             const tableIndex = parseInt(e.target.dataset.tableName);
-            const tables = getChatTables();
+            const tables = getTablesByScope(scope);
+            if (!tables[tableIndex]) return;
             tables[tableIndex].name = e.target.value;
-            setChatTables(tables);
+            setTablesByScope(scope, tables);
         });
     });
-    
+
     // 表格提示词输入事件
-    document.querySelectorAll('[data-table-prompt]').forEach(input => {
+    document.querySelectorAll('input[data-table-prompt]').forEach(input => {
         input.addEventListener('change', (e) => {
+            const scope = getScope(e.target);
             const tableIndex = parseInt(e.target.dataset.tablePrompt);
-            const tables = getChatTables();
+            const tables = getTablesByScope(scope);
+            if (!tables[tableIndex]) return;
             tables[tableIndex].prompt = e.target.value;
-            setChatTables(tables);
+            setTablesByScope(scope, tables);
         });
     });
-    
+
     // 导出表格按钮
     document.querySelectorAll('.export-table-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
+            const scope = getScope(btn);
             const tableIndex = parseInt(btn.dataset.tableIndex);
-            exportTable(tableIndex);
+            exportTable(tableIndex, scope);
         });
     });
-    
+
     // 删除表格按钮
     document.querySelectorAll('.delete-table-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const container = btn.closest('.horae-excel-table-container');
+            const scope = getScope(container);
             const tableIndex = parseInt(container.dataset.tableIndex);
-            deleteCustomTable(tableIndex);
+            deleteCustomTable(tableIndex, scope);
+        });
+    });
+
+    // 清空表格数据按钮（保留表头）
+    document.querySelectorAll('.clear-table-data-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const scope = getScope(btn);
+            const tableIndex = parseInt(btn.dataset.tableIndex);
+            clearTableData(tableIndex, scope);
+        });
+    });
+
+    // 全局/本地切换
+    document.querySelectorAll('[data-toggle-scope]').forEach(el => {
+        el.addEventListener('click', (e) => {
+            const currentScope = el.dataset.scope;
+            const tableIndex = parseInt(el.dataset.toggleScope);
+            toggleTableScope(tableIndex, currentScope);
         });
     });
     
-    // 表头长按显示右键菜单
-    document.querySelectorAll('.horae-excel-table th').forEach(th => {
+    // 所有单元格长按/右键显示菜单
+    document.querySelectorAll('.horae-excel-table th, .horae-excel-table td').forEach(cell => {
         let pressTimer = null;
-        
+
         const startPress = (e) => {
             pressTimer = setTimeout(() => {
-                const tableContainer = th.closest('.horae-excel-table-container');
+                const tableContainer = cell.closest('.horae-excel-table-container');
                 const tableIndex = parseInt(tableContainer.dataset.tableIndex);
-                const row = parseInt(th.dataset.row);
-                const col = parseInt(th.dataset.col);
-                showTableContextMenu(e, tableIndex, row, col);
+                const scope = tableContainer.dataset.scope || 'local';
+                const row = parseInt(cell.dataset.row);
+                const col = parseInt(cell.dataset.col);
+                showTableContextMenu(e, tableIndex, row, col, scope);
             }, 500);
         };
-        
+
         const cancelPress = () => {
-            if (pressTimer) {
-                clearTimeout(pressTimer);
-                pressTimer = null;
-            }
+            if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
         };
-        
-        th.addEventListener('mousedown', (e) => {
-            e.stopPropagation();
-            startPress(e);
-        });
-        th.addEventListener('touchstart', (e) => {
-            e.stopPropagation();
-            startPress(e);
-        }, { passive: false });
-        th.addEventListener('mouseup', (e) => {
-            e.stopPropagation();
-            cancelPress();
-        });
-        th.addEventListener('mouseleave', cancelPress);
-        th.addEventListener('touchend', (e) => {
-            e.stopPropagation();
-            cancelPress();
-        });
-        th.addEventListener('touchcancel', cancelPress);
-        
-        // 右键菜单
-        th.addEventListener('contextmenu', (e) => {
+
+        cell.addEventListener('mousedown', (e) => { e.stopPropagation(); startPress(e); });
+        cell.addEventListener('touchstart', (e) => { e.stopPropagation(); startPress(e); }, { passive: false });
+        cell.addEventListener('mouseup', (e) => { e.stopPropagation(); cancelPress(); });
+        cell.addEventListener('mouseleave', cancelPress);
+        cell.addEventListener('touchend', (e) => { e.stopPropagation(); cancelPress(); });
+        cell.addEventListener('touchcancel', cancelPress);
+
+        cell.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            const tableContainer = th.closest('.horae-excel-table-container');
+            const tableContainer = cell.closest('.horae-excel-table-container');
             const tableIndex = parseInt(tableContainer.dataset.tableIndex);
-            const row = parseInt(th.dataset.row);
-            const col = parseInt(th.dataset.col);
-            showTableContextMenu(e, tableIndex, row, col);
+            const scope = tableContainer.dataset.scope || 'local';
+            const row = parseInt(cell.dataset.row);
+            const col = parseInt(cell.dataset.col);
+            showTableContextMenu(e, tableIndex, row, col, scope);
         });
     });
-    
+
 }
 
 /** 显示表格右键菜单 */
 let contextMenuCloseHandler = null;
 
-function showTableContextMenu(e, tableIndex, row, col) {
+function showTableContextMenu(e, tableIndex, row, col, scope = 'local') {
     hideContextMenu();
-    
-    const isRowHeader = col === 0 && row > 0;  // 第一列（非第一行）= 行操作
-    const isColHeader = row === 0 && col > 0;  // 第一行（非第一列）= 列操作
-    const isCorner = row === 0 && col === 0;   // 左上角
-    
+
+    const tables = getTablesByScope(scope);
+    const table = tables[tableIndex];
+    if (!table) return;
+    const lockedRows = new Set(table.lockedRows || []);
+    const lockedCols = new Set(table.lockedCols || []);
+    const lockedCells = new Set(table.lockedCells || []);
+    const cellKey = `${row}-${col}`;
+    const isCellLocked = lockedCells.has(cellKey) || lockedRows.has(row) || lockedCols.has(col);
+
+    const isRowHeader = col === 0;
+    const isColHeader = row === 0;
+    const isCorner = row === 0 && col === 0;
+
     let menuItems = '';
-    
+
+    // 行操作（第一列所有行 / 任何单元格都能添加行）
     if (isCorner) {
-        menuItems = `
+        menuItems += `
             <div class="horae-context-menu-item" data-action="add-row-below"><i class="fa-solid fa-plus"></i> 添加行</div>
             <div class="horae-context-menu-item" data-action="add-col-right"><i class="fa-solid fa-plus"></i> 添加列</div>
         `;
     } else if (isColHeader) {
-        menuItems = `
+        const colLocked = lockedCols.has(col);
+        menuItems += `
             <div class="horae-context-menu-item" data-action="add-col-left"><i class="fa-solid fa-arrow-left"></i> 左侧添加列</div>
             <div class="horae-context-menu-item" data-action="add-col-right"><i class="fa-solid fa-arrow-right"></i> 右侧添加列</div>
+            <div class="horae-context-menu-divider"></div>
+            <div class="horae-context-menu-item" data-action="toggle-lock-col"><i class="fa-solid ${colLocked ? 'fa-lock-open' : 'fa-lock'}"></i> ${colLocked ? '解锁此列' : '锁定此列'}</div>
             <div class="horae-context-menu-divider"></div>
             <div class="horae-context-menu-item danger" data-action="delete-col"><i class="fa-solid fa-trash-can"></i> 删除此列</div>
         `;
     } else if (isRowHeader) {
-        menuItems = `
+        const rowLocked = lockedRows.has(row);
+        menuItems += `
             <div class="horae-context-menu-item" data-action="add-row-above"><i class="fa-solid fa-arrow-up"></i> 上方添加行</div>
             <div class="horae-context-menu-item" data-action="add-row-below"><i class="fa-solid fa-arrow-down"></i> 下方添加行</div>
+            <div class="horae-context-menu-divider"></div>
+            <div class="horae-context-menu-item" data-action="toggle-lock-row"><i class="fa-solid ${rowLocked ? 'fa-lock-open' : 'fa-lock'}"></i> ${rowLocked ? '解锁此行' : '锁定此行'}</div>
             <div class="horae-context-menu-divider"></div>
             <div class="horae-context-menu-item danger" data-action="delete-row"><i class="fa-solid fa-trash-can"></i> 删除此行</div>
         `;
     } else {
-        return;
+        // 普通数据单元格
+        menuItems += `
+            <div class="horae-context-menu-item" data-action="add-row-above"><i class="fa-solid fa-arrow-up"></i> 上方添加行</div>
+            <div class="horae-context-menu-item" data-action="add-row-below"><i class="fa-solid fa-arrow-down"></i> 下方添加行</div>
+            <div class="horae-context-menu-item" data-action="add-col-left"><i class="fa-solid fa-arrow-left"></i> 左侧添加列</div>
+            <div class="horae-context-menu-item" data-action="add-col-right"><i class="fa-solid fa-arrow-right"></i> 右侧添加列</div>
+        `;
+    }
+
+    // 所有非角落单元格都可以锁定/解锁单格
+    if (!isCorner) {
+        const cellLocked = lockedCells.has(cellKey);
+        menuItems += `
+            <div class="horae-context-menu-divider"></div>
+            <div class="horae-context-menu-item" data-action="toggle-lock-cell"><i class="fa-solid ${cellLocked ? 'fa-lock-open' : 'fa-lock'}"></i> ${cellLocked ? '解锁此格' : '锁定此格'}</div>
+        `;
     }
     
     const menu = document.createElement('div');
     menu.className = 'horae-context-menu';
+    if (settings.themeMode === 'light') menu.classList.add('horae-light');
     menu.innerHTML = menuItems;
     
     // 获取位置
@@ -2163,7 +2428,7 @@ function showTableContextMenu(e, tableIndex, row, col) {
             const action = item.dataset.action;
             hideContextMenu();
             setTimeout(() => {
-                executeTableAction(tableIndex, row, col, action);
+                executeTableAction(tableIndex, row, col, action, scope);
             }, 10);
         });
         
@@ -2174,7 +2439,7 @@ function showTableContextMenu(e, tableIndex, row, col) {
             const action = item.dataset.action;
             hideContextMenu();
             setTimeout(() => {
-                executeTableAction(tableIndex, row, col, action);
+                executeTableAction(tableIndex, row, col, action, scope);
             }, 10);
         });
     });
@@ -2220,98 +2485,126 @@ function hideContextMenu() {
 /**
  * 执行表格操作
  */
-function executeTableAction(tableIndex, row, col, action) {
-    const tables = getChatTables();
+function executeTableAction(tableIndex, row, col, action, scope = 'local') {
+    const tables = getTablesByScope(scope);
     const table = tables[tableIndex];
     if (!table) return;
-    
+
     const oldRows = table.rows || 2;
     const oldCols = table.cols || 2;
     const oldData = table.data || {};
     const newData = {};
-    
+
     switch (action) {
         case 'add-row-above':
             table.rows = oldRows + 1;
             for (const [key, val] of Object.entries(oldData)) {
                 const [r, c] = key.split('-').map(Number);
-                const newRow = r >= row ? r + 1 : r;
-                newData[`${newRow}-${c}`] = val;
+                newData[`${r >= row ? r + 1 : r}-${c}`] = val;
             }
             table.data = newData;
             break;
-            
+
         case 'add-row-below':
             table.rows = oldRows + 1;
             for (const [key, val] of Object.entries(oldData)) {
                 const [r, c] = key.split('-').map(Number);
-                const newRow = r > row ? r + 1 : r;
-                newData[`${newRow}-${c}`] = val;
+                newData[`${r > row ? r + 1 : r}-${c}`] = val;
             }
             table.data = newData;
             break;
-            
+
         case 'add-col-left':
             table.cols = oldCols + 1;
             for (const [key, val] of Object.entries(oldData)) {
                 const [r, c] = key.split('-').map(Number);
-                const newCol = c >= col ? c + 1 : c;
-                newData[`${r}-${newCol}`] = val;
+                newData[`${r}-${c >= col ? c + 1 : c}`] = val;
             }
             table.data = newData;
             break;
-            
+
         case 'add-col-right':
             table.cols = oldCols + 1;
             for (const [key, val] of Object.entries(oldData)) {
                 const [r, c] = key.split('-').map(Number);
-                const newCol = c > col ? c + 1 : c;
-                newData[`${r}-${newCol}`] = val;
+                newData[`${r}-${c > col ? c + 1 : c}`] = val;
             }
             table.data = newData;
             break;
-            
+
         case 'delete-row':
-            if (oldRows <= 2) {
-                showToast('表格至少需要2行', 'warning');
-                return;
-            }
+            if (oldRows <= 2) { showToast('表格至少需要2行', 'warning'); return; }
             table.rows = oldRows - 1;
             for (const [key, val] of Object.entries(oldData)) {
                 const [r, c] = key.split('-').map(Number);
                 if (r === row) continue;
-                const newRow = r > row ? r - 1 : r;
-                newData[`${newRow}-${c}`] = val;
+                newData[`${r > row ? r - 1 : r}-${c}`] = val;
             }
             table.data = newData;
             break;
-            
+
         case 'delete-col':
-            if (oldCols <= 2) {
-                showToast('表格至少需要2列', 'warning');
-                return;
-            }
+            if (oldCols <= 2) { showToast('表格至少需要2列', 'warning'); return; }
             table.cols = oldCols - 1;
             for (const [key, val] of Object.entries(oldData)) {
                 const [r, c] = key.split('-').map(Number);
                 if (c === col) continue;
-                const newCol = c > col ? c - 1 : c;
-                newData[`${r}-${newCol}`] = val;
+                newData[`${r}-${c > col ? c - 1 : c}`] = val;
             }
             table.data = newData;
             break;
+
+        case 'toggle-lock-row': {
+            if (!table.lockedRows) table.lockedRows = [];
+            const idx = table.lockedRows.indexOf(row);
+            if (idx >= 0) {
+                table.lockedRows.splice(idx, 1);
+                showToast(`已解锁第 ${row + 1} 行`, 'info');
+            } else {
+                table.lockedRows.push(row);
+                showToast(`已锁定第 ${row + 1} 行（AI无法编辑）`, 'success');
+            }
+            break;
+        }
+
+        case 'toggle-lock-col': {
+            if (!table.lockedCols) table.lockedCols = [];
+            const idx = table.lockedCols.indexOf(col);
+            if (idx >= 0) {
+                table.lockedCols.splice(idx, 1);
+                showToast(`已解锁第 ${col + 1} 列`, 'info');
+            } else {
+                table.lockedCols.push(col);
+                showToast(`已锁定第 ${col + 1} 列（AI无法编辑）`, 'success');
+            }
+            break;
+        }
+
+        case 'toggle-lock-cell': {
+            if (!table.lockedCells) table.lockedCells = [];
+            const cellKey = `${row}-${col}`;
+            const idx = table.lockedCells.indexOf(cellKey);
+            if (idx >= 0) {
+                table.lockedCells.splice(idx, 1);
+                showToast(`已解锁单元格 [${row},${col}]`, 'info');
+            } else {
+                table.lockedCells.push(cellKey);
+                showToast(`已锁定单元格 [${row},${col}]（AI无法编辑）`, 'success');
+            }
+            break;
+        }
     }
-    
-    setChatTables(tables);
+
+    setTablesByScope(scope, tables);
     renderCustomTablesList();
 }
 
 /**
  * 添加新的2x2表格
  */
-function addNewExcelTable() {
-    const tables = getChatTables();
-    
+function addNewExcelTable(scope = 'local') {
+    const tables = getTablesByScope(scope);
+
     tables.push({
         id: Date.now().toString(),
         name: '',
@@ -2321,29 +2614,79 @@ function addNewExcelTable() {
         baseData: {},
         baseRows: 2,
         baseCols: 2,
-        prompt: ''
+        prompt: '',
+        lockedRows: [],
+        lockedCols: [],
+        lockedCells: []
     });
-    
-    setChatTables(tables);
+
+    setTablesByScope(scope, tables);
     renderCustomTablesList();
-    showToast('已添加新表格', 'success');
+    showToast(scope === 'global' ? '已添加全局表格' : '已添加本地表格', 'success');
 }
 
 /**
  * 删除表格
  */
-function deleteCustomTable(index) {
+function deleteCustomTable(index, scope = 'local') {
     if (!confirm('确定要删除此表格吗？')) return;
-    
-    const tables = getChatTables();
+
+    const tables = getTablesByScope(scope);
     tables.splice(index, 1);
-    setChatTables(tables);
+    setTablesByScope(scope, tables);
     renderCustomTablesList();
     showToast('表格已删除', 'info');
 }
 
+/** 清空表格数据区（保留第0行和第0列的表头） */
+function clearTableData(index, scope = 'local') {
+    if (!confirm('确定要清空此表格的数据区吗？表头将保留。')) return;
+
+    const tables = getTablesByScope(scope);
+    if (!tables[index]) return;
+    const table = tables[index];
+    const data = table.data || {};
+
+    // 删除所有 row>0 且 col>0 的单元格数据
+    for (const key of Object.keys(data)) {
+        const [r, c] = key.split('-').map(Number);
+        if (r > 0 && c > 0) {
+            delete data[key];
+        }
+    }
+
+    table.data = data;
+    setTablesByScope(scope, tables);
+    renderCustomTablesList();
+    showToast('表格数据已清空', 'info');
+}
+
+/** 切换表格的全局/本地属性 */
+function toggleTableScope(tableIndex, currentScope) {
+    const newScope = currentScope === 'global' ? 'local' : 'global';
+    const label = newScope === 'global' ? '全局（所有对话共享）' : '本地（仅当前对话）';
+    if (!confirm(`将此表格转为${label}？`)) return;
+
+    const srcTables = getTablesByScope(currentScope);
+    if (!srcTables[tableIndex]) return;
+    const table = JSON.parse(JSON.stringify(srcTables[tableIndex]));
+
+    // 从源列表移除
+    srcTables.splice(tableIndex, 1);
+    setTablesByScope(currentScope, srcTables);
+
+    // 加入目标列表
+    const dstTables = getTablesByScope(newScope);
+    dstTables.push(table);
+    setTablesByScope(newScope, dstTables);
+
+    renderCustomTablesList();
+    showToast(`表格已转为${label}`, 'success');
+}
+
+
 /**
- * 绑定物品列表事件（长按、点击）
+ * 绑定物品列表事件
  */
 function bindItemsEvents() {
     const items = document.querySelectorAll('#horae-items-full-list .horae-full-item');
@@ -2550,6 +2893,228 @@ function scrollToMessage(messageId) {
     }
 }
 
+/** 应用消息面板宽度设置 */
+function applyPanelWidth() {
+    const width = Math.max(50, Math.min(100, settings.panelWidth || 100));
+    document.querySelectorAll('.horae-message-panel').forEach(panel => {
+        panel.style.maxWidth = width < 100 ? `${width}%` : '';
+    });
+}
+
+/** 内置预设主题 */
+const BUILTIN_THEMES = {
+    'sakura': {
+        name: '樱花粉',
+        variables: {
+            '--horae-primary': '#ec4899', '--horae-primary-light': '#f472b6', '--horae-primary-dark': '#be185d',
+            '--horae-accent': '#fb923c', '--horae-success': '#34d399', '--horae-warning': '#fbbf24',
+            '--horae-danger': '#f87171', '--horae-info': '#60a5fa',
+            '--horae-bg': '#1f1018', '--horae-bg-secondary': '#2d1825', '--horae-bg-hover': '#3d2535',
+            '--horae-border': 'rgba(236, 72, 153, 0.15)', '--horae-text': '#fce7f3', '--horae-text-muted': '#d4a0b9',
+            '--horae-shadow': '0 4px 20px rgba(190, 24, 93, 0.2)'
+        }
+    },
+    'forest': {
+        name: '森林绿',
+        variables: {
+            '--horae-primary': '#059669', '--horae-primary-light': '#34d399', '--horae-primary-dark': '#047857',
+            '--horae-accent': '#fbbf24', '--horae-success': '#10b981', '--horae-warning': '#f59e0b',
+            '--horae-danger': '#ef4444', '--horae-info': '#60a5fa',
+            '--horae-bg': '#0f1a14', '--horae-bg-secondary': '#1a2e22', '--horae-bg-hover': '#2a3e32',
+            '--horae-border': 'rgba(16, 185, 129, 0.15)', '--horae-text': '#d1fae5', '--horae-text-muted': '#6ee7b7',
+            '--horae-shadow': '0 4px 20px rgba(4, 120, 87, 0.2)'
+        }
+    },
+    'ocean': {
+        name: '海洋蓝',
+        variables: {
+            '--horae-primary': '#3b82f6', '--horae-primary-light': '#60a5fa', '--horae-primary-dark': '#1d4ed8',
+            '--horae-accent': '#f59e0b', '--horae-success': '#10b981', '--horae-warning': '#f59e0b',
+            '--horae-danger': '#ef4444', '--horae-info': '#93c5fd',
+            '--horae-bg': '#0c1929', '--horae-bg-secondary': '#162a45', '--horae-bg-hover': '#1e3a5f',
+            '--horae-border': 'rgba(59, 130, 246, 0.15)', '--horae-text': '#dbeafe', '--horae-text-muted': '#93c5fd',
+            '--horae-shadow': '0 4px 20px rgba(29, 78, 216, 0.2)'
+        }
+    }
+};
+
+/** 获取当前主题对象（内置或自定义） */
+function resolveTheme(mode) {
+    if (BUILTIN_THEMES[mode]) return BUILTIN_THEMES[mode];
+    if (mode.startsWith('custom-')) {
+        const idx = parseInt(mode.split('-')[1]);
+        return (settings.customThemes || [])[idx] || null;
+    }
+    return null;
+}
+
+/** 应用主题模式（dark / light / 内置预设 / custom-{index}） */
+function applyThemeMode() {
+    const mode = settings.themeMode || 'dark';
+    const isLight = mode === 'light';
+    const theme = resolveTheme(mode);
+
+    // 切换 horae-light 类
+    const targets = [
+        document.getElementById('horae_drawer'),
+        ...document.querySelectorAll('.horae-message-panel'),
+        ...document.querySelectorAll('.horae-modal')
+    ].filter(Boolean);
+    targets.forEach(el => el.classList.toggle('horae-light', isLight));
+
+    // 注入主题变量
+    let themeStyleEl = document.getElementById('horae-theme-vars');
+    if (theme && theme.variables) {
+        if (!themeStyleEl) {
+            themeStyleEl = document.createElement('style');
+            themeStyleEl.id = 'horae-theme-vars';
+            document.head.appendChild(themeStyleEl);
+        }
+        const vars = Object.entries(theme.variables)
+            .map(([k, v]) => `  ${k}: ${v};`)
+            .join('\n');
+        const selectors = '#horae_drawer,\n.horae-message-panel,\n.horae-modal,\n.horae-context-menu,\n.horae-progress-overlay';
+        themeStyleEl.textContent = `${selectors} {\n${vars}\n}`;
+    } else {
+        if (themeStyleEl) themeStyleEl.remove();
+    }
+
+    // 注入主题附带CSS
+    let themeCssEl = document.getElementById('horae-theme-css');
+    if (theme && theme.css) {
+        if (!themeCssEl) {
+            themeCssEl = document.createElement('style');
+            themeCssEl.id = 'horae-theme-css';
+            document.head.appendChild(themeCssEl);
+        }
+        themeCssEl.textContent = theme.css;
+    } else {
+        if (themeCssEl) themeCssEl.remove();
+    }
+}
+
+/** 注入用户自定义CSS */
+function applyCustomCSS() {
+    let styleEl = document.getElementById('horae-custom-style');
+    const css = (settings.customCSS || '').trim();
+    if (!css) {
+        if (styleEl) styleEl.remove();
+        return;
+    }
+    if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'horae-custom-style';
+        document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = css;
+}
+
+/** 导出当前美化为JSON文件 */
+function exportTheme() {
+    const theme = {
+        name: '我的Horae美化',
+        author: '',
+        version: '1.0',
+        variables: {},
+        css: settings.customCSS || ''
+    };
+    // 读取当前主题变量
+    const root = document.getElementById('horae_drawer');
+    if (root) {
+        const style = getComputedStyle(root);
+        const varNames = [
+            '--horae-primary', '--horae-primary-light', '--horae-primary-dark',
+            '--horae-accent', '--horae-success', '--horae-warning', '--horae-danger', '--horae-info',
+            '--horae-bg', '--horae-bg-secondary', '--horae-bg-hover',
+            '--horae-border', '--horae-text', '--horae-text-muted',
+            '--horae-shadow', '--horae-radius', '--horae-radius-sm'
+        ];
+        varNames.forEach(name => {
+            const val = style.getPropertyValue(name).trim();
+            if (val) theme.variables[name] = val;
+        });
+    }
+    const blob = new Blob([JSON.stringify(theme, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'horae-theme.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('美化已导出', 'info');
+}
+
+/** 导入美化JSON文件 */
+function importTheme() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+            const text = await file.text();
+            const theme = JSON.parse(text);
+            if (!theme.variables || typeof theme.variables !== 'object') {
+                showToast('无效的美化文件：缺少 variables 字段', 'error');
+                return;
+            }
+            theme.name = theme.name || file.name.replace('.json', '');
+            if (!settings.customThemes) settings.customThemes = [];
+            settings.customThemes.push(theme);
+            saveSettings();
+            refreshThemeSelector();
+            showToast(`已导入美化「${theme.name}」`, 'success');
+        } catch (err) {
+            showToast('美化文件解析失败', 'error');
+            console.error('[Horae] 导入美化失败:', err);
+        }
+    });
+    input.click();
+}
+
+/** 刷新主题选择器下拉选项 */
+function refreshThemeSelector() {
+    const sel = document.getElementById('horae-setting-theme-mode');
+    if (!sel) return;
+    // 清除动态选项（内置预设 + 用户导入）
+    sel.querySelectorAll('option:not([value="dark"]):not([value="light"])').forEach(o => o.remove());
+    // 内置预设主题
+    for (const [key, t] of Object.entries(BUILTIN_THEMES)) {
+        const opt = document.createElement('option');
+        opt.value = key;
+        opt.textContent = `🎨 ${t.name}`;
+        sel.appendChild(opt);
+    }
+    // 用户导入的主题
+    const themes = settings.customThemes || [];
+    themes.forEach((t, i) => {
+        const opt = document.createElement('option');
+        opt.value = `custom-${i}`;
+        opt.textContent = `📁 ${t.name}`;
+        sel.appendChild(opt);
+    });
+    sel.value = settings.themeMode || 'dark';
+}
+
+/** 删除已导入的自定义主题 */
+function deleteCustomTheme(index) {
+    const themes = settings.customThemes || [];
+    if (!themes[index]) return;
+    if (!confirm(`确定删除美化「${themes[index].name}」？`)) return;
+    const currentMode = settings.themeMode || 'dark';
+    themes.splice(index, 1);
+    settings.customThemes = themes;
+    // 如果删除的是当前使用的主题，回退暗色
+    if (currentMode === `custom-${index}` || (currentMode.startsWith('custom-') && parseInt(currentMode.split('-')[1]) >= index)) {
+        settings.themeMode = 'dark';
+        applyThemeMode();
+    }
+    saveSettings();
+    refreshThemeSelector();
+    showToast('美化已删除', 'info');
+}
+
 /**
  * 为消息添加元数据面板
  */
@@ -2615,6 +3180,15 @@ function addMessagePanel(messageEl, messageIndex) {
         bindPanelEvents(panelEl);
         if (!settings.showMessagePanel && panelEl) {
             panelEl.style.display = 'none';
+        }
+        // 应用自定义宽度
+        const w = Math.max(50, Math.min(100, settings.panelWidth || 100));
+        if (w < 100 && panelEl) {
+            panelEl.style.maxWidth = `${w}%`;
+        }
+        // 继承主题模式
+        if (settings.themeMode === 'light' && panelEl) {
+            panelEl.classList.add('horae-light');
         }
     }
 }
@@ -2802,17 +3376,17 @@ function buildPanelContent(messageIndex, meta) {
         <div class="horae-panel-rescan">
             <div class="horae-rescan-label"><i class="fa-solid fa-rotate"></i> 重新扫描此消息</div>
             <div class="horae-rescan-buttons">
-                <button class="horae-btn-quick-scan menu_button" title="从现有文本中提取格式化数据（不消耗API）">
+                <button class="horae-btn-quick-scan horae-btn" title="从现有文本中提取格式化数据（不消耗API）">
                     <i class="fa-solid fa-bolt"></i> 快速解析
                 </button>
-                <button class="horae-btn-ai-analyze menu_button" title="使用AI分析消息内容（消耗API）">
+                <button class="horae-btn-ai-analyze horae-btn" title="使用AI分析消息内容（消耗API）">
                     <i class="fa-solid fa-wand-magic-sparkles"></i> AI分析
                 </button>
             </div>
         </div>
         <div class="horae-panel-footer">
-            <button class="horae-btn-save menu_button"><i class="fa-solid fa-check"></i> 保存</button>
-            <button class="horae-btn-cancel menu_button"><i class="fa-solid fa-xmark"></i> 取消</button>
+            <button class="horae-btn-save horae-btn"><i class="fa-solid fa-check"></i> 保存</button>
+            <button class="horae-btn-cancel horae-btn"><i class="fa-solid fa-xmark"></i> 取消</button>
         </div>
     `;
 }
@@ -3623,6 +4197,10 @@ function initSettingsEvents() {
     $('#horae-btn-agenda-delete').on('click', deleteSelectedAgenda);
     $('#horae-btn-agenda-cancel-select').on('click', exitAgendaMultiSelect);
     
+    $('#horae-btn-timeline-select-all').on('click', selectAllTimelineEvents);
+    $('#horae-btn-timeline-delete').on('click', deleteSelectedTimelineEvents);
+    $('#horae-btn-timeline-cancel-select').on('click', exitTimelineMultiSelect);
+    
     $('#horae-items-search').on('input', updateItemsDisplay);
     $('#horae-items-filter').on('change', updateItemsDisplay);
     $('#horae-items-holder-filter').on('change', updateItemsDisplay);
@@ -3657,9 +4235,45 @@ function initSettingsEvents() {
         updateTokenCounter();
     });
     
+    $('#horae-setting-panel-width').on('change', function() {
+        let val = parseInt(this.value) || 100;
+        val = Math.max(50, Math.min(100, val));
+        this.value = val;
+        settings.panelWidth = val;
+        saveSettings();
+        applyPanelWidth();
+    });
+
+    // 主题模式切换
+    $('#horae-setting-theme-mode').on('change', function() {
+        settings.themeMode = this.value;
+        saveSettings();
+        applyThemeMode();
+    });
+
+    // 美化导入/导出/删除
+    $('#horae-btn-theme-export').on('click', exportTheme);
+    $('#horae-btn-theme-import').on('click', importTheme);
+    $('#horae-btn-theme-delete').on('click', function() {
+        const mode = settings.themeMode || 'dark';
+        if (!mode.startsWith('custom-')) {
+            showToast('仅可删除导入的自定义美化', 'warning');
+            return;
+        }
+        deleteCustomTheme(parseInt(mode.split('-')[1]));
+    });
+
+    // 自定义CSS
+    $('#horae-custom-css').on('change', function() {
+        settings.customCSS = this.value;
+        saveSettings();
+        applyCustomCSS();
+    });
+    
     $('#horae-btn-refresh').on('click', refreshAllDisplays);
     
-    $('#horae-btn-add-table').on('click', addNewExcelTable);
+    $('#horae-btn-add-table-local').on('click', () => addNewExcelTable('local'));
+    $('#horae-btn-add-table-global').on('click', () => addNewExcelTable('global'));
     $('#horae-btn-import-table').on('click', () => {
         $('#horae-import-table-file').trigger('click');
     });
@@ -3756,6 +4370,14 @@ function initSettingsEvents() {
         body.slideToggle(200);
         icon.toggleClass('collapsed');
     });
+
+    // 自定义CSS区域折叠切换
+    $('#horae-css-collapse-toggle').on('click', function() {
+        const body = $('#horae-css-collapse-body');
+        const icon = $(this).find('.horae-collapse-icon');
+        body.slideToggle(200);
+        icon.toggleClass('collapsed');
+    });
 }
 
 /**
@@ -3782,6 +4404,18 @@ function syncSettingsToUI() {
     $('#horae-system-prompt-count').text(sysPrompt.length);
     $('#horae-batch-prompt-count').text(batchPromptVal.length);
     $('#horae-analysis-prompt-count').text(analysisPromptVal.length);
+    
+    // 面板宽度
+    $('#horae-setting-panel-width').val(settings.panelWidth || 100);
+    applyPanelWidth();
+
+    // 主题模式
+    refreshThemeSelector();
+    applyThemeMode();
+
+    // 自定义CSS
+    $('#horae-custom-css').val(settings.customCSS || '');
+    applyCustomCSS();
 }
 
 // ============================================
@@ -3793,7 +4427,7 @@ function syncSettingsToUI() {
  */
 async function scanHistoryWithProgress() {
     const overlay = document.createElement('div');
-    overlay.className = 'horae-progress-overlay';
+    overlay.className = 'horae-progress-overlay' + (settings.themeMode === 'light' ? ' horae-light' : '');
     overlay.innerHTML = `
         <div class="horae-progress-container">
             <div class="horae-progress-title">正在扫描历史记录...</div>
@@ -3984,7 +4618,7 @@ async function executeBatchScan(batches, options = {}) {
     };
 
     const overlay = document.createElement('div');
-    overlay.className = 'horae-progress-overlay';
+    overlay.className = 'horae-progress-overlay' + (settings.themeMode === 'light' ? ' horae-light' : '');
     overlay.innerHTML = `
         <div class="horae-progress-container">
             <div class="horae-progress-title">AI 智能摘要中...</div>
@@ -4223,7 +4857,7 @@ function showScanReviewModal(scanResults, scanOptions) {
     }
 
     const modal = document.createElement('div');
-    modal.className = 'horae-modal horae-review-modal';
+    modal.className = 'horae-modal horae-review-modal' + (settings.themeMode === 'light' ? ' horae-light' : '');
 
     const activeTab = tabs[0].id;
     const tabsHtml = tabs.map(t =>
@@ -4269,9 +4903,9 @@ function showScanReviewModal(scanResults, scanOptions) {
             <div class="horae-modal-footer horae-review-footer">
                 <div class="horae-review-stats">已删除 <strong id="horae-review-del-count">0</strong> 条</div>
                 <div class="horae-review-actions">
-                    <button class="menu_button" id="horae-review-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
-                    <button class="menu_button primary" id="horae-review-rescan" disabled style="opacity:0.5;"><i class="fa-solid fa-wand-magic-sparkles"></i> 补充摘要</button>
-                    <button class="menu_button primary" id="horae-review-confirm"><i class="fa-solid fa-check"></i> 确认保存</button>
+                    <button class="horae-btn" id="horae-review-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+                    <button class="horae-btn primary" id="horae-review-rescan" disabled style="opacity:0.5;"><i class="fa-solid fa-wand-magic-sparkles"></i> 补充摘要</button>
+                    <button class="horae-btn primary" id="horae-review-confirm"><i class="fa-solid fa-check"></i> 确认保存</button>
                 </div>
             </div>
         </div>
@@ -4420,7 +5054,7 @@ function applyDeletedToResults(scanResults, deletedSet, categories) {
 function showAIScanConfigDialog(targetCount) {
     return new Promise(resolve => {
         const modal = document.createElement('div');
-        modal.className = 'horae-modal';
+        modal.className = 'horae-modal' + (settings.themeMode === 'light' ? ' horae-light' : '');
         modal.innerHTML = `
             <div class="horae-modal-content" style="max-width: 420px;">
                 <div class="horae-modal-header">
@@ -4456,8 +5090,8 @@ function showAIScanConfigDialog(targetCount) {
                     </div>
                 </div>
                 <div class="horae-modal-footer">
-                    <button class="menu_button" id="horae-ai-scan-cancel">取消</button>
-                    <button class="menu_button primary" id="horae-ai-scan-confirm">继续</button>
+                    <button class="horae-btn" id="horae-ai-scan-cancel">取消</button>
+                    <button class="horae-btn primary" id="horae-ai-scan-confirm">继续</button>
                 </div>
             </div>
         `;

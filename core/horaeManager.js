@@ -695,11 +695,13 @@ class HoraeManager {
             }
         }
         
-        // 自定义表格数据
+        // 自定义表格数据（合并全局和本地）
         const chat = this.getChat();
         const firstMsg = chat?.[0];
-        const customTables = firstMsg?.horae_meta?.customTables || this.settings?.customTables || [];
-        for (const table of customTables) {
+        const localTables = firstMsg?.horae_meta?.customTables || [];
+        const globalTables = this.settings?.globalTables || [];
+        const allTables = [...globalTables, ...localTables];
+        for (const table of allTables) {
             const rows = table.rows || 2;
             const cols = table.cols || 2;
             const data = table.data || {};
@@ -749,15 +751,27 @@ class HoraeManager {
             // 至少显示第1行
             if (lastDataRow === 0) lastDataRow = 1;
             
-            // 3. 输出表头行
-            const headerRow = activeCols.map(c => data[`0-${c}`] || (c === 0 ? '表头' : `列${c}`));
+            // 3. 输出表头行（锁定列/单格标🔒）
+            const lockedRows = new Set(table.lockedRows || []);
+            const lockedCols = new Set(table.lockedCols || []);
+            const lockedCells = new Set(table.lockedCells || []);
+            const headerRow = activeCols.map(c => {
+                const label = data[`0-${c}`] || (c === 0 ? '表头' : `列${c}`);
+                return lockedCols.has(c) ? `${label}🔒` : label;
+            });
             lines.push(headerRow.join(' | '));
-            
-            // 4. 输出数据行
+
+            // 4. 输出数据行（锁定行/单格标🔒）
             for (let r = 1; r <= lastDataRow; r++) {
                 const rowData = activeCols.map(c => {
-                    if (c === 0) return data[`${r}-0`] || `${r}`;
-                    return data[`${r}-${c}`] || '-';
+                    if (c === 0) {
+                        const label = data[`${r}-0`] || `${r}`;
+                        return lockedRows.has(r) ? `${label}🔒` : label;
+                    }
+                    const val = data[`${r}-${c}`] || '-';
+                    // 单格锁定标记
+                    if (lockedCells.has(`${r}-${c}`)) return `${val}🔒`;
+                    return val;
                 });
                 lines.push(rowData.join(' | '));
             }
@@ -1258,52 +1272,67 @@ class HoraeManager {
         return updates;
     }
 
-    /** 将表格更新写入 chat[0] */
+    /** 将表格更新写入 chat[0] 或全局设置 */
     applyTableUpdates(tableUpdates) {
         if (!tableUpdates || tableUpdates.length === 0) return;
-        
+
         const chat = this.getChat();
         if (!chat || chat.length === 0) return;
-        
+
         const firstMsg = chat[0];
         if (!firstMsg.horae_meta) firstMsg.horae_meta = createEmptyMeta();
         if (!firstMsg.horae_meta.customTables) firstMsg.horae_meta.customTables = [];
-        
-        const tables = firstMsg.horae_meta.customTables;
-        
+
+        const localTables = firstMsg.horae_meta.customTables;
+        const globalTables = this.settings?.globalTables || [];
+
         for (const update of tableUpdates) {
-            // 查找对应表格
             const updateName = (update.name || '').trim();
-            const table = tables.find(t => (t.name || '').trim() === updateName);
+            // 在本地和全局表格中查找
+            let table = localTables.find(t => (t.name || '').trim() === updateName);
+            let isGlobal = false;
             if (!table) {
-                console.warn(`[Horae] 表格 "${updateName}" 不存在（已有表格：${tables.map(t => t.name).join(', ')}），跳过`);
+                table = globalTables.find(t => (t.name || '').trim() === updateName);
+                isGlobal = true;
+            }
+            if (!table) {
+                console.warn(`[Horae] 表格 "${updateName}" 不存在，跳过`);
                 continue;
             }
-            
+
             if (!table.data) table.data = {};
-            
+            const lockedRows = new Set(table.lockedRows || []);
+            const lockedCols = new Set(table.lockedCols || []);
+            const lockedCells = new Set(table.lockedCells || []);
+
             let updatedCount = 0;
-            
-            // 写入单元格，自动扩展，保护表头
+            let blockedCount = 0;
+
             for (const [key, value] of Object.entries(update.updates)) {
                 const [r, c] = key.split('-').map(Number);
-                
+
                 // 保护表头
                 if (r === 0 || c === 0) {
                     const existing = table.data[key];
-                    if (existing && existing.trim()) {
-                        console.log(`[Horae] 表格 "${updateName}" 跳过表头单元格 [${r},${c}]（已有: "${existing}"）`);
-                        continue;
-                    }
+                    if (existing && existing.trim()) continue;
                 }
-                
+
+                // 锁定保护：AI不得修改锁定行/列/单格的单元格
+                if (lockedRows.has(r) || lockedCols.has(c) || lockedCells.has(key)) {
+                    blockedCount++;
+                    continue;
+                }
+
                 table.data[key] = value;
                 updatedCount++;
-                
+
                 if (r + 1 > (table.rows || 2)) table.rows = r + 1;
                 if (c + 1 > (table.cols || 2)) table.cols = c + 1;
             }
-            
+
+            if (blockedCount > 0) {
+                console.log(`[Horae] 表格 "${updateName}" 拦截 ${blockedCount} 个锁定单元格的修改`);
+            }
             console.log(`[Horae] 表格 "${updateName}" 已更新 ${updatedCount} 个单元格`);
         }
     }
@@ -1709,9 +1738,14 @@ event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键
     generateCustomTablesPrompt() {
         const chat = this.getChat();
         const firstMsg = chat?.[0];
-        const customTables = firstMsg?.horae_meta?.customTables || this.settings?.customTables || [];
-        if (customTables.length === 0) return '';
-        
+        const localTables = firstMsg?.horae_meta?.customTables || [];
+        const globalTables = this.settings?.globalTables || [];
+        const allTables = [...globalTables, ...localTables];
+        if (allTables.length === 0) return '';
+
+        // 检查是否有任何锁定行列
+        const hasLocks = allTables.some(t => (t.lockedRows?.length > 0) || (t.lockedCols?.length > 0) || (t.lockedCells?.length > 0));
+
         let prompt = `
 ═══ 自定义表格规则 ═══
 上方有用户自定义表格，根据"填写要求"填写数据。
@@ -1722,8 +1756,11 @@ event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键
   - 空单元格无对应剧情 → 不填
   - 禁止输出"(空)""-""无"等占位符
 `;
-        
-        for (const table of customTables) {
+        if (hasLocks) {
+            prompt += `  - 🔒标记的行/列为只读数据，禁止修改其内容\n`;
+        }
+
+        for (const table of allTables) {
             const tableName = table.name || '自定义表格';
             prompt += `示例：
 <horaetable:${tableName}>
@@ -1733,7 +1770,7 @@ event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键
 `;
             break;
         }
-        
+
         return prompt;
     }
 

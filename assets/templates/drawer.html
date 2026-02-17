@@ -10,7 +10,7 @@
                 <i class="fa-regular fa-clock"></i>
                 Horae 时光记忆
             </div>
-            <span class="horae-version">v1.2.2</span>
+            <span class="horae-version">v1.3.0</span>
         </div>
         
         <!-- 标签页导航 -->
@@ -84,8 +84,9 @@
                 </div>
                 
                 <div class="horae-action-buttons">
-                    <button id="horae-btn-refresh" class="menu_button">
-                        <i class="fa-solid fa-rotate"></i> 刷新
+                    <button id="horae-btn-refresh" class="horae-data-btn primary">
+                        <i class="fa-solid fa-rotate"></i>
+                        <span>刷新</span>
                     </button>
                 </div>
             </div>
@@ -132,7 +133,7 @@
                             <option value="重要">重要</option>
                             <option value="一般">一般</option>
                         </select>
-                        <button id="horae-btn-scan-all" class="menu_button" title="刷新时间线">
+                        <button id="horae-btn-scan-all" class="horae-icon-btn" title="刷新时间线">
                             <i class="fa-solid fa-rotate"></i>
                         </button>
                     </div>
@@ -140,6 +141,23 @@
                 <div class="horae-timeline-search-row">
                     <i class="fa-solid fa-magnifying-glass horae-search-icon"></i>
                     <input type="text" id="horae-timeline-search" class="horae-search-input" placeholder="搜索事件关键字...">
+                </div>
+                <!-- 时间线多选模式工具栏 -->
+                <div id="horae-timeline-multiselect-bar" class="horae-multiselect-bar" style="display: none;">
+                    <div class="horae-multiselect-info">
+                        <span id="horae-timeline-selected-count">0</span> 项已选
+                    </div>
+                    <div class="horae-multiselect-actions">
+                        <button id="horae-btn-timeline-select-all" class="horae-icon-btn small" title="全选">
+                            <i class="fa-solid fa-check-double"></i>
+                        </button>
+                        <button id="horae-btn-timeline-delete" class="horae-icon-btn small danger" title="删除选中">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                        <button id="horae-btn-timeline-cancel-select" class="horae-icon-btn small" title="取消多选">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
                 </div>
                 <div id="horae-timeline-list" class="horae-timeline-list">
                     <div class="horae-empty-state">
@@ -266,6 +284,62 @@
                             显示消息元数据面板
                         </label>
                     </div>
+                    
+                    <div class="horae-setting-item">
+                        <label>
+                            面板宽度
+                            <input type="number" id="horae-setting-panel-width" min="50" max="100" value="100">
+                        </label>
+                        <span class="horae-setting-hint">
+                            消息面板占聊天区域的宽度百分比（50-100）。宽屏美化可调低避免溢出。
+                        </span>
+                    </div>
+                </div>
+
+                <div class="horae-settings-section">
+                    <div class="horae-section-header">
+                        <i class="fa-solid fa-palette"></i>
+                        外观设置
+                    </div>
+                    
+                    <div class="horae-setting-item">
+                        <label>
+                            插件主题
+                            <select id="horae-setting-theme-mode" class="horae-select">
+                                <option value="dark">夜间模式</option>
+                                <option value="light">日间模式</option>
+                            </select>
+                        </label>
+                        <div class="horae-theme-buttons">
+                            <button id="horae-btn-theme-import" class="horae-icon-btn" title="导入美化">
+                                <i class="fa-solid fa-file-import"></i>
+                            </button>
+                            <button id="horae-btn-theme-export" class="horae-icon-btn" title="导出当前美化">
+                                <i class="fa-solid fa-file-export"></i>
+                            </button>
+                            <button id="horae-btn-theme-delete" class="horae-icon-btn" title="删除当前自定义美化">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
+                        <span class="horae-setting-hint">
+                            <i class="fa-solid fa-circle-info"></i>
+                            选择内置主题或导入的自定义美化。导入美化文件（.json）后会出现在下拉列表中。
+                        </span>
+                    </div>
+                    
+                    <div class="horae-setting-item">
+                        <div class="horae-section-header horae-collapse-header" id="horae-css-collapse-toggle" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
+                            自定义CSS
+                            <i class="fa-solid fa-chevron-down horae-collapse-icon collapsed"></i>
+                        </div>
+                        <div id="horae-css-collapse-body" style="display: none;">
+                            <span class="horae-setting-hint" style="margin-bottom: 8px;">
+                                <i class="fa-solid fa-circle-info"></i>
+                                输入自定义CSS覆盖插件样式。适合进阶用户微调配色。修改后切换焦点即生效。
+                            </span>
+                            <textarea id="horae-custom-css" class="horae-prompt-textarea" rows="6" placeholder="/* 在此输入自定义CSS */"></textarea>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="horae-settings-section">
@@ -312,7 +386,8 @@
                         <i class="fa-solid fa-circle-info"></i>
                         创建Excel风格表格，让AI按你的需求填写特定信息。<br>
                         长按表头可添加/删除行列。每个表格可设置提示词指导AI如何填写。<br>
-                        <strong>表格跟随当前对话保存</strong>，切换对话不会丢失。可导出/导入在其他对话复用。
+                        <strong>本地表格</strong>跟随当前对话保存；<strong>全局表格</strong>所有对话共享。点击表格名称前的图标可切换。<br>
+                        🔒 锁定行列可防止AI修改特定内容。
                     </span>
                     
                     <div id="horae-custom-tables-list" class="horae-custom-tables-list">
@@ -320,8 +395,11 @@
                     </div>
                     
                     <div class="horae-table-buttons">
-                        <button id="horae-btn-add-table" class="horae-btn-add-table">
-                            <i class="fa-solid fa-plus"></i> 添加 2×2 表格
+                        <button id="horae-btn-add-table-local" class="horae-btn-add-table">
+                            <i class="fa-solid fa-plus"></i> 添加本地表格
+                        </button>
+                        <button id="horae-btn-add-table-global" class="horae-btn-add-table">
+                            <i class="fa-solid fa-globe"></i> 添加全局表格
                         </button>
                         <button id="horae-btn-import-table" class="horae-btn-import-table">
                             <i class="fa-solid fa-upload"></i> 导入表格
@@ -457,7 +535,7 @@
                 </div>
                 
                 <div class="horae-about">
-                    <p>Horae v1.2.2 | 作者: SenriYuki</p>
+                    <p>Horae v1.3.0 | 作者: SenriYuki</p>
                     <p>基于时间锚点的AI记忆增强系统</p>
                 </div>
             </div>
