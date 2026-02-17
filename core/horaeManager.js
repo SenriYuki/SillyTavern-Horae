@@ -408,16 +408,15 @@ class HoraeManager {
         return null;
     }
 
-    /** 获取事件列表（用于时间线显示） */
-    getEvents(limit = 50, filterLevel = 'all', skipLast = 0) {
+    /** 获取事件列表（limit=0表示不限制数量） */
+    getEvents(limit = 0, filterLevel = 'all', skipLast = 0) {
         const chat = this.getChat();
         const end = Math.max(0, chat.length - skipLast);
         const events = [];
         
-        for (let i = 0; i < end && events.length < limit; i++) {
+        for (let i = 0; i < end; i++) {
             const meta = chat[i].horae_meta;
             
-            // 支持新格式（events数组）和旧格式（单个event）
             const metaEvents = meta?.events || (meta?.event ? [meta.event] : []);
             
             for (let j = 0; j < metaEvents.length; j++) {
@@ -430,20 +429,21 @@ class HoraeManager {
                 
                 events.push({
                     messageIndex: i,
-                    eventIndex: j,  // 事件在该消息中的索引
+                    eventIndex: j,
                     timestamp: meta.timestamp,
                     event: evt
                 });
                 
-                if (events.length >= limit) break;
+                if (limit > 0 && events.length >= limit) break;
             }
+            if (limit > 0 && events.length >= limit) break;
         }
         
         return events;
     }
 
     /** 获取重要事件列表（兼容旧调用） */
-    getImportantEvents(limit = 50) {
+    getImportantEvents(limit = 0) {
         return this.getEvents(limit, 'all');
     }
 
@@ -603,7 +603,7 @@ class HoraeManager {
         
         // 剧情轨迹
         if (sendTimeline) {
-            const events = this.getEvents(100, 'all', skipLast);
+            const events = this.getEvents(0, 'all', skipLast);
             if (events.length > 0) {
                 lines.push('\n[剧情轨迹]');
                 
@@ -668,7 +668,7 @@ class HoraeManager {
                     return (a.messageIndex || 0) - (b.messageIndex || 0);
                 });
                 
-                // 筛选：关键/重要全部 + 最近30条一般
+                // 筛选：关键/重要全部保留 + 一般事件取最近contextDepth条
                 const criticalAndImportant = sortedEvents.filter(e => 
                     e.event?.level === '关键' || e.event?.level === '重要'
                 );

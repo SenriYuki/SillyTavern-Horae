@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.2.1
+ * 版本: 1.2.2
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -19,7 +19,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.2.1';
+const VERSION = '1.2.2';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -502,7 +502,7 @@ function updateStatusDisplay() {
 function updateTimelineDisplay() {
     const filterLevel = document.getElementById('horae-timeline-filter')?.value || 'all';
     const searchKeyword = (document.getElementById('horae-timeline-search')?.value || '').trim().toLowerCase();
-    let events = horaeManager.getEvents(50, filterLevel);
+    let events = horaeManager.getEvents(0, filterLevel);
     const listEl = document.getElementById('horae-timeline-list');
     
     if (!listEl) return;
