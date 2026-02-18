@@ -256,12 +256,12 @@ class HoraeManager {
                         if (value.type === 'absolute') {
                             state.affection[key] = value.value;
                         } else if (value.type === 'relative') {
-                            const delta = parseInt(value.value) || 0;
+                            const delta = parseFloat(value.value) || 0;
                             state.affection[key] = (state.affection[key] || 0) + delta;
                         }
                     } else {
                         // 旧格式兼容
-                        const numValue = typeof value === 'number' ? value : parseInt(value) || 0;
+                        const numValue = typeof value === 'number' ? value : parseFloat(value) || 0;
                         state.affection[key] = (state.affection[key] || 0) + numValue;
                     }
                 }
@@ -668,15 +668,14 @@ class HoraeManager {
                     return (a.messageIndex || 0) - (b.messageIndex || 0);
                 });
                 
-                // 筛选：关键/重要全部保留 + 一般事件取最近contextDepth条
+                // 筛选：关键/重要/摘要全部保留 + 一般事件取最近contextDepth条
                 const criticalAndImportant = sortedEvents.filter(e => 
-                    e.event?.level === '关键' || e.event?.level === '重要'
+                    e.event?.level === '关键' || e.event?.level === '重要' || e.event?.level === '摘要' || e.event?.isSummary
                 );
                 const contextDepth = this.settings?.contextDepth ?? 15;
                 const normalAll = sortedEvents.filter(e => 
-                    e.event?.level === '一般' || !e.event?.level
+                    (e.event?.level === '一般' || !e.event?.level) && !e.event?.isSummary
                 );
-                // contextDepth=0时不发送一般事件，>0时取最近N条
                 const normalEvents = contextDepth === 0 ? [] : normalAll.slice(-contextDepth);
                 
                 // 合并后按楼层排序
@@ -684,13 +683,18 @@ class HoraeManager {
                     .sort((a, b) => (a.messageIndex || 0) - (b.messageIndex || 0));
                 
                 for (const e of allToShow) {
-                    const mark = getLevelMark(e.event?.level);
-                    const date = e.timestamp?.story_date || '?';
-                    const time = e.timestamp?.story_time || '';
-                    const timeStr = time ? `${date} ${time}` : date;
-                    const relativeDesc = getRelativeDesc(e.timestamp?.story_date);
-                    const msgNum = e.messageIndex !== undefined ? `#${e.messageIndex}` : '';
-                    lines.push(`${mark} ${msgNum} ${timeStr}${relativeDesc}: ${e.event.summary}`);
+                    const isSummary = e.event?.isSummary || e.event?.level === '摘要';
+                    if (isSummary) {
+                        lines.push(`📋 [摘要]: ${e.event.summary}`);
+                    } else {
+                        const mark = getLevelMark(e.event?.level);
+                        const date = e.timestamp?.story_date || '?';
+                        const time = e.timestamp?.story_time || '';
+                        const timeStr = time ? `${date} ${time}` : date;
+                        const relativeDesc = getRelativeDesc(e.timestamp?.story_date);
+                        const msgNum = e.messageIndex !== undefined ? `#${e.messageIndex}` : '';
+                        lines.push(`${mark} ${msgNum} ${timeStr}${relativeDesc}: ${e.event.summary}`);
+                    }
                 }
             }
         }
@@ -712,7 +716,7 @@ class HoraeManager {
             if (!hasContent && !hasPrompt) continue;
             
             const tableName = table.name || '自定义表格';
-            lines.push(`\n[${tableName}]`);
+            lines.push(`\n[${tableName}](${rows - 1}行×${cols - 1}列)`);
             
             if (table.prompt && table.prompt.trim()) {
                 lines.push(`(填写要求: ${table.prompt.trim()})`);
@@ -735,24 +739,26 @@ class HoraeManager {
             const lockedCols = new Set(table.lockedCols || []);
             const lockedCells = new Set(table.lockedCells || []);
 
-            // 输出表头行（始终显示所有列）
+            // 输出表头行（带坐标标注）
             const headerRow = [];
             for (let c = 0; c < cols; c++) {
                 const label = data[`0-${c}`] || (c === 0 ? '表头' : `列${c}`);
-                headerRow.push(lockedCols.has(c) ? `${label}🔒` : label);
+                const coord = `[0,${c}]`;
+                headerRow.push(lockedCols.has(c) ? `${coord}${label}🔒` : `${coord}${label}`);
             }
             lines.push(headerRow.join(' | '));
 
-            // 输出数据行（始终显示所有列）
+            // 输出数据行（带坐标标注）
             for (let r = 1; r <= lastDataRow; r++) {
                 const rowData = [];
                 for (let c = 0; c < cols; c++) {
+                    const coord = `[${r},${c}]`;
                     if (c === 0) {
                         const label = data[`${r}-0`] || `${r}`;
-                        rowData.push(lockedRows.has(r) ? `${label}🔒` : label);
+                        rowData.push(lockedRows.has(r) ? `${coord}${label}🔒` : `${coord}${label}`);
                     } else {
-                        const val = data[`${r}-${c}`] || '-';
-                        rowData.push(lockedCells.has(`${r}-${c}`) ? `${val}🔒` : val);
+                        const val = data[`${r}-${c}`] || '';
+                        rowData.push(lockedCells.has(`${r}-${c}`) ? `${coord}${val}🔒` : `${coord}${val}`);
                     }
                 }
                 lines.push(rowData.join(' | '));
@@ -774,7 +780,7 @@ class HoraeManager {
             }
             if (emptyCols.length > 0) {
                 const emptyColNames = emptyCols.map(c => data[`0-${c}`] || `列${c}`);
-                lines.push(`(${emptyColNames.join('、')}：暂无数据，对应事件未发生时禁止填写)`);
+                lines.push(`(${emptyColNames.join('、')}：暂无数据，如剧情中已有相关信息请填写)`);
             }
         }
         
@@ -955,14 +961,14 @@ class HoraeManager {
             else if (trimmedLine.startsWith('affection:')) {
                 const affStr = trimmedLine.substring(10).trim();
                 // 新格式：角色名=数值（绝对值，允许带正负号如 =+28 或 =-15）
-                const absoluteMatch = affStr.match(/^(.+?)=\s*([+\-]?\d+)/);
+                const absoluteMatch = affStr.match(/^(.+?)=\s*([+\-]?\d+\.?\d*)/);
                 if (absoluteMatch) {
                     const key = absoluteMatch[1].trim();
-                    const value = parseInt(absoluteMatch[2]);
+                    const value = parseFloat(absoluteMatch[2]);
                     result.affection[key] = { type: 'absolute', value: value };
                 } else {
                     // 旧格式：角色名+/-数值（相对值，无=号）— 允许数值后跟任意注解
-                    const relativeMatch = affStr.match(/^(.+?)([+\-]\d+)/);
+                    const relativeMatch = affStr.match(/^(.+?)([+\-]\d+\.?\d*)/);
                     if (relativeMatch) {
                         const key = relativeMatch[1].trim();
                         const value = relativeMatch[2];
@@ -1724,6 +1730,21 @@ event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键
 - 奇幻/架空：该世界观日历（如 霜降月第三日 黄昏）`;
     }
 
+    /** 获取默认表格填写规则提示词（供UI展示和重置用） */
+    getDefaultTablesPrompt() {
+        return `═══ 自定义表格规则 ═══
+上方有用户自定义表格，根据"填写要求"填写数据。
+★ 格式：<horaetable:表格名> 标签内，每行一个单元格 → 行,列:内容
+★★ 坐标说明：第0行和第0列是表头，数据从1,1开始。行号=数据行序号，列号=数据列序号
+★★★ 填写原则 ★★★
+  - 空单元格且剧情中已有对应信息 → 必须填写！不要遗漏！
+  - 已有内容且无变化 → 不重复写
+  - 该行/列确实无对应剧情信息 → 留空
+  - 禁止输出"(空)""-""无"等占位符
+  - 🔒标记的行/列为只读数据，禁止修改其内容
+  - 新增行请在现有最大行号之后追加，新增列请在现有最大列号之后追加`;
+    }
+
     /** 生成自定义表格的提示词 */
     generateCustomTablesPrompt() {
         const chat = this.getChat();
@@ -1733,31 +1754,21 @@ event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键
         const allTables = [...globalTables, ...localTables];
         if (allTables.length === 0) return '';
 
-        // 检查是否有任何锁定行列
-        const hasLocks = allTables.some(t => (t.lockedRows?.length > 0) || (t.lockedCols?.length > 0) || (t.lockedCells?.length > 0));
+        // 用户自定义或默认规则
+        let prompt = '\n' + (this.settings?.customTablesPrompt || this.getDefaultTablesPrompt());
 
-        let prompt = `
-═══ 自定义表格规则 ═══
-上方有用户自定义表格，根据"填写要求"填写数据。
-★ 格式：<horaetable:表格名> 标签内，每行一个单元格 → 行,列:内容（坐标0起始，数据从1,1开始）
-★★★ 核心原则：只记录剧情中实际发生的事！★★★
-  - 标注"暂无数据"或"对应事件未发生"的列/行 → 绝对禁止填写！留空等事件发生！
-  - 已有内容且无变化 → 不重复写
-  - 空单元格无对应剧情 → 不填
-  - 禁止输出"(空)""-""无"等占位符
-`;
-        if (hasLocks) {
-            prompt += `  - 🔒标记的行/列为只读数据，禁止修改其内容\n`;
-        }
-
+        // 为每个表格生成带坐标的示例
         for (const table of allTables) {
             const tableName = table.name || '自定义表格';
-            prompt += `示例：
+            const rows = table.rows || 2;
+            const cols = table.cols || 2;
+            prompt += `\n★ 表格「${tableName}」尺寸：${rows - 1}行×${cols - 1}列（数据区行号1-${rows - 1}，列号1-${cols - 1}）`;
+            prompt += `\n示例（填写空单元格或更新有变化的单元格）：
 <horaetable:${tableName}>
-1,1:数据A
-2,1:数据B
-</horaetable>
-`;
+1,1:内容A
+1,2:内容B
+2,1:内容C
+</horaetable>`;
             break;
         }
 
@@ -1925,13 +1936,13 @@ event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键
         while ((match = patterns.affection.exec(message)) !== null) {
             const affStr = match[1].trim();
             // 绝对值格式
-            const absMatch = affStr.match(/^(.+?)=\s*([+\-]?\d+)/);
+            const absMatch = affStr.match(/^(.+?)=\s*([+\-]?\d+\.?\d*)/);
             if (absMatch) {
-                result.affection[absMatch[1].trim()] = { type: 'absolute', value: parseInt(absMatch[2]) };
+                result.affection[absMatch[1].trim()] = { type: 'absolute', value: parseFloat(absMatch[2]) };
                 hasAnyData = true;
             } else {
                 // 相对值格式 name+/-数值（无=号）
-                const relMatch = affStr.match(/^(.+?)([+\-]\d+)/);
+                const relMatch = affStr.match(/^(.+?)([+\-]\d+\.?\d*)/);
                 if (relMatch) {
                     result.affection[relMatch[1].trim()] = { type: 'relative', value: relMatch[2] };
                     hasAnyData = true;

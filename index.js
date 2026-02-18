@@ -19,7 +19,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.3.1';
+const VERSION = '1.4.0';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -101,7 +101,9 @@ const DEFAULT_SETTINGS = {
     themeMode: 'dark',             // 插件主题：dark / light / custom-{index}
     customCSS: '',                 // 用户自定义CSS
     customThemes: [],              // 导入的美化主题 [{name, author, variables, css}]
-    globalTables: []               // 全局表格（跨角色卡共享）
+    globalTables: [],              // 全局表格（跨角色卡共享）
+    showTopIcon: true,             // 显示顶部导航栏图标
+    customTablesPrompt: ''         // 自定义表格填写规则提示词（空=使用默认）
 };
 
 // ============================================
@@ -576,13 +578,23 @@ function updateTimelineDisplay() {
     const state = horaeManager.getLatestState();
     const currentDate = state.timestamp?.story_date || getCurrentSystemTime().date;
     
+    // 更新多选按钮状态
+    const msBtn = document.getElementById('horae-btn-timeline-multiselect');
+    if (msBtn) {
+        msBtn.classList.toggle('active', timelineMultiSelectMode);
+        msBtn.title = timelineMultiSelectMode ? '退出多选' : '多选模式';
+    }
+    
     listEl.innerHTML = events.reverse().map(e => {
+        const isSummary = e.event?.isSummary || e.event?.level === '摘要';
+        
         const result = calculateDetailedRelativeTime(
             e.timestamp?.story_date || '',
             currentDate
         );
         const relTime = result.relative;
-        const levelClass = e.event?.level === '关键' ? 'critical' : 
+        const levelClass = isSummary ? 'summary' :
+                          e.event?.level === '关键' ? 'critical' : 
                           e.event?.level === '重要' ? 'important' : '';
         const levelBadge = e.event?.level ? `<span class="horae-level-badge ${levelClass}">${e.event.level}</span>` : '';
         
@@ -595,6 +607,28 @@ function updateTimelineDisplay() {
         const isSelected = selectedTimelineEvents.has(eventKey);
         const selectedClass = isSelected ? 'selected' : '';
         const checkboxDisplay = timelineMultiSelectMode ? 'flex' : 'none';
+        
+        if (isSummary) {
+            const summaryContent = e.event?.summary || '';
+            const summaryDisplay = summaryContent || '<span class="horae-summary-hint">点击编辑添加摘要内容。请勿删除开头的时间线，否则相对时间计算和年龄自动推进将失效。</span>';
+            return `
+            <div class="horae-timeline-item horae-editable-item summary ${selectedClass}" data-message-id="${e.messageIndex}" data-event-key="${eventKey}">
+                <div class="horae-item-checkbox" style="display: ${checkboxDisplay}">
+                    <input type="checkbox" ${isSelected ? 'checked' : ''}>
+                </div>
+                <div class="horae-timeline-summary-icon">
+                    <i class="fa-solid fa-file-lines"></i>
+                </div>
+                <div class="horae-timeline-content">
+                    <div class="horae-timeline-summary">${levelBadge}${summaryDisplay}</div>
+                    <div class="horae-timeline-meta">摘要 · 消息 #${e.messageIndex}</div>
+                </div>
+                <button class="horae-item-edit-btn" data-edit-type="event" data-message-id="${e.messageIndex}" data-event-index="${e.eventIndex || 0}" title="编辑" style="${timelineMultiSelectMode ? 'display:none' : ''}">
+                    <i class="fa-solid fa-pen"></i>
+                </button>
+            </div>
+            `;
+        }
         
         return `
             <div class="horae-timeline-item horae-editable-item ${levelClass} ${selectedClass}" data-message-id="${e.messageIndex}" data-event-key="${eventKey}">
@@ -621,19 +655,17 @@ function updateTimelineDisplay() {
         const eventKey = item.dataset.eventKey;
         
         if (timelineMultiSelectMode) {
-            // 多选模式：点击切换选中
             item.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (eventKey) toggleTimelineSelection(eventKey);
             });
         } else {
-            // 普通模式：点击跳转，长按进入多选
             item.addEventListener('click', (e) => {
                 if (e.target.closest('.horae-item-edit-btn')) return;
                 scrollToMessage(item.dataset.messageId);
             });
             item.addEventListener('mousedown', (e) => startTimelineLongPress(e, eventKey));
-            item.addEventListener('touchstart', (e) => startTimelineLongPress(e, eventKey), { passive: true });
+            item.addEventListener('touchstart', (e) => startTimelineLongPress(e, eventKey), { passive: false });
             item.addEventListener('mouseup', cancelTimelineLongPress);
             item.addEventListener('mouseleave', cancelTimelineLongPress);
             item.addEventListener('touchend', cancelTimelineLongPress);
@@ -824,15 +856,16 @@ async function deleteSelectedAgenda() {
 }
 
 // ============================================
-// 时间线多选模式
+// 时间线多选模式 & 长按插入菜单
 // ============================================
 
-/** 时间线长按开始 */
+/** 时间线长按开始（弹出插入菜单） */
 function startTimelineLongPress(e, eventKey) {
     if (timelineMultiSelectMode) return;
     timelineLongPressTimer = setTimeout(() => {
-        enterTimelineMultiSelect(eventKey);
-    }, 1600); // 1600ms长按触发（物品栏的两倍）
+        e.preventDefault?.();
+        showTimelineContextMenu(e, eventKey);
+    }, 800);
 }
 
 /** 取消时间线长按 */
@@ -841,6 +874,275 @@ function cancelTimelineLongPress() {
         clearTimeout(timelineLongPressTimer);
         timelineLongPressTimer = null;
     }
+}
+
+/** 显示时间线长按上下文菜单 */
+function showTimelineContextMenu(e, eventKey) {
+    closeTimelineContextMenu();
+    const [msgIdx, evtIdx] = eventKey.split('-').map(Number);
+    
+    const menu = document.createElement('div');
+    menu.id = 'horae-timeline-context-menu';
+    menu.className = 'horae-context-menu';
+    menu.innerHTML = `
+        <div class="horae-context-item" data-action="insert-event-above">
+            <i class="fa-solid fa-arrow-up"></i> 在上方添加事件
+        </div>
+        <div class="horae-context-item" data-action="insert-event-below">
+            <i class="fa-solid fa-arrow-down"></i> 在下方添加事件
+        </div>
+        <div class="horae-context-separator"></div>
+        <div class="horae-context-item" data-action="insert-summary-above">
+            <i class="fa-solid fa-file-lines"></i> 在上方插入摘要
+        </div>
+        <div class="horae-context-item" data-action="insert-summary-below">
+            <i class="fa-solid fa-file-lines"></i> 在下方插入摘要
+        </div>
+        <div class="horae-context-separator"></div>
+        <div class="horae-context-item danger" data-action="delete">
+            <i class="fa-solid fa-trash-can"></i> 删除此事件
+        </div>
+    `;
+    
+    document.body.appendChild(menu);
+    
+    // 阻止菜单自身的所有事件冒泡（防止移动端抽屉收回）
+    ['click', 'mousedown', 'mouseup', 'touchstart', 'touchend'].forEach(evType => {
+        menu.addEventListener(evType, (ev) => ev.stopPropagation());
+    });
+    
+    // 定位
+    const rect = e.target.closest('.horae-timeline-item')?.getBoundingClientRect();
+    if (rect) {
+        let top = rect.bottom + 4;
+        let left = rect.left + rect.width / 2 - 90;
+        if (top + menu.offsetHeight > window.innerHeight) top = rect.top - menu.offsetHeight - 4;
+        if (left < 8) left = 8;
+        if (left + 180 > window.innerWidth) left = window.innerWidth - 188;
+        menu.style.top = `${top}px`;
+        menu.style.left = `${left}px`;
+    } else {
+        menu.style.top = `${(e.clientY || e.touches?.[0]?.clientY || 100)}px`;
+        menu.style.left = `${(e.clientX || e.touches?.[0]?.clientX || 100)}px`;
+    }
+    
+    // 绑定菜单项操作（click + touchend 双绑定确保移动端可用）
+    menu.querySelectorAll('.horae-context-item').forEach(item => {
+        let handled = false;
+        const handler = (ev) => {
+            ev.stopPropagation();
+            ev.stopImmediatePropagation();
+            ev.preventDefault();
+            if (handled) return;
+            handled = true;
+            const action = item.dataset.action;
+            closeTimelineContextMenu();
+            handleTimelineContextAction(action, msgIdx, evtIdx, eventKey);
+        };
+        item.addEventListener('click', handler);
+        item.addEventListener('touchend', handler);
+    });
+    
+    // 点击菜单外区域关闭（仅用 click，不用 touchstart 避免抢占移动端触摸）
+    setTimeout(() => {
+        const dismissHandler = (ev) => {
+            if (menu.contains(ev.target)) return;
+            closeTimelineContextMenu();
+            document.removeEventListener('click', dismissHandler, true);
+        };
+        document.addEventListener('click', dismissHandler, true);
+    }, 100);
+}
+
+/** 关闭时间线上下文菜单 */
+function closeTimelineContextMenu() {
+    const menu = document.getElementById('horae-timeline-context-menu');
+    if (menu) menu.remove();
+}
+
+/** 处理时间线上下文菜单操作 */
+async function handleTimelineContextAction(action, msgIdx, evtIdx, eventKey) {
+    const chat = horaeManager.getChat();
+    
+    if (action === 'delete') {
+        if (!confirm('确定删除此事件？')) return;
+        const meta = chat[msgIdx]?.horae_meta;
+        if (!meta) return;
+        if (meta.events && evtIdx < meta.events.length) {
+            meta.events.splice(evtIdx, 1);
+        } else if (meta.event && evtIdx === 0) {
+            delete meta.event;
+        }
+        await getContext().saveChat();
+        showToast('已删除事件', 'success');
+        updateTimelineDisplay();
+        updateStatusDisplay();
+        return;
+    }
+    
+    const isAbove = action.includes('above');
+    const isSummary = action.includes('summary');
+    
+    if (isSummary) {
+        openTimelineSummaryModal(msgIdx, evtIdx, isAbove);
+    } else {
+        openTimelineInsertEventModal(msgIdx, evtIdx, isAbove);
+    }
+}
+
+/** 打开插入事件弹窗 */
+function openTimelineInsertEventModal(refMsgIdx, refEvtIdx, isAbove) {
+    const state = horaeManager.getLatestState();
+    const currentDate = state.timestamp?.story_date || '';
+    const currentTime = state.timestamp?.story_time || '';
+    
+    const modalHtml = `
+        <div id="horae-edit-modal" class="horae-modal">
+            <div class="horae-modal-content">
+                <div class="horae-modal-header">
+                    <i class="fa-solid fa-timeline"></i> ${isAbove ? '在上方' : '在下方'}添加事件
+                </div>
+                <div class="horae-modal-body horae-edit-modal-body">
+                    <div class="horae-edit-field">
+                        <label>日期</label>
+                        <input type="text" id="insert-event-date" value="${currentDate}" placeholder="如 2026/2/14">
+                    </div>
+                    <div class="horae-edit-field">
+                        <label>时间</label>
+                        <input type="text" id="insert-event-time" value="${currentTime}" placeholder="如 15:00">
+                    </div>
+                    <div class="horae-edit-field">
+                        <label>重要程度</label>
+                        <select id="insert-event-level" class="horae-select">
+                            <option value="一般">一般</option>
+                            <option value="重要">重要</option>
+                            <option value="关键">关键</option>
+                        </select>
+                    </div>
+                    <div class="horae-edit-field">
+                        <label>事件摘要</label>
+                        <textarea id="insert-event-summary" rows="3" placeholder="描述此事件的摘要..."></textarea>
+                    </div>
+                </div>
+                <div class="horae-modal-footer">
+                    <button id="edit-modal-save" class="horae-btn primary">
+                        <i class="fa-solid fa-check"></i> 添加
+                    </button>
+                    <button id="edit-modal-cancel" class="horae-btn">
+                        <i class="fa-solid fa-xmark"></i> 取消
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    preventModalBubble();
+    
+    document.getElementById('edit-modal-save').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const date = document.getElementById('insert-event-date').value.trim();
+        const time = document.getElementById('insert-event-time').value.trim();
+        const level = document.getElementById('insert-event-level').value;
+        const summary = document.getElementById('insert-event-summary').value.trim();
+        
+        if (!summary) { showToast('请输入事件摘要', 'warning'); return; }
+        
+        const newEvent = {
+            is_important: level === '重要' || level === '关键',
+            level: level,
+            summary: summary
+        };
+        
+        const chat = horaeManager.getChat();
+        const meta = chat[refMsgIdx]?.horae_meta;
+        if (!meta) { closeEditModal(); return; }
+        if (!meta.events) meta.events = [];
+        
+        const newTimestamp = { story_date: date, story_time: time };
+        if (!meta.timestamp) meta.timestamp = {};
+        
+        const insertIdx = isAbove ? refEvtIdx + 1 : refEvtIdx;
+        meta.events.splice(insertIdx, 0, newEvent);
+        
+        if (date && !meta.timestamp.story_date) {
+            meta.timestamp.story_date = date;
+            meta.timestamp.story_time = time;
+        }
+        
+        await getContext().saveChat();
+        closeEditModal();
+        updateTimelineDisplay();
+        updateStatusDisplay();
+        showToast('事件已添加', 'success');
+    });
+    
+    document.getElementById('edit-modal-cancel').addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeEditModal();
+    });
+}
+
+/** 打开插入摘要弹窗 */
+function openTimelineSummaryModal(refMsgIdx, refEvtIdx, isAbove) {
+    const modalHtml = `
+        <div id="horae-edit-modal" class="horae-modal">
+            <div class="horae-modal-content">
+                <div class="horae-modal-header">
+                    <i class="fa-solid fa-file-lines"></i> ${isAbove ? '在上方' : '在下方'}插入摘要
+                </div>
+                <div class="horae-modal-body horae-edit-modal-body">
+                    <div class="horae-edit-field">
+                        <label>摘要内容</label>
+                        <textarea id="insert-summary-text" rows="5" placeholder="在此输入摘要内容，用于替代被删除的中间时间线...&#10;&#10;提示：请勿删除开头的时间线，否则相对时间计算和年龄自动推进功能将会失效。"></textarea>
+                    </div>
+                </div>
+                <div class="horae-modal-footer">
+                    <button id="edit-modal-save" class="horae-btn primary">
+                        <i class="fa-solid fa-check"></i> 插入摘要
+                    </button>
+                    <button id="edit-modal-cancel" class="horae-btn">
+                        <i class="fa-solid fa-xmark"></i> 取消
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    preventModalBubble();
+    
+    document.getElementById('edit-modal-save').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const summaryText = document.getElementById('insert-summary-text').value.trim();
+        if (!summaryText) { showToast('请输入摘要内容', 'warning'); return; }
+        
+        const newEvent = {
+            is_important: true,
+            level: '摘要',
+            summary: summaryText,
+            isSummary: true
+        };
+        
+        const chat = horaeManager.getChat();
+        const meta = chat[refMsgIdx]?.horae_meta;
+        if (!meta) { closeEditModal(); return; }
+        if (!meta.events) meta.events = [];
+        
+        const insertIdx = isAbove ? refEvtIdx + 1 : refEvtIdx;
+        meta.events.splice(insertIdx, 0, newEvent);
+        
+        await getContext().saveChat();
+        closeEditModal();
+        updateTimelineDisplay();
+        updateStatusDisplay();
+        showToast('摘要已插入', 'success');
+    });
+    
+    document.getElementById('edit-modal-cancel').addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeEditModal();
+    });
 }
 
 /** 进入时间线多选模式 */
@@ -1123,7 +1425,7 @@ function updateCharactersDisplay() {
             );
             
             const renderAffection = (arr, isMainChar = false) => arr.map(([key, value]) => {
-                const numValue = typeof value === 'number' ? value : parseInt(value) || 0;
+                const numValue = typeof value === 'number' ? value : parseFloat(value) || 0;
                 const valueClass = numValue > 0 ? 'positive' : numValue < 0 ? 'negative' : 'neutral';
                 const level = horaeManager.getAffectionLevel(numValue);
                 const mainClass = isMainChar ? 'main-character' : '';
@@ -1621,7 +1923,7 @@ function openItemEditModal(itemName) {
 function openAffectionEditModal(charName) {
     const state = horaeManager.getLatestState();
     const currentValue = state.affection?.[charName] || 0;
-    const numValue = typeof currentValue === 'number' ? currentValue : parseInt(currentValue) || 0;
+    const numValue = typeof currentValue === 'number' ? currentValue : parseFloat(currentValue) || 0;
     const level = horaeManager.getAffectionLevel(numValue);
     
     const modalHtml = `
@@ -1633,7 +1935,7 @@ function openAffectionEditModal(charName) {
                 <div class="horae-modal-body horae-edit-modal-body">
                     <div class="horae-edit-field">
                         <label>当前好感度</label>
-                        <input type="number" id="edit-affection-value" value="${numValue}" placeholder="0-100">
+                        <input type="number" step="0.1" id="edit-affection-value" value="${numValue}" placeholder="0-100">
                     </div>
                     <div class="horae-edit-field">
                         <label>好感等级</label>
@@ -1660,7 +1962,7 @@ function openAffectionEditModal(charName) {
     
     // 实时更新好感等级预览
     document.getElementById('edit-affection-value').addEventListener('input', (e) => {
-        const val = parseInt(e.target.value) || 0;
+        const val = parseFloat(e.target.value) || 0;
         const newLevel = horaeManager.getAffectionLevel(val);
         document.querySelector('.horae-affection-level-preview').textContent = newLevel;
     });
@@ -1668,7 +1970,7 @@ function openAffectionEditModal(charName) {
     document.getElementById('edit-modal-save').addEventListener('click', (e) => {
         e.stopPropagation();
         e.stopImmediatePropagation();
-        const newValue = parseInt(document.getElementById('edit-affection-value').value) || 0;
+        const newValue = parseFloat(document.getElementById('edit-affection-value').value) || 0;
         
         const chat = horaeManager.getChat();
         let lastMessageWithAffection = -1;
@@ -1933,6 +2235,7 @@ function openEventEditModal(messageId, eventIndex = 0) {
                             <option value="一般" ${event.level === '一般' || !event.level ? 'selected' : ''}>一般</option>
                             <option value="重要" ${event.level === '重要' ? 'selected' : ''}>重要</option>
                             <option value="关键" ${event.level === '关键' ? 'selected' : ''}>关键</option>
+                            <option value="摘要" ${event.level === '摘要' ? 'selected' : ''}>摘要</option>
                         </select>
                     </div>
                     <div class="horae-edit-field">
@@ -1994,17 +2297,20 @@ function openEventEditModal(messageId, eventIndex = 0) {
             }
             
             // 更新或添加事件
+            const isSummaryLevel = newLevel === '摘要';
             if (chatMeta.events[eventIndex]) {
                 chatMeta.events[eventIndex] = {
                     is_important: newLevel === '重要' || newLevel === '关键',
                     level: newLevel,
-                    summary: newSummary
+                    summary: newSummary,
+                    ...(isSummaryLevel ? { isSummary: true } : {})
                 };
             } else {
                 chatMeta.events.push({
                     is_important: newLevel === '重要' || newLevel === '关键',
                     level: newLevel,
-                    summary: newSummary
+                    summary: newSummary,
+                    ...(isSummaryLevel ? { isSummary: true } : {})
                 });
             }
             
@@ -2646,20 +2952,42 @@ function deleteCustomTable(index, scope = 'local') {
     if (!confirm('确定要删除此表格吗？')) return;
 
     const tables = getTablesByScope(scope);
+    const deletedTable = tables[index];
+    const deletedName = (deletedTable?.name || '').trim();
     tables.splice(index, 1);
     setTablesByScope(scope, tables);
+
+    // 清除所有消息中引用该表格名的 tableContributions
+    if (deletedName) {
+        const chat = horaeManager.getChat();
+        for (let i = 0; i < chat.length; i++) {
+            const meta = chat[i]?.horae_meta;
+            if (meta?.tableContributions) {
+                meta.tableContributions = meta.tableContributions.filter(
+                    tc => (tc.name || '').trim() !== deletedName
+                );
+                if (meta.tableContributions.length === 0) {
+                    delete meta.tableContributions;
+                }
+            }
+        }
+    }
+
+    horaeManager.rebuildTableData();
+    getContext().saveChat();
     renderCustomTablesList();
     showToast('表格已删除', 'info');
 }
 
 /** 清空表格数据区（保留第0行和第0列的表头） */
 function clearTableData(index, scope = 'local') {
-    if (!confirm('确定要清空此表格的数据区吗？表头将保留。')) return;
+    if (!confirm('确定要清空此表格的数据区吗？表头将保留。\n\n将同时清除 AI 历史填写记录，防止旧数据回流。')) return;
 
     const tables = getTablesByScope(scope);
     if (!tables[index]) return;
     const table = tables[index];
     const data = table.data || {};
+    const tableName = (table.name || '').trim();
 
     // 删除所有 row>0 且 col>0 的单元格数据
     for (const key of Object.keys(data)) {
@@ -2670,7 +2998,36 @@ function clearTableData(index, scope = 'local') {
     }
 
     table.data = data;
+
+    // 同步更新 baseData（清除数据区，保留表头）
+    if (table.baseData) {
+        for (const key of Object.keys(table.baseData)) {
+            const [r, c] = key.split('-').map(Number);
+            if (r > 0 && c > 0) {
+                delete table.baseData[key];
+            }
+        }
+    }
+
+    // 清除所有消息中该表格的 tableContributions（防止 rebuildTableData 回放旧数据）
+    if (tableName) {
+        const chat = horaeManager.getChat();
+        for (let i = 0; i < chat.length; i++) {
+            const meta = chat[i]?.horae_meta;
+            if (meta?.tableContributions) {
+                meta.tableContributions = meta.tableContributions.filter(
+                    tc => (tc.name || '').trim() !== tableName
+                );
+                if (meta.tableContributions.length === 0) {
+                    delete meta.tableContributions;
+                }
+            }
+        }
+    }
+
     setTablesByScope(scope, tables);
+    horaeManager.rebuildTableData();
+    getContext().saveChat();
     renderCustomTablesList();
     showToast('表格数据已清空', 'info');
 }
@@ -2905,6 +3262,24 @@ function scrollToMessage(messageId) {
         messageEl.classList.add('horae-highlight');
         setTimeout(() => messageEl.classList.remove('horae-highlight'), 2000);
     }
+}
+
+/** 应用顶部图标可见性 */
+function applyTopIconVisibility() {
+    const show = settings.showTopIcon !== false;
+    if (show) {
+        $('#horae_drawer').show();
+    } else {
+        // 先关闭抽屉再隐藏
+        if ($('#horae_drawer_icon').hasClass('openIcon')) {
+            $('#horae_drawer_icon').toggleClass('openIcon closedIcon');
+            $('#horae_drawer_content').toggleClass('openDrawer closedDrawer').hide();
+        }
+        $('#horae_drawer').hide();
+    }
+    // 同步两处开关
+    $('#horae-setting-show-top-icon').prop('checked', show);
+    $('#horae-ext-show-top-icon').prop('checked', show);
 }
 
 /** 应用消息面板宽度设置 */
@@ -3637,17 +4012,17 @@ function bindAffectionInputs(container) {
     container.querySelectorAll('.horae-affection-row').forEach(row => {
         const deltaInput = row.querySelector('.affection-delta');
         const totalInput = row.querySelector('.affection-total');
-        const prevVal = parseInt(row.dataset.prev) || 0;
+        const prevVal = parseFloat(row.dataset.prev) || 0;
         
         deltaInput?.addEventListener('input', () => {
-            const deltaStr = deltaInput.value.replace(/[^\d\-+]/g, '');
-            const delta = parseInt(deltaStr) || 0;
-            totalInput.value = prevVal + delta;
+            const deltaStr = deltaInput.value.replace(/[^\d\.\-+]/g, '');
+            const delta = parseFloat(deltaStr) || 0;
+            totalInput.value = parseFloat((prevVal + delta).toFixed(2));
         });
         
         totalInput?.addEventListener('input', () => {
-            const total = parseInt(totalInput.value) || 0;
-            const delta = total - prevVal;
+            const total = parseFloat(totalInput.value) || 0;
+            const delta = parseFloat((total - prevVal).toFixed(2));
             deltaInput.value = delta >= 0 ? `+${delta}` : `${delta}`;
         });
     });
@@ -3835,7 +4210,7 @@ function savePanelData(panelEl, messageId) {
         const totalInput = row.querySelector('.affection-total');
         
         const key = charSpan?.textContent?.trim() || charInput?.value?.trim() || '';
-        const total = parseInt(totalInput?.value) || 0;
+        const total = parseFloat(totalInput?.value) || 0;
         
         if (key) {
             meta.affection[key] = { type: 'absolute', value: total };
@@ -4185,6 +4560,12 @@ function initSettingsEvents() {
         });
     });
     
+    $('#horae-setting-show-top-icon').on('change', function() {
+        settings.showTopIcon = this.checked;
+        saveSettings();
+        applyTopIconVisibility();
+    });
+    
     $('#horae-setting-context-depth').on('change', function() {
         settings.contextDepth = parseInt(this.value);
         if (isNaN(settings.contextDepth) || settings.contextDepth < 0) settings.contextDepth = 15;
@@ -4211,6 +4592,13 @@ function initSettingsEvents() {
     $('#horae-btn-agenda-delete').on('click', deleteSelectedAgenda);
     $('#horae-btn-agenda-cancel-select').on('click', exitAgendaMultiSelect);
     
+    $('#horae-btn-timeline-multiselect').on('click', () => {
+        if (timelineMultiSelectMode) {
+            exitTimelineMultiSelect();
+        } else {
+            enterTimelineMultiSelect(null);
+        }
+    });
     $('#horae-btn-timeline-select-all').on('click', selectAllTimelineEvents);
     $('#horae-btn-timeline-delete').on('click', deleteSelectedTimelineEvents);
     $('#horae-btn-timeline-cancel-select').on('click', exitTimelineMultiSelect);
@@ -4377,6 +4765,28 @@ function initSettingsEvents() {
         showToast('已恢复默认提示词', 'success');
     });
 
+    // 表格填写规则提示词
+    $('#horae-custom-tables-prompt').on('input', function() {
+        const val = this.value;
+        settings.customTablesPrompt = (val.trim() === horaeManager.getDefaultTablesPrompt().trim()) ? '' : val;
+        $('#horae-tables-prompt-count').text(val.length);
+        saveSettings();
+        horaeManager.init(getContext(), settings);
+        updateTokenCounter();
+    });
+
+    $('#horae-btn-reset-tables-prompt').on('click', () => {
+        if (!confirm('确定恢复表格填写规则提示词为默认值？')) return;
+        settings.customTablesPrompt = '';
+        saveSettings();
+        const def = horaeManager.getDefaultTablesPrompt();
+        $('#horae-custom-tables-prompt').val(def);
+        $('#horae-tables-prompt-count').text(def.length);
+        horaeManager.init(getContext(), settings);
+        updateTokenCounter();
+        showToast('已恢复默认提示词', 'success');
+    });
+
     // 提示词区域折叠切换
     $('#horae-prompt-collapse-toggle').on('click', function() {
         const body = $('#horae-prompt-collapse-body');
@@ -4402,22 +4812,29 @@ function syncSettingsToUI() {
     $('#horae-setting-auto-parse').prop('checked', settings.autoParse);
     $('#horae-setting-inject-context').prop('checked', settings.injectContext);
     $('#horae-setting-show-panel').prop('checked', settings.showMessagePanel);
+    $('#horae-setting-show-top-icon').prop('checked', settings.showTopIcon !== false);
+    $('#horae-ext-show-top-icon').prop('checked', settings.showTopIcon !== false);
     $('#horae-setting-context-depth').val(settings.contextDepth);
     $('#horae-setting-injection-position').val(settings.injectionPosition);
     $('#horae-setting-send-timeline').prop('checked', settings.sendTimeline);
     $('#horae-setting-send-characters').prop('checked', settings.sendCharacters);
     $('#horae-setting-send-items').prop('checked', settings.sendItems);
     
+    applyTopIconVisibility();
+    
     // 自定义提示词（空则填入默认值供用户查看和微调）
     const sysPrompt = settings.customSystemPrompt || horaeManager.getDefaultSystemPrompt();
     const batchPromptVal = settings.customBatchPrompt || getDefaultBatchPrompt();
     const analysisPromptVal = settings.customAnalysisPrompt || getDefaultAnalysisPrompt();
+    const tablesPromptVal = settings.customTablesPrompt || horaeManager.getDefaultTablesPrompt();
     $('#horae-custom-system-prompt').val(sysPrompt);
     $('#horae-custom-batch-prompt').val(batchPromptVal);
     $('#horae-custom-analysis-prompt').val(analysisPromptVal);
+    $('#horae-custom-tables-prompt').val(tablesPromptVal);
     $('#horae-system-prompt-count').text(sysPrompt.length);
     $('#horae-batch-prompt-count').text(batchPromptVal.length);
     $('#horae-analysis-prompt-count').text(analysisPromptVal.length);
+    $('#horae-tables-prompt-count').text(tablesPromptVal.length);
     
     // 面板宽度
     $('#horae-setting-panel-width').val(settings.panelWidth || 100);
@@ -5476,6 +5893,30 @@ jQuery(async () => {
     ensureRegexRules();
 
     $('#extensions-settings-button').after(await getTemplate('drawer'));
+
+    // 在扩展面板中注入顶部图标开关
+    const extToggleHtml = `
+        <div id="horae-ext-settings" class="inline-drawer" style="margin-top:4px;">
+            <div class="inline-drawer-toggle inline-drawer-header">
+                <b>Horae 时光记忆</b>
+                <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+            </div>
+            <div class="inline-drawer-content">
+                <label class="checkbox_label" style="margin:6px 0;">
+                    <input type="checkbox" id="horae-ext-show-top-icon" checked>
+                    <span>显示顶部导航栏图标</span>
+                </label>
+            </div>
+        </div>
+    `;
+    $('#extensions_settings2').append(extToggleHtml);
+    
+    // 绑定扩展面板内的图标开关（折叠切换由 SillyTavern 全局处理器自动管理）
+    $('#horae-ext-show-top-icon').on('change', function() {
+        settings.showTopIcon = this.checked;
+        saveSettings();
+        applyTopIconVisibility();
+    });
 
     await initDrawer();
     initTabs();

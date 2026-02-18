@@ -10,7 +10,7 @@
                 <i class="fa-regular fa-clock"></i>
                 Horae 时光记忆
             </div>
-            <span class="horae-version">v1.3.1</span>
+            <span class="horae-version">v1.4.0</span>
         </div>
         
         <!-- 标签页导航 -->
@@ -132,7 +132,11 @@
                             <option value="关键">关键</option>
                             <option value="重要">重要</option>
                             <option value="一般">一般</option>
+                            <option value="摘要">摘要</option>
                         </select>
+                        <button id="horae-btn-timeline-multiselect" class="horae-icon-btn" title="多选模式">
+                            <i class="fa-solid fa-check-double"></i>
+                        </button>
                         <button id="horae-btn-scan-all" class="horae-icon-btn" title="刷新时间线">
                             <i class="fa-solid fa-rotate"></i>
                         </button>
@@ -283,6 +287,16 @@
                             <input type="checkbox" id="horae-setting-show-panel" checked>
                             显示消息元数据面板
                         </label>
+                    </div>
+                    
+                    <div class="horae-setting-item">
+                        <label>
+                            <input type="checkbox" id="horae-setting-show-top-icon" checked>
+                            显示顶部导航栏图标
+                        </label>
+                        <span class="horae-setting-hint">
+                            关闭后顶部图标完全隐藏，不留空位。可通过扩展面板（积木图标）中的「Horae 时光记忆」栏位重新开启。
+                        </span>
                     </div>
                     
                     <div class="horae-setting-item">
@@ -497,6 +511,19 @@
                                 <span id="horae-analysis-prompt-count">0</span> 字符
                             </div>
                         </div>
+
+                        <div class="horae-prompt-editor-group" style="margin-top: 12px;">
+                            <div class="horae-prompt-editor-header">
+                                <span>表格填写规则提示词</span>
+                                <button id="horae-btn-reset-tables-prompt" class="horae-btn-reset-prompt" title="恢复默认">
+                                    <i class="fa-solid fa-rotate-left"></i> 恢复默认
+                                </button>
+                            </div>
+                            <textarea id="horae-custom-tables-prompt" class="horae-prompt-textarea" rows="6" placeholder="留空使用默认提示词..."></textarea>
+                            <div class="horae-prompt-char-count">
+                                <span id="horae-tables-prompt-count">0</span> 字符
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -535,7 +562,7 @@
                 </div>
                 
                 <div class="horae-about">
-                    <p>Horae v1.3.1 | 作者: SenriYuki</p>
+                    <p>Horae v1.4.0 | 作者: SenriYuki</p>
                     <p>基于时间锚点的AI记忆增强系统</p>
                 </div>
             </div>

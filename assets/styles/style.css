@@ -726,6 +726,84 @@
     border-left-color: var(--horae-danger);
 }
 
+.horae-timeline-item.summary {
+    border-left-color: var(--horae-info, #2563eb);
+    background: rgba(37, 99, 235, 0.08);
+}
+
+.horae-timeline-summary-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    color: var(--horae-info, #2563eb);
+    font-size: 16px;
+    opacity: 0.8;
+}
+
+.horae-summary-hint {
+    color: var(--horae-text-muted);
+    font-style: italic;
+    font-size: 11px;
+    opacity: 0.7;
+}
+
+/* 时间线上下文菜单 */
+.horae-context-menu {
+    position: fixed;
+    z-index: 99999;
+    min-width: 180px;
+    background: var(--horae-bg-secondary, #2a2a3e);
+    border: 1px solid var(--horae-border);
+    border-radius: var(--horae-radius-sm, 8px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    padding: 4px 0;
+    animation: horae-fade-in 0.15s ease;
+}
+
+.horae-context-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--horae-text);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.horae-context-item:hover {
+    background: var(--horae-bg-hover);
+}
+
+.horae-context-item.danger {
+    color: var(--horae-danger);
+}
+
+.horae-context-item.danger:hover {
+    background: rgba(239, 68, 68, 0.15);
+}
+
+.horae-context-item i {
+    width: 16px;
+    text-align: center;
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.horae-context-separator {
+    height: 1px;
+    margin: 4px 8px;
+    background: var(--horae-border);
+}
+
+/* 多选按钮激活状态 */
+#horae-btn-timeline-multiselect.active {
+    background: var(--horae-primary);
+    color: #fff;
+    border-color: var(--horae-primary);
+}
+
 .horae-timeline-time {
     min-width: 60px;
     font-size: 12px;
@@ -3304,6 +3382,18 @@
 /* 时间线 */
 #horae_drawer.horae-light .horae-timeline-item {
     border: 1px solid var(--horae-border);
+}
+
+#horae_drawer.horae-light .horae-timeline-item.summary {
+    background: rgba(37, 99, 235, 0.06);
+}
+
+/* 上下文菜单浅色模式 */
+.horae-light .horae-context-menu,
+body .horae-context-menu {
+    background: var(--horae-bg-secondary, #2a2a3e);
+    border-color: var(--horae-border);
+    color: var(--horae-text);
 }
 
 /* 表格表头 */
