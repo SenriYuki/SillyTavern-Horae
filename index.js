@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.3.0
+ * 版本: 1.3.1
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -19,7 +19,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.3.0';
+const VERSION = '1.3.1';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -2486,6 +2486,20 @@ function hideContextMenu() {
  * 执行表格操作
  */
 function executeTableAction(tableIndex, row, col, action, scope = 'local') {
+    // 先将DOM中未提交的输入值写入data，防止正在编辑的值丢失
+    const container = document.querySelector(`.horae-excel-table-container[data-table-index="${tableIndex}"][data-scope="${scope}"]`);
+    if (container) {
+        const tbl = getTablesByScope(scope)[tableIndex];
+        if (tbl) {
+            if (!tbl.data) tbl.data = {};
+            container.querySelectorAll('.horae-excel-table input[data-table]').forEach(inp => {
+                const r = parseInt(inp.dataset.row);
+                const c = parseInt(inp.dataset.col);
+                tbl.data[`${r}-${c}`] = inp.value;
+            });
+        }
+    }
+
     const tables = getTablesByScope(scope);
     const table = tables[tableIndex];
     if (!table) return;
