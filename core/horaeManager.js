@@ -718,29 +718,10 @@ class HoraeManager {
                 lines.push(`(填写要求: ${table.prompt.trim()})`);
             }
             
-            // 智能展示：隐藏空列和尾部空行
-            // 1. 检测有数据的列
-            const activeCols = [0]; // col 0 = 行标题，始终显示
-            const emptyCols = [];   // 完全空的数据列
-            for (let c = 1; c < cols; c++) {
-                let colHasData = false;
-                for (let r = 1; r < rows; r++) {
-                    if (data[`${r}-${c}`] && data[`${r}-${c}`].trim()) {
-                        colHasData = true;
-                        break;
-                    }
-                }
-                if (colHasData) {
-                    activeCols.push(c);
-                } else {
-                    emptyCols.push(c);
-                }
-            }
-            
-            // 2. 检测最后有数据的行
+            // 检测最后有内容的行（含行标题列）
             let lastDataRow = 0;
             for (let r = rows - 1; r >= 1; r--) {
-                for (let c = 1; c < cols; c++) {
+                for (let c = 0; c < cols; c++) {
                     if (data[`${r}-${c}`] && data[`${r}-${c}`].trim()) {
                         lastDataRow = r;
                         break;
@@ -748,40 +729,49 @@ class HoraeManager {
                 }
                 if (lastDataRow > 0) break;
             }
-            // 至少显示第1行
             if (lastDataRow === 0) lastDataRow = 1;
             
-            // 3. 输出表头行（锁定列/单格标🔒）
             const lockedRows = new Set(table.lockedRows || []);
             const lockedCols = new Set(table.lockedCols || []);
             const lockedCells = new Set(table.lockedCells || []);
-            const headerRow = activeCols.map(c => {
+
+            // 输出表头行（始终显示所有列）
+            const headerRow = [];
+            for (let c = 0; c < cols; c++) {
                 const label = data[`0-${c}`] || (c === 0 ? '表头' : `列${c}`);
-                return lockedCols.has(c) ? `${label}🔒` : label;
-            });
+                headerRow.push(lockedCols.has(c) ? `${label}🔒` : label);
+            }
             lines.push(headerRow.join(' | '));
 
-            // 4. 输出数据行（锁定行/单格标🔒）
+            // 输出数据行（始终显示所有列）
             for (let r = 1; r <= lastDataRow; r++) {
-                const rowData = activeCols.map(c => {
+                const rowData = [];
+                for (let c = 0; c < cols; c++) {
                     if (c === 0) {
                         const label = data[`${r}-0`] || `${r}`;
-                        return lockedRows.has(r) ? `${label}🔒` : label;
+                        rowData.push(lockedRows.has(r) ? `${label}🔒` : label);
+                    } else {
+                        const val = data[`${r}-${c}`] || '-';
+                        rowData.push(lockedCells.has(`${r}-${c}`) ? `${val}🔒` : val);
                     }
-                    const val = data[`${r}-${c}`] || '-';
-                    // 单格锁定标记
-                    if (lockedCells.has(`${r}-${c}`)) return `${val}🔒`;
-                    return val;
-                });
+                }
                 lines.push(rowData.join(' | '));
             }
             
-            // 5. 标注被省略的尾部空行
+            // 标注被省略的尾部空行
             if (lastDataRow < rows - 1) {
                 lines.push(`(共${rows - 1}行，第${lastDataRow + 1}-${rows - 1}行暂无数据)`);
             }
-            
-            // 6. 提示空列
+
+            // 提示完全空的数据列
+            const emptyCols = [];
+            for (let c = 1; c < cols; c++) {
+                let colHasData = false;
+                for (let r = 1; r < rows; r++) {
+                    if (data[`${r}-${c}`] && data[`${r}-${c}`].trim()) { colHasData = true; break; }
+                }
+                if (!colHasData) emptyCols.push(c);
+            }
             if (emptyCols.length > 0) {
                 const emptyColNames = emptyCols.map(c => data[`0-${c}`] || `列${c}`);
                 lines.push(`(${emptyColNames.join('、')}：暂无数据，对应事件未发生时禁止填写)`);
