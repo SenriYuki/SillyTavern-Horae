@@ -59,11 +59,13 @@ export function createEmptyMeta() {
         },
         costumes: {},
         items: {},
-        deletedItems: [],  // 已消耗/删除的物品名称列表
-        events: [],  // 支持多个事件
+        deletedItems: [],
+        events: [],
         affection: {},
         npcs: {},
-        agenda: []   // 待办事项
+        agenda: [],
+        mood: {},
+        relationships: [],
     };
 }
 
@@ -137,6 +139,7 @@ class HoraeManager {
     getLatestState(skipLast = 0) {
         const chat = this.getChat();
         const state = createEmptyMeta();
+        state._previousLocation = '';
         const end = Math.max(0, chat.length - skipLast);
         
         for (let i = 0; i < end; i++) {
@@ -151,6 +154,7 @@ class HoraeManager {
             }
             
             if (meta.scene?.location) {
+                state._previousLocation = state.scene.location;
                 state.scene.location = meta.scene.location;
             }
             if (meta.scene?.atmosphere) {
@@ -311,6 +315,12 @@ class HoraeManager {
                             last_seen: newNpc.last_seen || new Date().toISOString()
                         };
                     }
+                }
+            }
+            // 情绪状态（覆盖式）
+            if (meta.mood) {
+                for (const [charName, emotion] of Object.entries(meta.mood)) {
+                    state.mood[charName] = emotion;
                 }
             }
         }
@@ -485,6 +495,23 @@ class HoraeManager {
             }
             sceneStr += ']';
             lines.push(sceneStr);
+
+            if (this.settings?.sendLocationMemory) {
+                const locMem = this.getLocationMemory();
+                const loc = state.scene.location;
+                const entry = this._findLocationMemory(loc, locMem, state._previousLocation);
+                if (entry?.desc) {
+                    lines.push(`[场景记忆|${entry.desc}]`);
+                }
+                // 附带父级地点描述（如「酒馆·大厅」→ 同时发送「酒馆」的描述）
+                const sepMatch = loc.match(/[·・\-\/\|]/);
+                if (sepMatch) {
+                    const parent = loc.substring(0, sepMatch.index).trim();
+                    if (parent && locMem[parent] && locMem[parent].desc && parent !== entry?._matchedName) {
+                        lines.push(`[场景记忆:${parent}|${locMem[parent].desc}]`);
+                    }
+                }
+            }
         }
         
         // 在场角色和服装
@@ -505,6 +532,31 @@ class HoraeManager {
                     }
                 }
                 lines.push(`[在场|${charStrs.join('|')}]`);
+            }
+            
+            // 情绪状态（仅在场角色，变化驱动）
+            if (this.settings?.sendMood) {
+                const moodEntries = [];
+                for (const char of presentChars) {
+                    if (state.mood[char]) {
+                        moodEntries.push(`${char}:${state.mood[char]}`);
+                    }
+                }
+                if (moodEntries.length > 0) {
+                    lines.push(`[情绪|${moodEntries.join('|')}]`);
+                }
+            }
+            
+            // 关系网络（仅在场角色相关的关系，从 chat[0] 读取，零AI输出token）
+            if (this.settings?.sendRelationships) {
+                const rels = this.getRelationshipsForCharacters(presentChars);
+                if (rels.length > 0) {
+                    lines.push('\n[关系网络]');
+                    for (const r of rels) {
+                        const noteStr = r.note ? `(${r.note})` : '';
+                        lines.push(`${r.from}→${r.to}: ${r.type}${noteStr}`);
+                    }
+                }
             }
         }
         
@@ -603,7 +655,17 @@ class HoraeManager {
         
         // 剧情轨迹
         if (sendTimeline) {
-            const events = this.getEvents(0, 'all', skipLast);
+            const allEvents = this.getEvents(0, 'all', skipLast);
+            // 过滤掉被活跃摘要覆盖的原始事件（_compressedBy 且摘要为 active）
+            const timelineChat = this.getChat();
+            const autoSums = timelineChat?.[0]?.horae_meta?.autoSummaries || [];
+            const activeSumIds = new Set(autoSums.filter(s => s.active).map(s => s.id));
+            // 被活跃摘要压缩的事件不发送；摘要为 inactive 时其 _summaryId 事件不发送
+            const events = allEvents.filter(e => {
+                if (e.event?._compressedBy && activeSumIds.has(e.event._compressedBy)) return false;
+                if (e.event?._summaryId && !activeSumIds.has(e.event._summaryId)) return false;
+                return true;
+            });
             if (events.length > 0) {
                 lines.push('\n[剧情轨迹]');
                 
@@ -630,14 +692,12 @@ class HoraeManager {
                     if (days === -2) return '(后天)';
                     if (days === -3) return '(大后天)';
                     
-                    // 上周几（4-13天前且有日期信息）
                     if (days >= 4 && days <= 13 && fromDate) {
                         const WEEKDAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'];
                         const weekday = fromDate.getDay();
                         return `(上周${WEEKDAY_NAMES[weekday]})`;
                     }
                     
-                    // 上个月
                     if (days >= 20 && days < 60 && fromDate && toDate) {
                         const fromMonth = fromDate.getMonth();
                         const toMonth = toDate.getMonth();
@@ -646,7 +706,6 @@ class HoraeManager {
                         }
                     }
                     
-                    // 去年
                     if (days >= 300 && fromDate && toDate) {
                         const fromYear = fromDate.getFullYear();
                         const toYear = toDate.getFullYear();
@@ -656,19 +715,16 @@ class HoraeManager {
                         }
                     }
                     
-                    // 通用格式
                     if (days > 0 && days < 30) return `(${days}天前)`;
                     if (days > 0) return `(${Math.round(days / 30)}个月前)`;
                     if (days === -999 || days === -998 || days === -997) return '';
                     return '';
                 };
                 
-                // 按消息楼层排序
                 const sortedEvents = [...events].sort((a, b) => {
                     return (a.messageIndex || 0) - (b.messageIndex || 0);
                 });
                 
-                // 筛选：关键/重要/摘要全部保留 + 一般事件取最近contextDepth条
                 const criticalAndImportant = sortedEvents.filter(e => 
                     e.event?.level === '关键' || e.event?.level === '重要' || e.event?.level === '摘要' || e.event?.isSummary
                 );
@@ -678,7 +734,6 @@ class HoraeManager {
                 );
                 const normalEvents = contextDepth === 0 ? [] : normalAll.slice(-contextDepth);
                 
-                // 合并后按楼层排序
                 const allToShow = [...criticalAndImportant, ...normalEvents]
                     .sort((a, b) => (a.messageIndex || 0) - (b.messageIndex || 0));
                 
@@ -703,8 +758,8 @@ class HoraeManager {
         const chat = this.getChat();
         const firstMsg = chat?.[0];
         const localTables = firstMsg?.horae_meta?.customTables || [];
-        const globalTables = this.settings?.globalTables || [];
-        const allTables = [...globalTables, ...localTables];
+        const resolvedGlobal = this._getResolvedGlobalTables();
+        const allTables = [...resolvedGlobal, ...localTables];
         for (const table of allTables) {
             const rows = table.rows || 2;
             const cols = table.cols || 2;
@@ -823,12 +878,14 @@ class HoraeManager {
             costumes: {},
             items: {},
             deletedItems: [],
-            events: [],  // 支持多个事件
+            events: [],
             affection: {},
             npcs: {},
             scene: {},
             agenda: [],
-            deletedAgenda: []
+            deletedAgenda: [],
+            mood: {},
+            relationships: [],
         };
         
         for (const line of lines) {
@@ -856,6 +913,10 @@ class HoraeManager {
             // atmosphere:轻松
             else if (trimmedLine.startsWith('atmosphere:')) {
                 result.scene.atmosphere = trimmedLine.substring(11).trim();
+            }
+            // scene_desc:地点的固定物理特征描述
+            else if (trimmedLine.startsWith('scene_desc:')) {
+                result.scene.scene_desc = trimmedLine.substring(11).trim();
             }
             // characters:爱丽丝,鲍勃
             else if (trimmedLine.startsWith('characters:')) {
@@ -1013,8 +1074,36 @@ class HoraeManager {
                         result.agenda.push({ date: dateStr, text, source: 'ai', done: false });
                     }
                 } else if (agendaStr) {
-                    // 容错：无日期分隔
                     result.agenda.push({ date: '', text: agendaStr, source: 'ai', done: false });
+                }
+            }
+            // rel:角色A>角色B=关系类型|备注
+            else if (trimmedLine.startsWith('rel:')) {
+                const relStr = trimmedLine.substring(4).trim();
+                const arrowIdx = relStr.indexOf('>');
+                const eqIdx = relStr.indexOf('=');
+                if (arrowIdx > 0 && eqIdx > arrowIdx) {
+                    const from = relStr.substring(0, arrowIdx).trim();
+                    const to = relStr.substring(arrowIdx + 1, eqIdx).trim();
+                    const rest = relStr.substring(eqIdx + 1).trim();
+                    const pipeIdx = rest.indexOf('|');
+                    const type = pipeIdx > 0 ? rest.substring(0, pipeIdx).trim() : rest;
+                    const note = pipeIdx > 0 ? rest.substring(pipeIdx + 1).trim() : '';
+                    if (from && to && type) {
+                        result.relationships.push({ from, to, type, note });
+                    }
+                }
+            }
+            // mood:角色名=情绪状态
+            else if (trimmedLine.startsWith('mood:')) {
+                const moodStr = trimmedLine.substring(5).trim();
+                const eqIdx = moodStr.indexOf('=');
+                if (eqIdx > 0) {
+                    const charName = moodStr.substring(0, eqIdx).trim();
+                    const emotion = moodStr.substring(eqIdx + 1).trim();
+                    if (charName && emotion) {
+                        result.mood[charName] = emotion;
+                    }
                 }
             }
         }
@@ -1053,6 +1142,9 @@ class HoraeManager {
         }
         if (parsed.scene?.atmosphere) {
             meta.scene.atmosphere = parsed.scene.atmosphere;
+        }
+        if (parsed.scene?.scene_desc) {
+            meta.scene.scene_desc = parsed.scene.scene_desc;
         }
         if (parsed.scene?.characters_present?.length > 0) {
             meta.scene.characters_present = parsed.scene.characters_present;
@@ -1099,12 +1191,105 @@ class HoraeManager {
             }
         }
         
+        // 关系网络：存入当前消息（后续由 processAIResponse 合并到 chat[0]）
+        if (parsed.relationships && parsed.relationships.length > 0) {
+            if (!meta.relationships) meta.relationships = [];
+            meta.relationships = parsed.relationships;
+        }
+        
+        // 情绪状态
+        if (parsed.mood && Object.keys(parsed.mood).length > 0) {
+            if (!meta.mood) meta.mood = {};
+            Object.assign(meta.mood, parsed.mood);
+        }
+        
         // tableUpdates 作为副属性传递
         if (parsed.tableUpdates) {
             meta._tableUpdates = parsed.tableUpdates;
         }
         
         return meta;
+    }
+
+    /** 合并关系数据到 chat[0].horae_meta */
+    _mergeRelationships(newRels) {
+        const chat = this.getChat();
+        if (!chat?.length || !newRels?.length) return;
+        const firstMsg = chat[0];
+        if (!firstMsg.horae_meta) firstMsg.horae_meta = createEmptyMeta();
+        if (!firstMsg.horae_meta.relationships) firstMsg.horae_meta.relationships = [];
+        const existing = firstMsg.horae_meta.relationships;
+        for (const rel of newRels) {
+            const idx = existing.findIndex(r => r.from === rel.from && r.to === rel.to);
+            if (idx >= 0) {
+                existing[idx].type = rel.type;
+                if (rel.note) existing[idx].note = rel.note;
+            } else {
+                existing.push({ ...rel });
+            }
+        }
+    }
+
+    /** 从所有消息重建 chat[0] 的关系网络（用于编辑/删除后回推） */
+    rebuildRelationships() {
+        const chat = this.getChat();
+        if (!chat?.length) return;
+        const firstMsg = chat[0];
+        if (!firstMsg.horae_meta) firstMsg.horae_meta = createEmptyMeta();
+        firstMsg.horae_meta.relationships = [];
+        for (let i = 1; i < chat.length; i++) {
+            const rels = chat[i]?.horae_meta?.relationships;
+            if (rels?.length) this._mergeRelationships(rels);
+        }
+    }
+
+    /** 从所有消息重建 chat[0] 的场景记忆（用于编辑/删除/重新生成后回推） */
+    rebuildLocationMemory() {
+        const chat = this.getChat();
+        if (!chat?.length) return;
+        const firstMsg = chat[0];
+        if (!firstMsg.horae_meta) firstMsg.horae_meta = createEmptyMeta();
+        const existing = firstMsg.horae_meta.locationMemory || {};
+        const rebuilt = {};
+        // 保留用户手动创建/编辑的条目
+        for (const [name, info] of Object.entries(existing)) {
+            if (info._userEdited) rebuilt[name] = { ...info };
+        }
+        // 从消息重放 AI 写入的 scene_desc（按时间顺序，后覆盖前）
+        for (let i = 1; i < chat.length; i++) {
+            const meta = chat[i]?.horae_meta;
+            if (meta?.scene?.scene_desc && meta?.scene?.location) {
+                const loc = meta.scene.location;
+                rebuilt[loc] = {
+                    desc: meta.scene.scene_desc,
+                    firstSeen: rebuilt[loc]?.firstSeen || new Date().toISOString(),
+                    lastUpdated: new Date().toISOString()
+                };
+            }
+        }
+        firstMsg.horae_meta.locationMemory = rebuilt;
+    }
+
+    getRelationships() {
+        const chat = this.getChat();
+        return chat?.[0]?.horae_meta?.relationships || [];
+    }
+
+    /** 设置关系网络（用户手动编辑时） */
+    setRelationships(relationships) {
+        const chat = this.getChat();
+        if (!chat?.length) return;
+        const firstMsg = chat[0];
+        if (!firstMsg.horae_meta) firstMsg.horae_meta = createEmptyMeta();
+        firstMsg.horae_meta.relationships = relationships;
+    }
+
+    /** 获取指定角色相关的关系 */
+    getRelationshipsForCharacters(charNames) {
+        const rels = this.getRelationships();
+        if (!charNames?.length) return rels;
+        const nameSet = new Set(charNames);
+        return rels.filter(r => nameSet.has(r.from) || nameSet.has(r.to));
     }
 
     /** 全局删除已完成的待办事项 */
@@ -1135,6 +1320,163 @@ class HoraeManager {
         }
     }
 
+    /** 写入/更新场景记忆到 chat[0] */
+    _updateLocationMemory(locationName, desc) {
+        const chat = this.getChat();
+        if (!chat?.length || !locationName || !desc) return;
+        const firstMsg = chat[0];
+        if (!firstMsg.horae_meta) firstMsg.horae_meta = createEmptyMeta();
+        if (!firstMsg.horae_meta.locationMemory) firstMsg.horae_meta.locationMemory = {};
+        const mem = firstMsg.horae_meta.locationMemory;
+        const now = new Date().toISOString();
+
+        // 子级地点去重：若子级描述的"位于"部分重复了父级的地理信息，则自动缩减
+        const sepMatch = locationName.match(/[·・\-\/\|]/);
+        if (sepMatch) {
+            const parentName = locationName.substring(0, sepMatch.index).trim();
+            const parentEntry = mem[parentName];
+            if (parentEntry?.desc) {
+                desc = this._deduplicateChildDesc(desc, parentEntry.desc, parentName);
+            }
+        }
+
+        if (mem[locationName]) {
+            if (mem[locationName]._userEdited) return;
+            mem[locationName].desc = desc;
+            mem[locationName].lastUpdated = now;
+        } else {
+            mem[locationName] = { desc, firstSeen: now, lastUpdated: now };
+        }
+        console.log(`[Horae] 场景记忆已更新: ${locationName}`);
+    }
+
+    /**
+     * 子级描述去重：检测子级描述是否包含父级的地理位置信息，若包含则替换为相对位置
+     */
+    _deduplicateChildDesc(childDesc, parentDesc, parentName) {
+        if (!childDesc || !parentDesc) return childDesc;
+        // 提取父级的"位于"部分
+        const parentLocMatch = parentDesc.match(/^位于(.+?)[。\.]/);
+        if (!parentLocMatch) return childDesc;
+        const parentLocInfo = parentLocMatch[1].trim();
+        // 若子级描述也包含父级的地理位置关键词（超过一半的字重合），则认为冗余
+        const parentKeywords = parentLocInfo.replace(/[，,、的]/g, ' ').split(/\s+/).filter(k => k.length >= 2);
+        if (parentKeywords.length === 0) return childDesc;
+        const childLocMatch = childDesc.match(/^位于(.+?)[。\.]/);
+        if (!childLocMatch) return childDesc;
+        const childLocInfo = childLocMatch[1].trim();
+        let matchCount = 0;
+        for (const kw of parentKeywords) {
+            if (childLocInfo.includes(kw)) matchCount++;
+        }
+        // 超过一半关键词重合，判定子级抄了父级地理位置
+        if (matchCount >= Math.ceil(parentKeywords.length / 2)) {
+            const shortName = parentName.length > 4 ? parentName.substring(0, 4) + '…' : parentName;
+            const restDesc = childDesc.substring(childLocMatch[0].length).trim();
+            return `位于${shortName}内。${restDesc}`;
+        }
+        return childDesc;
+    }
+
+    /** 获取场景记忆 */
+    getLocationMemory() {
+        const chat = this.getChat();
+        return chat?.[0]?.horae_meta?.locationMemory || {};
+    }
+
+    /**
+     * 智能匹配场景记忆（复合地名支持）
+     * 优先级：精确匹配 → 拆分回退父级 → 上下文推断 → 放弃
+     */
+    _findLocationMemory(currentLocation, locMem, previousLocation = '') {
+        if (!currentLocation || !locMem || Object.keys(locMem).length === 0) return null;
+
+        const tag = (name) => ({ ...locMem[name], _matchedName: name });
+
+        if (locMem[currentLocation]) return tag(currentLocation);
+
+        const SEP = /[·・\-\/|]/;
+        const parts = currentLocation.split(SEP).map(s => s.trim()).filter(Boolean);
+
+        if (parts.length > 1) {
+            for (let i = parts.length - 1; i >= 1; i--) {
+                const partial = parts.slice(0, i).join('·');
+                if (locMem[partial]) return tag(partial);
+            }
+        }
+
+        if (previousLocation) {
+            const prevParts = previousLocation.split(SEP).map(s => s.trim()).filter(Boolean);
+            const prevParent = prevParts[0] || previousLocation;
+            const curParent = parts[0] || currentLocation;
+
+            if (prevParent !== curParent && prevParent.includes(curParent)) {
+                if (locMem[prevParent]) return tag(prevParent);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 获取全局表格的当前卡片数据（per-card overlay）
+     * 全局表格的结构（表头、名称、提示词、锁定）共享，数据按角色卡分离
+     */
+    _getResolvedGlobalTables() {
+        const templates = this.settings?.globalTables || [];
+        const chat = this.getChat();
+        if (!chat?.[0] || templates.length === 0) return [];
+
+        const firstMsg = chat[0];
+        if (!firstMsg.horae_meta) firstMsg.horae_meta = createEmptyMeta();
+        if (!firstMsg.horae_meta.globalTableData) firstMsg.horae_meta.globalTableData = {};
+        const perCardData = firstMsg.horae_meta.globalTableData;
+
+        const result = [];
+        for (const template of templates) {
+            const name = (template.name || '').trim();
+            if (!name) continue;
+
+            if (!perCardData[name]) {
+                // 首次在此卡使用：从模板初始化（含迁移旧数据）
+                const initData = JSON.parse(JSON.stringify(template.data || {}));
+                perCardData[name] = {
+                    data: initData,
+                    rows: template.rows || 2,
+                    cols: template.cols || 2,
+                    baseData: JSON.parse(JSON.stringify(initData)),
+                    baseRows: template.rows || 2,
+                    baseCols: template.cols || 2,
+                };
+            } else {
+                // 同步全局模板的表头到 per-card（用户可能在别处改了表头）
+                const templateData = template.data || {};
+                for (const key of Object.keys(templateData)) {
+                    const [r, c] = key.split('-').map(Number);
+                    if (r === 0 || c === 0) {
+                        perCardData[name].data[key] = templateData[key];
+                    }
+                }
+            }
+
+            const overlay = perCardData[name];
+            result.push({
+                name: template.name,
+                prompt: template.prompt,
+                lockedRows: template.lockedRows || [],
+                lockedCols: template.lockedCols || [],
+                lockedCells: template.lockedCells || [],
+                data: overlay.data,
+                rows: overlay.rows,
+                cols: overlay.cols,
+                baseData: overlay.baseData,
+                baseRows: overlay.baseRows,
+                baseCols: overlay.baseCols,
+            });
+        }
+        return result;
+    }
+
     /** 处理AI回复，解析标签并存储元数据 */
     processAIResponse(messageIndex, messageContent) {
         const parsed = this.parseHoraeTag(messageContent);
@@ -1154,6 +1496,16 @@ class HoraeManager {
             // 处理AI标记已完成的待办
             if (parsed.deletedAgenda && parsed.deletedAgenda.length > 0) {
                 this.removeCompletedAgenda(parsed.deletedAgenda);
+            }
+
+            // 场景记忆：将 scene_desc 存入 locationMemory
+            if (parsed.scene?.scene_desc && parsed.scene?.location) {
+                this._updateLocationMemory(parsed.scene.location, parsed.scene.scene_desc);
+            }
+            
+            // 关系网络：合并到 chat[0].horae_meta.relationships
+            if (parsed.relationships && parsed.relationships.length > 0) {
+                this._mergeRelationships(parsed.relationships);
             }
             
             this.setMessageMeta(messageIndex, newMeta);
@@ -1268,7 +1620,7 @@ class HoraeManager {
         return updates;
     }
 
-    /** 将表格更新写入 chat[0] 或全局设置 */
+    /** 将表格更新写入 chat[0]（本地表格）或 per-card overlay（全局表格） */
     applyTableUpdates(tableUpdates) {
         if (!tableUpdates || tableUpdates.length === 0) return;
 
@@ -1280,15 +1632,14 @@ class HoraeManager {
         if (!firstMsg.horae_meta.customTables) firstMsg.horae_meta.customTables = [];
 
         const localTables = firstMsg.horae_meta.customTables;
-        const globalTables = this.settings?.globalTables || [];
+        const resolvedGlobal = this._getResolvedGlobalTables();
 
         for (const update of tableUpdates) {
             const updateName = (update.name || '').trim();
-            // 在本地和全局表格中查找
             let table = localTables.find(t => (t.name || '').trim() === updateName);
             let isGlobal = false;
             if (!table) {
-                table = globalTables.find(t => (t.name || '').trim() === updateName);
+                table = resolvedGlobal.find(t => (t.name || '').trim() === updateName);
                 isGlobal = true;
             }
             if (!table) {
@@ -1301,22 +1652,31 @@ class HoraeManager {
             const lockedCols = new Set(table.lockedCols || []);
             const lockedCells = new Set(table.lockedCells || []);
 
+            // 用户编辑快照：先清除所有数据单元格再整体写入
+            if (update._isUserEdit) {
+                for (const key of Object.keys(table.data)) {
+                    const [r, c] = key.split('-').map(Number);
+                    if (r >= 1 && c >= 1) delete table.data[key];
+                }
+            }
+
             let updatedCount = 0;
             let blockedCount = 0;
 
             for (const [key, value] of Object.entries(update.updates)) {
                 const [r, c] = key.split('-').map(Number);
 
-                // 保护表头
-                if (r === 0 || c === 0) {
-                    const existing = table.data[key];
-                    if (existing && existing.trim()) continue;
-                }
+                // 用户编辑不受 header 保护和锁定限制
+                if (!update._isUserEdit) {
+                    if (r === 0 || c === 0) {
+                        const existing = table.data[key];
+                        if (existing && existing.trim()) continue;
+                    }
 
-                // 锁定保护：AI不得修改锁定行/列/单格的单元格
-                if (lockedRows.has(r) || lockedCols.has(c) || lockedCells.has(key)) {
-                    blockedCount++;
-                    continue;
+                    if (lockedRows.has(r) || lockedCols.has(c) || lockedCells.has(key)) {
+                        blockedCount++;
+                        continue;
+                    }
                 }
 
                 table.data[key] = value;
@@ -1324,6 +1684,15 @@ class HoraeManager {
 
                 if (r + 1 > (table.rows || 2)) table.rows = r + 1;
                 if (c + 1 > (table.cols || 2)) table.cols = c + 1;
+            }
+
+            // 全局表格：将维度变更同步回 per-card overlay
+            if (isGlobal) {
+                const perCardData = firstMsg.horae_meta?.globalTableData;
+                if (perCardData?.[updateName]) {
+                    perCardData[updateName].rows = table.rows;
+                    perCardData[updateName].cols = table.cols;
+                }
             }
 
             if (blockedCount > 0) {
@@ -1334,22 +1703,19 @@ class HoraeManager {
     }
 
     /** 重建表格数据（消息删除/编辑后保持一致性） */
-    rebuildTableData() {
+    rebuildTableData(maxIndex = -1) {
         const chat = this.getChat();
         if (!chat || chat.length === 0) return;
         
         const firstMsg = chat[0];
-        if (!firstMsg.horae_meta?.customTables) return;
-        
-        const tables = firstMsg.horae_meta.customTables;
-        
-        // 1. 恢复到 baseData 快照
-        for (const table of tables) {
+        const limit = maxIndex >= 0 ? Math.min(maxIndex + 1, chat.length) : chat.length;
+
+        // 辅助：重置单个表格到 baseData
+        const resetTable = (table) => {
             if (table.baseData) {
                 table.data = JSON.parse(JSON.stringify(table.baseData));
             } else {
-                // 无 baseData：清空数据区，保留表头
-                if (!table.data) { table.data = {}; continue; }
+                if (!table.data) { table.data = {}; return; }
                 const keysToDelete = [];
                 for (const key of Object.keys(table.data)) {
                     const [r, c] = key.split('-').map(Number);
@@ -1357,11 +1723,9 @@ class HoraeManager {
                 }
                 for (const key of keysToDelete) delete table.data[key];
             }
-            
             if (table.baseRows !== undefined) {
                 table.rows = table.baseRows;
             } else if (table.baseData) {
-                // 无 baseRows，从 baseData 推算
                 let calcRows = 2, calcCols = 2;
                 for (const key of Object.keys(table.baseData)) {
                     const [r, c] = key.split('-').map(Number);
@@ -1374,19 +1738,31 @@ class HoraeManager {
             if (table.baseCols !== undefined) {
                 table.cols = table.baseCols;
             }
+        };
+
+        // 1a. 重置本地表格
+        const localTables = firstMsg.horae_meta?.customTables || [];
+        for (const table of localTables) {
+            resetTable(table);
+        }
+
+        // 1b. 重置全局表格的 per-card overlay
+        const perCardData = firstMsg.horae_meta?.globalTableData || {};
+        for (const overlay of Object.values(perCardData)) {
+            resetTable(overlay);
         }
         
-        // 2. 按消息顺序回放 tableContributions
+        // 2. 按消息顺序回放 tableContributions（截断到 limit）
         let totalApplied = 0;
-        for (let i = 0; i < chat.length; i++) {
-            const meta = chat[i].horae_meta;
+        for (let i = 0; i < limit; i++) {
+            const meta = chat[i]?.horae_meta;
             if (meta?.tableContributions && meta.tableContributions.length > 0) {
                 this.applyTableUpdates(meta.tableContributions);
                 totalApplied++;
             }
         }
         
-        console.log(`[Horae] 表格数据已重建，回放了 ${totalApplied} 条消息的表格贡献`);
+        console.log(`[Horae] 表格数据已重建，回放了 ${totalApplied} 条消息的表格贡献（截止到#${limit - 1}）`);
     }
 
     /** 扫描并注入历史记录 */
@@ -1460,19 +1836,20 @@ class HoraeManager {
         return { processed, skipped };
     }
 
-    /** 生成系统提示词附加内容 */
     generateSystemPromptAddition() {
         const userName = this.context?.name1 || '主角';
         const charName = this.context?.name2 || '角色';
         
-        // 用户自定义提示词优先
         if (this.settings?.customSystemPrompt) {
             const custom = this.settings.customSystemPrompt
                 .replace(/\{\{user\}\}/gi, userName)
                 .replace(/\{\{char\}\}/gi, charName);
-            return custom + this.generateCustomTablesPrompt();
+            return custom + this.generateLocationMemoryPrompt() + this.generateCustomTablesPrompt() + this.generateRelationshipPrompt() + this.generateMoodPrompt();
         }
         
+        const sceneDescLine = this.settings?.sendLocationMemory ? '\nscene_desc:地点固定物理特征（见场景记忆规则，触发时才写）' : '';
+        const relLine = this.settings?.sendRelationships ? '\nrel:角色A>角色B=关系类型|备注（触发时才写，见关系网络规则）' : '';
+        const moodLine = this.settings?.sendMood ? '\nmood:角色名=情绪/心理状态（触发时才写，见情绪追踪规则）' : '';
         return `
 【Horae记忆系统】（以下示例仅为示范，勿直接原句用于正文！）
 
@@ -1487,8 +1864,8 @@ class HoraeManager {
 每次回复末尾写两个标签：
 <horae>
 time:日期 时间（必填）
-location:地点（必填）
-atmosphere:氛围
+location:地点（必填。多级地点用·分隔，如「酒馆·大厅」「皇宫·王座间」。同一地点每次必须使用完全一致的名称）
+atmosphere:氛围${sceneDescLine}
 characters:在场角色名,逗号分隔（必填）
 costume:角色名=服装描述（必填，每人一行，禁止分号合并）
 item/item!/item!!:见物品规则（触发时才写）
@@ -1496,10 +1873,10 @@ item-:物品名（物品消耗/丢失时删除。见物品规则，触发时才�
 affection:角色名=好感度（触发时才写）
 npc:角色名|外貌=性格@关系~扩展字段（触发时才写）
 agenda:日期|内容（新待办触发时才写）
-agenda-:内容关键词（待办已完成/失效时才写，系统自动移除匹配的待办）
+agenda-:内容关键词（待办已完成/失效时才写，系统自动移除匹配的待办）${relLine}${moodLine}
 </horae>
 <horaeevent>
-event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键，记录事件摘要，用于剧情追溯）
+event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键，记录本条消息中的事件摘要，用于剧情追溯）
 </horaeevent>
 
 ═══ 【物品】触发条件与规则 ═══
@@ -1598,12 +1975,14 @@ event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键
 - 现代：年/月/日 时:分（如 2026/2/4 15:00）
 - 历史：该年代日期（如 1920/3/15 14:00）
 - 奇幻/架空：该世界观日历（如 霜降月第三日 黄昏）
-${this.generateCustomTablesPrompt()}
+${this.generateLocationMemoryPrompt()}${this.generateCustomTablesPrompt()}${this.generateRelationshipPrompt()}${this.generateMoodPrompt()}
 `;
     }
 
-    /** 获取默认系统提示词（供UI展示和重置用） */
     getDefaultSystemPrompt() {
+        const sceneDescLine = this.settings?.sendLocationMemory ? '\nscene_desc:地点固定物理特征（见场景记忆规则，触发时才写）' : '';
+        const relLine = this.settings?.sendRelationships ? '\nrel:角色A>角色B=关系类型|备注（触发时才写，见关系网络规则）' : '';
+        const moodLine = this.settings?.sendMood ? '\nmood:角色名=情绪/心理状态（触发时才写，见情绪追踪规则）' : '';
         return `【Horae记忆系统】（以下示例仅为示范，勿直接原句用于正文！）
 
 ═══ 核心原则：变化驱动 ═══
@@ -1617,8 +1996,8 @@ ${this.generateCustomTablesPrompt()}
 每次回复末尾写两个标签：
 <horae>
 time:日期 时间（必填）
-location:地点（必填）
-atmosphere:氛围
+location:地点（必填。多级地点用·分隔，如「酒馆·大厅」「皇宫·王座间」。同一地点每次必须使用完全一致的名称）
+atmosphere:氛围${sceneDescLine}
 characters:在场角色名,逗号分隔（必填）
 costume:角色名=服装描述（必填，每人一行，禁止分号合并）
 item/item!/item!!:见物品规则（触发时才写）
@@ -1626,10 +2005,10 @@ item-:物品名（物品消耗/丢失时删除。见物品规则，触发时才�
 affection:角色名=好感度（触发时才写）
 npc:角色名|外貌=性格@关系~扩展字段（触发时才写）
 agenda:日期|内容（新待办触发时才写）
-agenda-:内容关键词（待办已完成/失效时才写，系统自动移除匹配的待办）
+agenda-:内容关键词（待办已完成/失效时才写，系统自动移除匹配的待办）${relLine}${moodLine}
 </horae>
 <horaeevent>
-event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键，记录事件摘要，用于剧情追溯）
+event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键，记录本条消息中的事件摘要，用于剧情追溯）
 </horaeevent>
 
 ═══ 【物品】触发条件与规则 ═══
@@ -1730,7 +2109,6 @@ event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键
 - 奇幻/架空：该世界观日历（如 霜降月第三日 黄昏）`;
     }
 
-    /** 获取默认表格填写规则提示词（供UI展示和重置用） */
     getDefaultTablesPrompt() {
         return `═══ 自定义表格规则 ═══
 上方有用户自定义表格，根据"填写要求"填写数据。
@@ -1745,16 +2123,57 @@ event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键
   - 新增行请在现有最大行号之后追加，新增列请在现有最大列号之后追加`;
     }
 
-    /** 生成自定义表格的提示词 */
+    getDefaultLocationPrompt() {
+        return `═══ 【场景记忆】触发条件 ═══
+格式：scene_desc:位于…。该地点的固定物理特征描述（50-150字）
+场景记忆记录地点的核心布局和永久性特征（建筑结构、固定家具、空间特点），用于保持跨回合的场景描写一致性。
+
+【地点／位于 格式】★★★ 严格遵守层级规则 ★★★
+  · 描述开头先写「位于」标明该地点相对于直接上级的方位，再写该地点自身的物理特征
+  · 子级地点（含·分隔符的地名）：「位于」只写相对于父级建筑内部的方位（如哪一楼、哪个方向），绝对禁止包含父级的外部地理位置
+  · 父级/顶级地点：「位于」才写外部地理位置（如哪个大陆、哪片森林旁）
+  · 系统会自动同时发送父级描述给AI，子级无需也不应重复父级信息
+    ✓ 无名酒馆·客房203 → scene_desc:位于2楼东侧。边间，采光佳，单人木床靠墙，窗户朝东
+    ✓ 无名酒馆·大厅 → scene_desc:位于1楼。挑高木质空间，正中是长吧台，散落数张圆桌
+    ✓ 无名酒馆 → scene_desc:位于OO大陆北方XX森林边上。两层木石结构，一楼大厅和吧台，二楼客房区
+    ✗ 无名酒馆·客房203 → scene_desc:位于OO大陆北方XX森林边上的无名酒馆2楼…（❌ 子级禁止写父级的外部地理信息）
+    ✗ 无名酒馆·大厅 → scene_desc:位于森林边上的无名酒馆1楼…（❌ 同上）
+【地名规范】
+  · 多级地点用·分隔：建筑·区域（如「无名酒馆·大厅」「皇宫·地牢」）
+  · 同一地点必须始终使用与上方[场景|...]中完全一致的名称，禁止缩写或改写
+  · 不同建筑的同名区域各自独立记录（如「无名酒馆·大厅」和「皇宫·大厅」是不同地点）
+【何时写】
+  ✦ 首次到达一个新地点 → 必须写scene_desc，描述该地点的固定物理特征
+  ✦ 地点发生永久性物理变化（如被破坏、重新装修）→ 写更新后的scene_desc
+【何时不写】
+  ✗ 回到已记录的旧地点且无物理变化 → 不写
+  ✗ 季节/天气/氛围变化 → 不写（这些是临时变化，不属于固定特征）
+【描述规范】
+  · 只写固定/永久性的物理特征：空间结构、建筑材质、固定家具、窗户朝向、标志性装饰
+  · 不写临时性状态：当前光照、天气、人群、季节装饰、临时摆放的物品
+  · 禁止照搬场景记忆原文到正文，将其作为背景参考，以当前时间/天气/光线/角色视角重新描写
+  · 上方[场景记忆|...]是系统已记录的该地点特征，描写该场景时保持这些核心要素不变，同时根据时间/季节/剧情自由发挥变化细节`;
+    }
+
+    generateLocationMemoryPrompt() {
+        if (!this.settings?.sendLocationMemory) return '';
+        const custom = this.settings?.customLocationPrompt;
+        if (custom) {
+            const userName = this.context?.name1 || '主角';
+            const charName = this.context?.name2 || '角色';
+            return '\n' + custom.replace(/\{\{user\}\}/gi, userName).replace(/\{\{char\}\}/gi, charName);
+        }
+        return '\n' + this.getDefaultLocationPrompt();
+    }
+
     generateCustomTablesPrompt() {
         const chat = this.getChat();
         const firstMsg = chat?.[0];
         const localTables = firstMsg?.horae_meta?.customTables || [];
-        const globalTables = this.settings?.globalTables || [];
-        const allTables = [...globalTables, ...localTables];
+        const resolvedGlobal = this._getResolvedGlobalTables();
+        const allTables = [...resolvedGlobal, ...localTables];
         if (allTables.length === 0) return '';
 
-        // 用户自定义或默认规则
         let prompt = '\n' + (this.settings?.customTablesPrompt || this.getDefaultTablesPrompt());
 
         // 为每个表格生成带坐标的示例
@@ -1773,6 +2192,69 @@ event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键
         }
 
         return prompt;
+    }
+
+    getDefaultRelationshipPrompt() {
+        const userName = this.context?.name1 || '{{user}}';
+        return `═══ 【关系网络】触发条件 ═══
+格式：rel:角色A>角色B=关系类型|备注
+系统会自动记录和显示角色间的关系网络，当角色间关系发生变化时输出。
+
+【何时写】（满足任一条件才输出）
+  ✦ 两个角色之间确立/定义了新关系 → rel:角色A>角色B=关系类型
+  ✦ 已有关系发生变化（如从同事变成朋友）→ rel:角色A>角色B=新关系类型
+  ✦ 关系中有重要细节需要备注 → 加|备注
+【何时不写】
+  ✗ 关系无变化 → 不写
+  ✗ 已记录过的关系且无更新 → 不写
+
+【规范】
+  · 角色A和角色B都必须使用准确全名
+  · 关系类型用简洁词描述：朋友、恋人、上下级、师徒、宿敌、合作伙伴等
+  · 备注字段可选，记录关系的特殊细节
+  · 包含${userName}的关系也要记录
+  示例：
+    rel:${userName}>沃尔=雇佣关系|${userName}经营酒馆，沃尔是常客
+    rel:沃尔>艾拉=暗恋|沃尔对艾拉有好感但未表白
+    rel:${userName}>艾拉=闺蜜`;
+    }
+
+    getDefaultMoodPrompt() {
+        return `═══ 【情绪/心理状态追踪】触发条件 ═══
+格式：mood:角色名=情绪状态（简洁词组，如"紧张/不安"、"开心/期待"、"愤怒"、"平静但警惕"）
+系统会追踪在场角色的情绪变化，帮助保持角色心理状态的连贯性。
+
+【何时写】（满足任一条件才输出）
+  ✦ 角色情绪发生明显变化（如从平静变为愤怒）→ mood:角色名=新情绪
+  ✦ 角色首次出场时有明显的情绪特征 → mood:角色名=当前情绪
+【何时不写】
+  ✗ 角色情绪无变化 → 不写
+  ✗ 角色不在场 → 不写
+【规范】
+  · 情绪描述用1-4个词，用/分隔复合情绪
+  · 只记录在场角色的情绪`;
+    }
+
+    generateRelationshipPrompt() {
+        if (!this.settings?.sendRelationships) return '';
+        const custom = this.settings?.customRelationshipPrompt;
+        if (custom) {
+            const userName = this.context?.name1 || '主角';
+            const charName = this.context?.name2 || '角色';
+            return '\n' + custom.replace(/\{\{user\}\}/gi, userName).replace(/\{\{char\}\}/gi, charName);
+        }
+        return '\n' + this.getDefaultRelationshipPrompt();
+    }
+
+    generateMoodPrompt() {
+        if (!this.settings?.sendMood) return '';
+        const custom = this.settings?.customMoodPrompt;
+        if (custom) {
+            const userName = this.context?.name1 || '主角';
+            const charName = this.context?.name2 || '角色';
+            return '\n' + custom.replace(/\{\{user\}\}/gi, userName).replace(/\{\{char\}\}/gi, charName);
+        }
+        return '\n' + this.getDefaultMoodPrompt();
     }
 
     /** 宽松正则解析（不需要标签包裹） */

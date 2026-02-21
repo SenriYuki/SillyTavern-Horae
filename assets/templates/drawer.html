@@ -10,7 +10,7 @@
                 <i class="fa-regular fa-clock"></i>
                 Horae 时光记忆
             </div>
-            <span class="horae-version">v1.4.1</span>
+            <span class="horae-version">v1.5.0</span>
         </div>
         
         <!-- 标签页导航 -->
@@ -30,6 +30,10 @@
             <button class="horae-tab" data-tab="items">
                 <i class="fa-solid fa-box-open"></i>
                 <span>物品</span>
+            </button>
+            <button class="horae-tab" data-tab="locations">
+                <i class="fa-solid fa-map-location-dot"></i>
+                <span>场景</span>
             </button>
             <button class="horae-tab" data-tab="settings">
                 <i class="fa-solid fa-gear"></i>
@@ -155,6 +159,9 @@
                         <button id="horae-btn-timeline-select-all" class="horae-icon-btn small" title="全选">
                             <i class="fa-solid fa-check-double"></i>
                         </button>
+                        <button id="horae-btn-timeline-compress" class="horae-icon-btn small" title="AI智能压缩：将选中事件合并为一条摘要">
+                            <i class="fa-solid fa-compress"></i>
+                        </button>
                         <button id="horae-btn-timeline-delete" class="horae-icon-btn small danger" title="删除选中">
                             <i class="fa-solid fa-trash-can"></i>
                         </button>
@@ -196,6 +203,18 @@
                     <div class="horae-subsection-title">角色</div>
                     <div id="horae-npc-list" class="horae-npc-list">
                         <div class="horae-empty-hint">暂无角色记录</div>
+                    </div>
+                </div>
+                
+                <div id="horae-relationship-section" class="horae-subsection" style="display: none;">
+                    <div class="horae-subsection-title">
+                        关系网络
+                        <button id="horae-btn-add-relationship" class="horae-btn-sm" title="手动添加关系">
+                            <i class="fa-solid fa-plus"></i>
+                        </button>
+                    </div>
+                    <div id="horae-relationship-list" class="horae-relationship-list">
+                        <div class="horae-empty-hint">暂无关系记录，AI会在角色互动时自动记录</div>
                     </div>
                 </div>
             </div>
@@ -249,6 +268,25 @@
                     <div class="horae-empty-state">
                         <i class="fa-solid fa-box-open"></i>
                         <span>暂无追踪的物品</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 场景记忆页 -->
+            <div id="horae-tab-locations" class="horae-tab-content">
+                <div class="horae-location-toolbar">
+                    <button id="horae-btn-add-location" class="horae-btn" title="手动添加地点">
+                        <i class="fa-solid fa-plus"></i> 添加地点
+                    </button>
+                    <button id="horae-btn-merge-locations" class="horae-btn" title="选择两个地点合并为一个">
+                        <i class="fa-solid fa-code-merge"></i> 合并地点
+                    </button>
+                </div>
+                <div id="horae-location-list">
+                    <div class="horae-empty-state">
+                        <i class="fa-solid fa-map-location-dot"></i>
+                        <span>暂无场景记忆</span>
+                        <span style="font-size:11px;opacity:0.6;margin-top:4px;">开启「设置 → 场景记忆」后，AI会在首次到达新地点时自动记录</span>
                     </div>
                 </div>
             </div>
@@ -459,8 +497,109 @@
                         </label>
                         <span class="horae-setting-sub-hint">当前持有的物品及位置。关闭后AI可能"凭空"取出不存在的物品。</span>
                     </div>
+
+                    <div class="horae-setting-item">
+                        <label>
+                            <input type="checkbox" id="horae-setting-send-location-memory">
+                            场景记忆
+                        </label>
+                        <span class="horae-setting-sub-hint">记录地点的固定物理特征，保持跨回合场景描写一致性。开启后AI会在首次到达新地点时记录特征描述。</span>
+                    </div>
+                    
+                    <div class="horae-setting-item">
+                        <label>
+                            <input type="checkbox" id="horae-setting-send-relationships">
+                            关系网络
+                        </label>
+                        <span class="horae-setting-sub-hint">追踪角色间的关系变化（朋友、恋人、敌对等），AI仅在关系变化时输出。关闭后不生成rel:标签，不注入关系网络提示词。</span>
+                    </div>
+                    
+                    <div class="horae-setting-item">
+                        <label>
+                            <input type="checkbox" id="horae-setting-send-mood">
+                            情绪追踪
+                        </label>
+                        <span class="horae-setting-sub-hint">追踪在场角色的情绪/心理状态变化，帮助AI保持角色情绪连贯性。AI仅在情绪明显变化时输出。</span>
+                    </div>
                 </div>
                 
+                <div class="horae-settings-section">
+                    <div class="horae-section-header horae-collapse-header" id="horae-autosummary-collapse-toggle">
+                        <i class="fa-solid fa-compress"></i>
+                        自动摘要 & 隐藏
+                        <i class="fa-solid fa-chevron-down horae-collapse-icon collapsed"></i>
+                    </div>
+                    <div id="horae-autosummary-collapse-body" style="display: none;">
+                        <span class="horae-setting-hint" style="margin-bottom: 12px;">
+                            <i class="fa-solid fa-circle-info"></i>
+                            超过缓冲上限后自动将旧事件交给AI压缩为摘要，节省Token。<br>
+                            压缩后的摘要可在时间线中切换回原始事件查看。
+                        </span>
+                        <div class="horae-setting-item">
+                            <label>
+                                <input type="checkbox" id="horae-setting-auto-summary">
+                                启用自动摘要
+                            </label>
+                        </div>
+                        <div id="horae-auto-summary-options" style="display: none;">
+                            <div class="horae-setting-item">
+                                <label>
+                                    保留最近消息数
+                                    <input type="number" id="horae-setting-auto-summary-keep" min="3" max="100" value="10">
+                                </label>
+                                <span class="horae-setting-sub-hint">最近N条消息的事件不会被自动压缩，保留近期剧情细节。</span>
+                            </div>
+                            <div class="horae-setting-item">
+                                <label>
+                                    缓冲模式
+                                    <select id="horae-setting-auto-summary-mode">
+                                        <option value="messages">按楼层数</option>
+                                        <option value="tokens">按Token数</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <div class="horae-setting-item">
+                                <label>
+                                    缓冲上限
+                                    <input type="number" id="horae-setting-auto-summary-limit" min="5" max="99999" value="20">
+                                </label>
+                                <span class="horae-setting-sub-hint" id="horae-auto-summary-limit-hint">超过此上限时触发自动压缩。</span>
+                            </div>
+                            <div class="horae-setting-item" style="border-top: 1px solid var(--horae-border); padding-top: 8px; margin-top: 4px;">
+                                <label>
+                                    <input type="checkbox" id="horae-setting-auto-summary-custom-api">
+                                    使用独立 API（省钱 & 真并行）
+                                </label>
+                                <span class="horae-setting-sub-hint">填入一个 OpenAI 兼容端点，摘要生成将直接请求该端点，不占用酒馆主连接。</span>
+                            </div>
+                            <div id="horae-auto-summary-api-options" style="display: none;">
+                                <div class="horae-setting-item">
+                                    <label>API 地址</label>
+                                    <input type="text" id="horae-setting-auto-summary-api-url" class="horae-edit-field"
+                                        placeholder="https://api.openai.com/v1">
+                                    <span class="horae-setting-sub-hint">OpenAI 兼容端点基础地址，如 https://api.openai.com/v1</span>
+                                </div>
+                                <div class="horae-setting-item">
+                                    <label>API 密钥</label>
+                                    <input type="password" id="horae-setting-auto-summary-api-key" class="horae-edit-field"
+                                        placeholder="sk-...">
+                                </div>
+                                <div class="horae-setting-item">
+                                    <label>模型名称</label>
+                                    <input type="text" id="horae-setting-auto-summary-model" class="horae-edit-field"
+                                        placeholder="gpt-4o-mini">
+                                    <span class="horae-setting-sub-hint">低成本模型即可，如 gpt-4o-mini、deepseek-chat 等。</span>
+                                </div>
+                                <span class="horae-setting-sub-hint">
+                                    <i class="fa-solid fa-circle-info"></i>
+                                    填写完成后，自动摘要将通过独立 HTTP 请求并行生成，不影响酒馆主 API。<br>
+                                    支持所有 OpenAI 兼容格式的端点（OpenAI、DeepSeek、OpenRouter 等）。
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="horae-settings-section">
                     <div class="horae-section-header horae-collapse-header" id="horae-prompt-collapse-toggle">
                         <i class="fa-solid fa-scroll"></i>
@@ -514,6 +653,19 @@
 
                         <div class="horae-prompt-editor-group" style="margin-top: 12px;">
                             <div class="horae-prompt-editor-header">
+                                <span>剧情压缩提示词</span>
+                                <button id="horae-btn-reset-compress-prompt" class="horae-btn-reset-prompt" title="恢复默认">
+                                    <i class="fa-solid fa-rotate-left"></i> 恢复默认
+                                </button>
+                            </div>
+                            <textarea id="horae-custom-compress-prompt" class="horae-prompt-textarea" rows="6" placeholder="留空使用默认提示词。可用 {{events}} 代表事件文本，{{fulltext}} 代表全文，{{user}} 代表主角名..."></textarea>
+                            <div class="horae-prompt-char-count">
+                                <span id="horae-compress-prompt-count">0</span> 字符
+                            </div>
+                        </div>
+
+                        <div class="horae-prompt-editor-group" style="margin-top: 12px;">
+                            <div class="horae-prompt-editor-header">
                                 <span>表格填写规则提示词</span>
                                 <button id="horae-btn-reset-tables-prompt" class="horae-btn-reset-prompt" title="恢复默认">
                                     <i class="fa-solid fa-rotate-left"></i> 恢复默认
@@ -522,6 +674,45 @@
                             <textarea id="horae-custom-tables-prompt" class="horae-prompt-textarea" rows="6" placeholder="留空使用默认提示词..."></textarea>
                             <div class="horae-prompt-char-count">
                                 <span id="horae-tables-prompt-count">0</span> 字符
+                            </div>
+                        </div>
+
+                        <div id="horae-location-prompt-group" class="horae-prompt-editor-group" style="margin-top: 12px; display: none;">
+                            <div class="horae-prompt-editor-header">
+                                <span>场景记忆提示词</span>
+                                <button id="horae-btn-reset-location-prompt" class="horae-btn-reset-prompt" title="恢复默认">
+                                    <i class="fa-solid fa-rotate-left"></i> 恢复默认
+                                </button>
+                            </div>
+                            <textarea id="horae-custom-location-prompt" class="horae-prompt-textarea" rows="6" placeholder="留空使用默认提示词..."></textarea>
+                            <div class="horae-prompt-char-count">
+                                <span id="horae-location-prompt-count">0</span> 字符
+                            </div>
+                        </div>
+
+                        <div id="horae-relationship-prompt-group" class="horae-prompt-editor-group" style="margin-top: 12px; display: none;">
+                            <div class="horae-prompt-editor-header">
+                                <span>关系网络提示词</span>
+                                <button id="horae-btn-reset-relationship-prompt" class="horae-btn-reset-prompt" title="恢复默认">
+                                    <i class="fa-solid fa-rotate-left"></i> 恢复默认
+                                </button>
+                            </div>
+                            <textarea id="horae-custom-relationship-prompt" class="horae-prompt-textarea" rows="6" placeholder="留空使用默认提示词..."></textarea>
+                            <div class="horae-prompt-char-count">
+                                <span id="horae-relationship-prompt-count">0</span> 字符
+                            </div>
+                        </div>
+
+                        <div id="horae-mood-prompt-group" class="horae-prompt-editor-group" style="margin-top: 12px; display: none;">
+                            <div class="horae-prompt-editor-header">
+                                <span>情绪追踪提示词</span>
+                                <button id="horae-btn-reset-mood-prompt" class="horae-btn-reset-prompt" title="恢复默认">
+                                    <i class="fa-solid fa-rotate-left"></i> 恢复默认
+                                </button>
+                            </div>
+                            <textarea id="horae-custom-mood-prompt" class="horae-prompt-textarea" rows="6" placeholder="留空使用默认提示词..."></textarea>
+                            <div class="horae-prompt-char-count">
+                                <span id="horae-mood-prompt-count">0</span> 字符
                             </div>
                         </div>
                     </div>
@@ -562,7 +753,7 @@
                 </div>
                 
                 <div class="horae-about">
-                    <p>Horae v1.4.1 | 作者: SenriYuki</p>
+                    <p>Horae v1.5.0 | 作者: SenriYuki</p>
                     <p>基于时间锚点的AI记忆增强系统</p>
                 </div>
             </div>

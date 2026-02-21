@@ -111,6 +111,23 @@ Horae 的所有视觉样式由 **CSS 变量** 控制。只需覆盖这些变量�
 | `.horae-full-item` | 物品条目 |
 | `.horae-item-tag` | 物品标签（小圆角胶囊） |
 | `.horae-agenda-item` | 待办事项条目 |
+| `.horae-relationship-item` | 关系网络条目 |
+| `.horae-relationship-list` | 关系网络列表容器 |
+| `.horae-location-card` | 场景记忆卡片 |
+| `.horae-mood-tag` | 情绪标签（圆角胶囊） |
+| `.horae-panel-rel-row` | 底部面板关系行 |
+| `.horae-empty-hint` | 空数据提示文字 |
+
+### 摘要与压缩
+
+| 选择器 | 说明 |
+|--------|------|
+| `.horae-timeline-item.summary` | 摘要事件卡片（active 状态） |
+| `.horae-timeline-item.horae-summary-collapsed` | 已展开为原始事件时的折叠指示条 |
+| `.horae-summary-actions` | 摘要卡片上的切换/删除按钮容器 |
+| `.horae-summary-toggle-btn` | 摘要/时间线切换按钮 |
+| `.horae-summary-delete-btn` | 删除摘要按钮 |
+| `.horae-compressed-restored` | 被摘要覆盖但当前已恢复显示的事件（虚线框） |
 
 ### 自定义表格
 

@@ -731,6 +731,61 @@
     background: rgba(37, 99, 235, 0.08);
 }
 
+/* 已压缩但切换为原始视图的事件 */
+.horae-timeline-item.horae-compressed-restored {
+    border: 1px dashed var(--horae-border);
+    opacity: 0.75;
+    border-left-width: 3px;
+}
+
+/* 摘要折叠指示条（inactive 状态） */
+.horae-timeline-item.horae-summary-collapsed {
+    opacity: 0.8;
+    border: 1px dashed var(--horae-info, #2563eb);
+    background: rgba(37, 99, 235, 0.06);
+    padding: 8px 10px;
+    min-height: unset;
+    position: relative;
+}
+
+/* 摘要操作按钮组 */
+.horae-summary-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.horae-summary-toggle-btn,
+.horae-summary-delete-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 3px 5px;
+    border-radius: var(--horae-radius-sm);
+    font-size: 11px;
+    opacity: 0.5;
+    transition: opacity 0.15s;
+}
+
+.horae-summary-toggle-btn { color: var(--horae-info, #2563eb); }
+.horae-summary-delete-btn { color: var(--horae-danger); }
+
+.horae-btn-inline-toggle {
+    flex-shrink: 0;
+    margin-left: auto;
+    opacity: 0.7;
+    font-size: 12px;
+}
+
+.horae-summary-toggle-btn:hover,
+.horae-summary-delete-btn:hover {
+    opacity: 1;
+}
+
 .horae-timeline-summary-icon {
     display: flex;
     align-items: center;
@@ -1351,7 +1406,8 @@
     align-items: center;
 }
 
-.horae-affection-row .affection-char {
+.horae-affection-row .affection-char,
+.horae-mood-row span.mood-char {
     min-width: 60px;
     max-width: 100px;
     font-size: 12px;
@@ -1385,6 +1441,7 @@
 .horae-btn-add-costume,
 .horae-btn-add-item,
 .horae-btn-add-affection,
+.horae-btn-add-mood,
 .horae-btn-add-agenda-row {
     align-self: flex-start;
     background: transparent;
@@ -1403,6 +1460,7 @@
 .horae-btn-add-costume:hover,
 .horae-btn-add-item:hover,
 .horae-btn-add-affection:hover,
+.horae-btn-add-mood:hover,
 .horae-btn-add-agenda-row:hover {
     border-color: var(--horae-primary);
     color: var(--horae-primary-light);
@@ -1502,16 +1560,30 @@
     margin-top: 12px;
     padding-top: 12px;
     border-top: 1px solid var(--horae-border);
+    align-items: center;
 }
 
 .horae-panel-footer .horae-btn {
-    padding: 6px 12px;
+    padding: 6px 16px;
     font-size: 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .horae-btn-save {
     background: var(--horae-success) !important;
     color: white !important;
+}
+
+.horae-btn-open-drawer {
+    margin-left: auto;
+    opacity: 0.6;
+    padding: 6px 8px !important;
+    min-width: unset;
+}
+
+.horae-btn-open-drawer:hover {
+    opacity: 1;
 }
 
 /* === 进度条 === */
@@ -1781,7 +1853,7 @@
     align-items: center;
 }
 
-.horae-search-icon {
+.horae-items-search-row .horae-search-icon {
     position: absolute;
     left: 10px;
     color: var(--horae-text-dim, #666);
@@ -1789,7 +1861,7 @@
     pointer-events: none;
 }
 
-.horae-search-input {
+.horae-items-search-row .horae-search-input {
     width: 100%;
     background: var(--horae-bg-secondary, #1a1a2e);
     border: 1px solid var(--horae-border, #333);
@@ -1801,12 +1873,12 @@
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.horae-search-input:focus {
+.horae-items-search-row .horae-search-input:focus {
     border-color: var(--horae-accent, #b388ff);
     box-shadow: 0 0 0 2px rgba(179, 136, 255, 0.15);
 }
 
-.horae-search-input::placeholder {
+.horae-items-search-row .horae-search-input::placeholder {
     color: var(--horae-text-dim, #555);
     font-size: 12px;
 }
@@ -2443,6 +2515,24 @@
     margin-top: 4px;
     padding-left: 22px;
     opacity: 0.8;
+}
+
+.horae-profile-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-top: 4px;
+}
+
+.horae-profile-row select {
+    flex: 1;
+    min-width: 0;
+}
+
+.horae-profile-row .horae-btn {
+    flex-shrink: 0;
+    padding: 4px 8px;
+    font-size: 12px;
 }
 
 /* === 物品描述 === */
@@ -3388,6 +3478,10 @@
     background: rgba(37, 99, 235, 0.06);
 }
 
+#horae_drawer.horae-light .horae-timeline-item.horae-compressed-restored {
+    border-color: var(--horae-border);
+}
+
 /* 上下文菜单浅色模式 */
 .horae-light .horae-context-menu,
 body .horae-context-menu {
@@ -3405,5 +3499,476 @@ body .horae-context-menu {
     border-color: rgba(0, 0, 0, 0.08);
 }
 
+/* ==================== 场景记忆 ==================== */
 
+.horae-location-toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+#horae-location-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.horae-location-card {
+    background: var(--horae-bg-secondary);
+    border: 1px solid var(--horae-border);
+    border-radius: var(--horae-radius);
+    padding: 12px;
+    transition: border-color 0.2s;
+}
+
+.horae-location-card:hover {
+    border-color: var(--horae-primary-light);
+}
+
+.horae-location-current {
+    border-color: var(--horae-primary);
+    box-shadow: 0 0 0 1px var(--horae-primary-light);
+}
+
+.horae-location-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.horae-location-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--horae-text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.horae-location-name i {
+    color: var(--horae-primary-light);
+    font-size: 12px;
+}
+
+.horae-location-badge {
+    font-size: 10px;
+    background: var(--horae-primary);
+    color: #fff;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+.horae-location-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.horae-location-desc {
+    font-size: 13px;
+    color: var(--horae-text-muted);
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+.horae-location-meta {
+    font-size: 11px;
+    color: var(--horae-text-muted);
+    opacity: 0.6;
+    margin-top: 6px;
+}
+
+/* 场景记忆编辑弹窗 */
+.horae-location-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+}
+
+.horae-location-modal-overlay .horae-input,
+.horae-location-modal-overlay .horae-textarea {
+    width: 100%;
+    background: var(--horae-bg);
+    border: 1px solid var(--horae-border);
+    border-radius: var(--horae-radius-sm);
+    color: var(--horae-text);
+    padding: 8px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    box-sizing: border-box;
+    resize: vertical;
+}
+
+.horae-location-modal-overlay .horae-input:focus,
+.horae-location-modal-overlay .horae-textarea:focus {
+    outline: none;
+    border-color: var(--horae-primary);
+}
+
+/* 浅色模式 */
+#horae_drawer.horae-light .horae-location-card {
+    background: #f0f0f5;
+    border-color: #d0d0d8;
+}
+
+#horae_drawer.horae-light .horae-location-current {
+    border-color: var(--horae-primary);
+}
+
+/* === 关系网络 === */
+.horae-relationship-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.horae-relationship-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--horae-bg-secondary);
+    border: 1px solid var(--horae-border);
+    border-radius: var(--horae-radius-sm);
+    font-size: 13px;
+    transition: border-color 0.2s;
+}
+
+.horae-relationship-item:hover {
+    border-color: var(--horae-primary);
+}
+
+.horae-rel-content {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex: 1;
+    min-width: 0;
+}
+
+.horae-rel-from, .horae-rel-to {
+    font-weight: 600;
+    color: var(--horae-text);
+}
+
+.horae-rel-arrow {
+    color: var(--horae-primary);
+    font-size: 14px;
+}
+
+.horae-rel-type {
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: rgba(124, 58, 237, 0.15);
+    color: var(--horae-primary);
+    font-size: 12px;
+}
+
+.horae-rel-note {
+    color: var(--horae-text-muted);
+    font-size: 11px;
+    font-style: italic;
+}
+
+.horae-rel-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.horae-relationship-item:hover .horae-rel-actions {
+    opacity: 1;
+}
+
+.horae-rel-edit, .horae-rel-delete {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    color: var(--horae-text-muted);
+    font-size: 12px;
+}
+
+.horae-rel-edit:hover { color: var(--horae-primary); }
+.horae-rel-delete:hover { color: var(--horae-danger, #ef4444); }
+
+/* 底部面板关系/情绪 */
+.horae-panel-relationships {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.horae-panel-rel-row {
+    font-size: 12px;
+    color: var(--horae-text);
+    padding: 2px 0;
+}
+
+.horae-rel-arrow-sm {
+    color: var(--horae-primary);
+    margin: 0 2px;
+}
+
+.horae-rel-note-sm {
+    color: var(--horae-text-muted);
+    font-size: 11px;
+}
+
+.horae-panel-mood {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.horae-mood-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 10px;
+    border-radius: 12px;
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--horae-accent);
+    font-size: 12px;
+}
+
+/* 关系编辑弹窗 */
+.horae-form-row {
+    margin-bottom: 12px;
+}
+
+.horae-form-row label {
+    display: block;
+    font-size: 12px;
+    margin-bottom: 4px;
+    color: var(--horae-text-muted);
+}
+
+.horae-form-row input {
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--horae-bg);
+    border: 1px solid var(--horae-border);
+    border-radius: var(--horae-radius-sm);
+    color: var(--horae-text);
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+.horae-form-row input:focus {
+    outline: none;
+    border-color: var(--horae-primary);
+}
+
+.horae-btn-sm {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    color: var(--horae-text-muted);
+    font-size: 12px;
+    transition: color 0.15s;
+}
+
+.horae-btn-sm:hover {
+    color: var(--horae-primary);
+}
+
+/* === 场景记忆列表 === */
+.horae-location-card {
+    padding: 10px 14px;
+    background: var(--horae-bg-secondary);
+    border: 1px solid var(--horae-border);
+    border-radius: var(--horae-radius-sm);
+    margin-bottom: 8px;
+    transition: border-color 0.2s;
+}
+
+.horae-location-card:hover {
+    border-color: var(--horae-primary);
+}
+
+.horae-location-card.horae-location-current {
+    border-color: var(--horae-primary);
+    border-left: 3px solid var(--horae-primary);
+}
+
+.horae-loc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.horae-loc-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--horae-text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.horae-loc-name i {
+    color: var(--horae-primary);
+    font-size: 12px;
+}
+
+.horae-loc-current-badge {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: rgba(124, 58, 237, 0.2);
+    color: var(--horae-primary);
+    font-weight: normal;
+}
+
+.horae-loc-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.horae-location-card:hover .horae-loc-actions {
+    opacity: 1;
+}
+
+.horae-loc-edit, .horae-loc-delete {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    color: var(--horae-text-muted);
+    font-size: 12px;
+}
+
+.horae-loc-edit:hover { color: var(--horae-primary); }
+.horae-loc-delete:hover { color: var(--horae-danger, #ef4444); }
+
+.horae-loc-desc {
+    font-size: 13px;
+    color: var(--horae-text);
+    line-height: 1.5;
+}
+
+.horae-loc-date {
+    font-size: 11px;
+    color: var(--horae-text-muted);
+    margin-top: 6px;
+}
+
+/* 空提示文字 */
+.horae-empty-hint {
+    text-align: center;
+    padding: 16px 12px;
+    font-size: 12px;
+    color: var(--horae-text-muted);
+    opacity: 0.7;
+}
+
+/* 合并预览 */
+.horae-merge-preview {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: var(--horae-bg);
+    border-radius: var(--horae-radius-sm);
+    font-size: 12px;
+    color: var(--horae-text-muted);
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* 场景工具栏 */
+.horae-location-toolbar {
+    display: flex;
+    gap: 8px;
+    padding: 8px 0;
+}
+
+.horae-location-toolbar .horae-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+/* 场景分组折叠 */
+.horae-loc-group {
+    margin-bottom: 8px;
+    border: 1px solid var(--horae-border);
+    border-radius: var(--horae-radius-sm);
+    overflow: hidden;
+}
+
+.horae-loc-group-active {
+    border-color: var(--horae-primary);
+}
+
+.horae-loc-group-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--horae-bg-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--horae-text);
+    user-select: none;
+}
+
+.horae-loc-group-header:hover {
+    background: var(--horae-bg-hover);
+}
+
+.horae-loc-fold-icon {
+    font-size: 10px;
+    color: var(--horae-text-muted);
+    width: 12px;
+    text-align: center;
+    transition: transform 0.15s;
+}
+
+.horae-loc-group-count {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--horae-text-muted);
+    background: var(--horae-bg);
+    padding: 1px 6px;
+    border-radius: 8px;
+}
+
+.horae-loc-group-body .horae-location-card {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    margin-bottom: 0;
+    border-bottom: 1px solid var(--horae-border);
+}
+
+.horae-loc-group-body .horae-location-card:last-child {
+    border-bottom: none;
+}
+
+.horae-loc-child {
+    padding-left: 24px;
+}
+
+/* 移动端关系/场景操作始终可见 */
+@media (max-width: 768px) {
+    .horae-rel-actions,
+    .horae-loc-actions {
+        opacity: 1;
+    }
+}
 
