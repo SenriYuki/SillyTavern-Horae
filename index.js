@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.5.0
+ * 版本: 1.5.1
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -19,7 +19,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.5.0';
+const VERSION = '1.5.1';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -6399,10 +6399,20 @@ async function checkAutoSummary() {
         const totalMsgs = chat.length;
         const cutoff = Math.max(1, totalMsgs - keepRecent);
         
+        // 收集已被活跃摘要覆盖的消息索引（无论 is_hidden 是否生效都排除）
+        const summarizedIndices = new Set();
+        const existingSums = chat[0]?.horae_meta?.autoSummaries || [];
+        for (const s of existingSums) {
+            if (!s.active || !s.range) continue;
+            for (let r = s.range[0]; r <= s.range[1]; r++) {
+                summarizedIndices.add(r);
+            }
+        }
+        
         const bufferMsgIndices = [];
         let bufferTokens = 0;
         for (let i = 1; i < cutoff; i++) {
-            if (chat[i]?.is_hidden) continue;
+            if (chat[i]?.is_hidden || summarizedIndices.has(i)) continue;
             bufferMsgIndices.push(i);
             if (bufferMode === 'tokens') {
                 bufferTokens += estimateTokens(chat[i]?.mes || '');
