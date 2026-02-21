@@ -247,6 +247,32 @@ Horae 的所有视觉样式由 **CSS 变量** 控制。只需覆盖这些变量�
 
 ---
 
+## 常见问题 & 美化技巧
+
+### 底部面板被其他元素遮挡（无法交互）
+
+部分酒馆美化或预设的 z-index 较高，导致 Horae 底部面板被盖住。在自定义 CSS 中添加：
+
+```css
+.horae-message-panel {
+    margin-bottom: 10px;
+    z-index: 9999;
+    position: relative;
+}
+```
+
+### 自定义顶部抽屉图标
+
+将顶部导航栏的 Horae 图标替换为自定义图片：
+
+```css
+#horae_drawer .drawer-icon::before {
+    background-image: url('你的图片URL') !important;
+}
+```
+
+---
+
 ## 注意事项
 
 1. **变量作用域**：CSS 变量定义在 `#horae_drawer`、`.horae-modal` 等顶级容器上，不要在 `body` 或 `:root` 上定义，否则不会生效。

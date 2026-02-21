@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.5.2
+ * 版本: 1.5.3
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -19,7 +19,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.5.2';
+const VERSION = '1.5.3';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -4751,15 +4751,15 @@ function buildPanelContent(messageIndex, meta) {
         const m = chat[i]?.horae_meta;
         if (m?.affection) {
             for (const [k, v] of Object.entries(m.affection)) {
-                let val = 0;
-                if (typeof v === 'object' && v !== null) {
-                    if (v.type === 'absolute') val = parseInt(v.value) || 0;
-                    else if (v.type === 'relative') val = (prevTotals[k] || 0) + (parseInt(v.value) || 0);
-                } else {
-                    val = (prevTotals[k] || 0) + (parseInt(v) || 0);
+                    let val = 0;
+                    if (typeof v === 'object' && v !== null) {
+                        if (v.type === 'absolute') val = parseFloat(v.value) || 0;
+                        else if (v.type === 'relative') val = (prevTotals[k] || 0) + (parseFloat(v.value) || 0);
+                    } else {
+                        val = (prevTotals[k] || 0) + (parseFloat(v) || 0);
+                    }
+                    prevTotals[k] = val;
                 }
-                prevTotals[k] = val;
-            }
         }
     }
     
@@ -4770,23 +4770,25 @@ function buildPanelContent(messageIndex, meta) {
         
         if (typeof value === 'object' && value !== null) {
             if (value.type === 'absolute') {
-                newTotal = parseInt(value.value) || 0;
+                newTotal = parseFloat(value.value) || 0;
                 delta = newTotal - prevVal;
             } else if (value.type === 'relative') {
-                delta = parseInt(value.value) || 0;
+                delta = parseFloat(value.value) || 0;
                 newTotal = prevVal + delta;
             }
         } else {
-            delta = parseInt(value) || 0;
+            delta = parseFloat(value) || 0;
             newTotal = prevVal + delta;
         }
         
-        const deltaStr = delta >= 0 ? `+${delta}` : `${delta}`;
+        const roundedDelta = Math.round(delta * 100) / 100;
+        const roundedTotal = Math.round(newTotal * 100) / 100;
+        const deltaStr = roundedDelta >= 0 ? `+${roundedDelta}` : `${roundedDelta}`;
         return `
             <div class="horae-editor-row horae-affection-row" data-char="${key}" data-prev="${prevVal}">
                 <span class="affection-char">${key}</span>
                 <input type="text" class="affection-delta" value="${deltaStr}" placeholder="±变化">
-                <input type="number" class="affection-total" value="${newTotal}" placeholder="总值">
+                <input type="number" class="affection-total" value="${roundedTotal}" placeholder="总值" step="any">
                 <button class="delete-btn"><i class="fa-solid fa-xmark"></i></button>
             </div>
         `;
@@ -4894,30 +4896,31 @@ function bindPanelEvents(panelEl) {
     if (!panelEl) return;
     
     const messageId = parseInt(panelEl.dataset.messageId);
-    const toggleEl = panelEl.querySelector('.horae-panel-toggle');
     const contentEl = panelEl.querySelector('.horae-panel-content');
-    const expandBtn = panelEl.querySelector('.horae-btn-expand');
     
-    // 展开/收起 - 点击整个横条或展开按钮都会展开
-    const rescanBtn = panelEl.querySelector('.horae-btn-rescan');
-    toggleEl?.addEventListener('click', (e) => {
-        if (e.target.closest('.horae-btn-expand') || e.target.closest('.horae-btn-rescan')) return;
-        togglePanel();
-    });
-    
-    expandBtn?.addEventListener('click', togglePanel);
-    
-    // 重新扫描此消息
-    rescanBtn?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        rescanMessageMeta(messageId, panelEl);
-    });
-    
-    function togglePanel() {
-        const isHidden = contentEl.style.display === 'none';
-        contentEl.style.display = isHidden ? 'block' : 'none';
-        const icon = expandBtn.querySelector('i');
-        icon.className = isHidden ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down';
+    // 头部区域事件只绑定一次，避免重复绑定导致 toggle 互相抵消
+    if (!panelEl._horaeBound) {
+        panelEl._horaeBound = true;
+        const toggleEl = panelEl.querySelector('.horae-panel-toggle');
+        const expandBtn = panelEl.querySelector('.horae-btn-expand');
+        const rescanBtn = panelEl.querySelector('.horae-btn-rescan');
+        
+        const togglePanel = () => {
+            const isHidden = contentEl.style.display === 'none';
+            contentEl.style.display = isHidden ? 'block' : 'none';
+            const icon = expandBtn?.querySelector('i');
+            if (icon) icon.className = isHidden ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down';
+        };
+        
+        toggleEl?.addEventListener('click', (e) => {
+            if (e.target.closest('.horae-btn-expand') || e.target.closest('.horae-btn-rescan')) return;
+            togglePanel();
+        });
+        expandBtn?.addEventListener('click', togglePanel);
+        rescanBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            rescanMessageMeta(messageId, panelEl);
+        });
     }
     
     // 标记面板已修改
