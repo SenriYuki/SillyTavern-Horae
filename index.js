@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.5.1
+ * 版本: 1.5.2
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -19,7 +19,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.5.1';
+const VERSION = '1.5.2';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -6517,8 +6517,9 @@ async function checkAutoSummary() {
             }
         }
         
-        // 在最早的有事件的消息上插入摘要事件（该消息必定有 horae_meta）
-        const targetIdx = bufferEvents[0].msgIdx;
+        // 插入摘要事件卡片：优先放在有事件的消息上，否则放在范围内首条消息
+        const targetIdx = bufferEvents.length > 0 ? bufferEvents[0].msgIdx : msgIndices[0];
+        if (!chat[targetIdx].horae_meta) chat[targetIdx].horae_meta = createEmptyMeta();
         const targetMeta = chat[targetIdx].horae_meta;
         if (!targetMeta.events) targetMeta.events = [];
         targetMeta.events.push({
