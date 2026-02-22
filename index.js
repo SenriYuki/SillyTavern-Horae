@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.5.4
+ * 版本: 1.5.5
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -19,7 +19,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.5.4';
+const VERSION = '1.5.5';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -428,6 +428,7 @@ function getAllAgenda() {
     // 1. 用户手动创建的
     const userItems = getUserAgenda();
     for (const item of userItems) {
+        if (item._deleted) continue;
         all.push({
             text: item.text,
             date: item.date || '',
@@ -446,6 +447,7 @@ function getAllAgenda() {
             const meta = context.chat[i].horae_meta;
             if (meta?.agenda?.length > 0) {
                 for (const item of meta.agenda) {
+                    if (item._deleted) continue;
                     // 去重：检查是否已存在相同内容
                     const isDupe = all.some(a => a.text === item.text);
                     if (!isDupe) {
@@ -501,24 +503,30 @@ function toggleAgendaDone(agendaItem, done) {
 function deleteAgendaItem(agendaItem) {
     const context = getContext();
     if (!context?.chat) return;
+    const targetText = agendaItem.text;
     
-    if (agendaItem._store === 'user') {
-        const agenda = getUserAgenda();
-        const idx = agenda.findIndex(a => a.text === agendaItem.text);
-        if (idx !== -1) {
-            agenda.splice(idx, 1);
-            setUserAgenda(agenda);
+    // 标记所有匹配项为 _deleted（防止其他消息中同名项复活）
+    if (context.chat[0]?.horae_meta?.agenda) {
+        for (const a of context.chat[0].horae_meta.agenda) {
+            if (a.text === targetText) a._deleted = true;
         }
-    } else if (agendaItem._store === 'msg') {
-        const msg = context.chat[agendaItem._msgIndex];
-        if (msg?.horae_meta?.agenda) {
-            const idx = msg.horae_meta.agenda.findIndex(a => a.text === agendaItem.text);
-            if (idx !== -1) {
-                msg.horae_meta.agenda.splice(idx, 1);
-                getContext().saveChat();
+    }
+    for (let i = 1; i < context.chat.length; i++) {
+        const meta = context.chat[i]?.horae_meta;
+        if (meta?.agenda?.length > 0) {
+            for (const a of meta.agenda) {
+                if (a.text === targetText) a._deleted = true;
             }
         }
     }
+    
+    // 同时记录已删除文本到 chat[0]，供 rebuild 时参考
+    if (!context.chat[0].horae_meta) context.chat[0].horae_meta = createEmptyMeta();
+    if (!context.chat[0].horae_meta._deletedAgendaTexts) context.chat[0].horae_meta._deletedAgendaTexts = [];
+    if (!context.chat[0].horae_meta._deletedAgendaTexts.includes(targetText)) {
+        context.chat[0].horae_meta._deletedAgendaTexts.push(targetText);
+    }
+    getContext().saveChat();
 }
 
 /**
@@ -3198,7 +3206,7 @@ function renderCustomTablesList() {
                             <i class="fa-solid fa-trash-can"></i>
                         </button>
                     </div>
-                </div>
+                </div><!-- header -->
                 <div class="horae-excel-table-wrapper">
                     ${tableHtml}
                 </div>

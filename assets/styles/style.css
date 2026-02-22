@@ -2832,9 +2832,10 @@
 
 .horae-excel-table-header {
     display: flex;
-    justify-content: space-between;
+    flex-wrap: wrap;
     align-items: center;
     padding: 8px 12px;
+    gap: 4px 8px;
     background: var(--horae-bg-secondary);
     border-bottom: 1px solid var(--horae-border);
 }
@@ -2843,7 +2844,15 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 120px;
+}
+
+.horae-excel-table-actions {
+    display: flex;
+    gap: 4px;
+    flex: 0 0 auto;
+    margin-left: auto;
 }
 
 .horae-excel-table-title i {
@@ -2867,11 +2876,6 @@
 .horae-excel-table-title input:focus {
     outline: none;
     border-bottom-color: var(--horae-primary);
-}
-
-.horae-excel-table-actions {
-    display: flex;
-    gap: 4px;
 }
 
 .horae-excel-table-actions button {

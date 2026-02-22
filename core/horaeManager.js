@@ -622,8 +622,10 @@ class HoraeManager {
         const chatForAgenda = this.getChat();
         const allAgendaItems = [];
         const seenTexts = new Set();
+        const deletedTexts = new Set(chatForAgenda?.[0]?.horae_meta?._deletedAgendaTexts || []);
         const userAgenda = chatForAgenda?.[0]?.horae_meta?.agenda || [];
         for (const item of userAgenda) {
+            if (item._deleted || deletedTexts.has(item.text)) continue;
             if (!seenTexts.has(item.text)) {
                 allAgendaItems.push(item);
                 seenTexts.add(item.text);
@@ -636,6 +638,7 @@ class HoraeManager {
                 const msgAgenda = chatForAgenda[i].horae_meta?.agenda;
                 if (msgAgenda?.length > 0) {
                     for (const item of msgAgenda) {
+                        if (item._deleted || deletedTexts.has(item.text)) continue;
                         if (!seenTexts.has(item.text)) {
                             allAgendaItems.push(item);
                             seenTexts.add(item.text);
@@ -1067,14 +1070,22 @@ class HoraeManager {
             else if (trimmedLine.startsWith('agenda:')) {
                 const agendaStr = trimmedLine.substring(7).trim();
                 const pipeIdx = agendaStr.indexOf('|');
+                let dateStr = '', text = '';
                 if (pipeIdx > 0) {
-                    const dateStr = agendaStr.substring(0, pipeIdx).trim();
-                    const text = agendaStr.substring(pipeIdx + 1).trim();
-                    if (text) {
+                    dateStr = agendaStr.substring(0, pipeIdx).trim();
+                    text = agendaStr.substring(pipeIdx + 1).trim();
+                } else {
+                    text = agendaStr;
+                }
+                if (text) {
+                    // 检测 AI 用括号标记完成的情况，自动归入 deletedAgenda
+                    const doneMatch = text.match(/[\(（](完成|已完成|done|finished|completed|失效|取消|已取消)[\)）]\s*$/i);
+                    if (doneMatch) {
+                        const cleanText = text.substring(0, text.length - doneMatch[0].length).trim();
+                        if (cleanText) result.deletedAgenda.push(cleanText);
+                    } else {
                         result.agenda.push({ date: dateStr, text, source: 'ai', done: false });
                     }
-                } else if (agendaStr) {
-                    result.agenda.push({ date: '', text: agendaStr, source: 'ai', done: false });
                 }
             }
             // rel:角色A>角色B=关系类型|备注
@@ -1179,11 +1190,13 @@ class HoraeManager {
             Object.assign(meta.npcs, parsed.npcs);
         }
         
-        // 追加AI写入的待办
+        // 追加AI写入的待办（跳过用户已手动删除的）
         if (parsed.agenda && parsed.agenda.length > 0) {
             if (!meta.agenda) meta.agenda = [];
+            const chat0 = this.getChat()?.[0];
+            const deletedSet = new Set(chat0?.horae_meta?._deletedAgendaTexts || []);
             for (const item of parsed.agenda) {
-                // 去重
+                if (deletedSet.has(item.text)) continue;
                 const isDupe = meta.agenda.some(a => a.text === item.text);
                 if (!isDupe) {
                     meta.agenda.push(item);
@@ -1291,10 +1304,10 @@ class HoraeManager {
         firstMsg.horae_meta.relationships = relationships;
     }
 
-    /** 获取指定角色相关的关系 */
+    /** 获取指定角色相关的关系（无在场角色时返回空数组） */
     getRelationshipsForCharacters(charNames) {
+        if (!charNames?.length) return [];
         const rels = this.getRelationships();
-        if (!charNames?.length) return rels;
         const nameSet = new Set(charNames);
         return rels.filter(r => nameSet.has(r.from) || nameSet.has(r.to));
     }
@@ -1978,12 +1991,15 @@ event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键
   ✦ 剧情中出现新的约定/计划/行程/任务/伏笔 → agenda:日期|内容
   格式：agenda:订立日期|内容（相对时间须括号标注绝对日期）
   示例：agenda:2026/02/10|艾伦邀请${userName}情人节晚上约会(2026/02/14 18:00)
-【何时写（完成删除）】
-  ✦ 待办事项已完成/已失效/已取消 → agenda-:内容关键词
+【何时写（完成删除）— 极重要！】
+  ✦ 待办事项已完成/已失效/已取消 → 必须用 agenda-: 标记删除
   格式：agenda-:待办内容（写入已完成事项的内容关键词即可自动移除）
   示例：agenda-:艾伦邀请${userName}情人节晚上约会
+  ⚠ 严禁用 agenda:内容(完成) 这种方式！必须用 agenda-: 前缀！
+  ⚠ 严禁重复写入已存在的待办内容！
 【何时不写】
   ✗ 已有待办无变化 → 禁止每回合重复已有待办
+  ✗ 待办已完成 → 禁止用 agenda: 加括号标注完成，必须用 agenda-:
 
 ═══ 时间格式规则 ═══
 禁止"Day 1"/"第X天"等模糊格式，必须使用具体日历日期。
@@ -2113,12 +2129,15 @@ event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键
   ✦ 剧情中出现新的约定/计划/行程/任务/伏笔 → agenda:日期|内容
   格式：agenda:订立日期|内容（相对时间须括号标注绝对日期）
   示例：agenda:2026/02/10|艾伦邀请{{user}}情人节晚上约会(2026/02/14 18:00)
-【何时写（完成删除）】
-  ✦ 待办事项已完成/已失效/已取消 → agenda-:内容关键词
+【何时写（完成删除）— 极重要！】
+  ✦ 待办事项已完成/已失效/已取消 → 必须用 agenda-: 标记删除
   格式：agenda-:待办内容（写入已完成事项的内容关键词即可自动移除）
   示例：agenda-:艾伦邀请{{user}}情人节晚上约会
+  ⚠ 严禁用 agenda:内容(完成) 这种方式！必须用 agenda-: 前缀！
+  ⚠ 严禁重复写入已存在的待办内容！
 【何时不写】
   ✗ 已有待办无变化 → 禁止每回合重复已有待办
+  ✗ 待办已完成 → 禁止用 agenda: 加括号标注完成，必须用 agenda-:
 
 ═══ 时间格式规则 ═══
 禁止"Day 1"/"第X天"等模糊格式，必须使用具体日历日期。
@@ -2481,16 +2500,22 @@ event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键
         while ((match = patterns.agenda.exec(message)) !== null) {
             const agendaStr = match[1].trim();
             const pipeIdx = agendaStr.indexOf('|');
+            let dateStr = '', text = '';
             if (pipeIdx > 0) {
-                const dateStr = agendaStr.substring(0, pipeIdx).trim();
-                const text = agendaStr.substring(pipeIdx + 1).trim();
-                if (text) {
+                dateStr = agendaStr.substring(0, pipeIdx).trim();
+                text = agendaStr.substring(pipeIdx + 1).trim();
+            } else {
+                text = agendaStr;
+            }
+            if (text) {
+                const doneMatch = text.match(/[\(（](完成|已完成|done|finished|completed|失效|取消|已取消)[\)）]\s*$/i);
+                if (doneMatch) {
+                    const cleanText = text.substring(0, text.length - doneMatch[0].length).trim();
+                    if (cleanText) { result.deletedAgenda.push(cleanText); hasAnyData = true; }
+                } else {
                     result.agenda.push({ date: dateStr, text, source: 'ai', done: false });
                     hasAnyData = true;
                 }
-            } else if (agendaStr) {
-                result.agenda.push({ date: '', text: agendaStr, source: 'ai', done: false });
-                hasAnyData = true;
             }
         }
 
