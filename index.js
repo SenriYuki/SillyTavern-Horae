@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.5.3
+ * 版本: 1.5.4
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -19,7 +19,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.5.3';
+const VERSION = '1.5.4';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -27,7 +27,7 @@ const HORAE_REGEX_RULES = [
         id: 'horae_hide',
         scriptName: 'Horae - 隐藏状态标签',
         description: '隐藏<horae>状态标签，不显示在正文，不发送给AI',
-        findRegex: '/(?:<horae>[\\s\\S]*?<\\/horae>|<!--horae[\\s\\S]*?-->|(?:^|\\n)(?:time|location|atmosphere|characters|costume|item-?!{0,2}|affection|npc|agenda-?|rel|mood|scene_desc):[^\\n]+(?:\\n(?:time|location|atmosphere|characters|costume|item-?!{0,2}|affection|npc|agenda-?|rel|mood|scene_desc):[^\\n]+)*)/gim',
+        findRegex: '/(?:<horae>[\\s\\S]*?<\\/horae>|<!--horae[\\s\\S]*?-->)/gim',
         replaceString: '',
         trimStrings: [],
         placement: [2],
@@ -118,6 +118,8 @@ const DEFAULT_SETTINGS = {
     autoSummaryKeepRecent: 10,      // 保留最近N条消息不压缩
     autoSummaryBufferMode: 'messages', // 'messages' | 'tokens'
     autoSummaryBufferLimit: 20,     // 缓冲阈值（楼层数或Token数）
+    autoSummaryBatchMaxMsgs: 50,    // 单次摘要最大消息条数
+    autoSummaryBatchMaxTokens: 80000, // 单次摘要最大Token数
     autoSummaryUseCustomApi: false, // 是否使用独立API端点
     autoSummaryApiUrl: '',          // 独立API端点地址（OpenAI兼容）
     autoSummaryApiKey: '',          // 独立API密钥
@@ -3029,6 +3031,87 @@ function preventModalBubble() {
 // Excel风格自定义表格功能
 // ============================================
 
+// 每个表格独立的 Undo/Redo 栈，key = tableId
+const TABLE_HISTORY_MAX = 20;
+const _perTableUndo = {};  // { tableId: [snapshot, ...] }
+const _perTableRedo = {};  // { tableId: [snapshot, ...] }
+
+function _getTableId(scope, tableIndex) {
+    const tables = getTablesByScope(scope);
+    return tables[tableIndex]?.id || `${scope}_${tableIndex}`;
+}
+
+function _deepCopyOneTable(scope, tableIndex) {
+    const tables = getTablesByScope(scope);
+    if (!tables[tableIndex]) return null;
+    return JSON.parse(JSON.stringify(tables[tableIndex]));
+}
+
+/** 在修改前调用：保存指定表格的快照到其独立 undo 栈 */
+function pushTableSnapshot(scope, tableIndex) {
+    if (tableIndex == null) return;
+    const tid = _getTableId(scope, tableIndex);
+    const snap = _deepCopyOneTable(scope, tableIndex);
+    if (!snap) return;
+    if (!_perTableUndo[tid]) _perTableUndo[tid] = [];
+    _perTableUndo[tid].push({ scope, tableIndex, table: snap });
+    if (_perTableUndo[tid].length > TABLE_HISTORY_MAX) _perTableUndo[tid].shift();
+    _perTableRedo[tid] = [];
+    _updatePerTableUndoRedoButtons(tid);
+}
+
+/** 撤回指定表格 */
+function undoSingleTable(tid) {
+    const stack = _perTableUndo[tid];
+    if (!stack?.length) return;
+    const snap = stack.pop();
+    const tables = getTablesByScope(snap.scope);
+    if (!tables[snap.tableIndex]) return;
+    // 当前状态入 redo
+    if (!_perTableRedo[tid]) _perTableRedo[tid] = [];
+    _perTableRedo[tid].push({
+        scope: snap.scope,
+        tableIndex: snap.tableIndex,
+        table: JSON.parse(JSON.stringify(tables[snap.tableIndex]))
+    });
+    tables[snap.tableIndex] = snap.table;
+    setTablesByScope(snap.scope, tables);
+    renderCustomTablesList();
+    showToast('已撤回此表格的操作', 'info');
+}
+
+/** 复原指定表格 */
+function redoSingleTable(tid) {
+    const stack = _perTableRedo[tid];
+    if (!stack?.length) return;
+    const snap = stack.pop();
+    const tables = getTablesByScope(snap.scope);
+    if (!tables[snap.tableIndex]) return;
+    if (!_perTableUndo[tid]) _perTableUndo[tid] = [];
+    _perTableUndo[tid].push({
+        scope: snap.scope,
+        tableIndex: snap.tableIndex,
+        table: JSON.parse(JSON.stringify(tables[snap.tableIndex]))
+    });
+    tables[snap.tableIndex] = snap.table;
+    setTablesByScope(snap.scope, tables);
+    renderCustomTablesList();
+    showToast('已复原此表格的操作', 'info');
+}
+
+function _updatePerTableUndoRedoButtons(tid) {
+    const undoBtn = document.querySelector(`.horae-table-undo-btn[data-table-id="${tid}"]`);
+    const redoBtn = document.querySelector(`.horae-table-redo-btn[data-table-id="${tid}"]`);
+    if (undoBtn) undoBtn.disabled = !_perTableUndo[tid]?.length;
+    if (redoBtn) redoBtn.disabled = !_perTableRedo[tid]?.length;
+}
+
+/** 切换聊天时清空所有 undo/redo 栈 */
+function clearTableHistory() {
+    for (const k of Object.keys(_perTableUndo)) delete _perTableUndo[k];
+    for (const k of Object.keys(_perTableRedo)) delete _perTableRedo[k];
+}
+
 let activeContextMenu = null;
 
 /**
@@ -3086,8 +3169,12 @@ function renderCustomTablesList() {
         }
         tableHtml += '</table>';
 
+        const tid = table.id || `${scope}_${idx}`;
+        const hasUndo = !!(_perTableUndo[tid]?.length);
+        const hasRedo = !!(_perTableRedo[tid]?.length);
+
         return `
-            <div class="horae-excel-table-container" data-table-index="${idx}" data-scope="${scope}">
+            <div class="horae-excel-table-container" data-table-index="${idx}" data-scope="${scope}" data-table-id="${tid}">
                 <div class="horae-excel-table-header">
                     <div class="horae-excel-table-title">
                         <i class="fa-solid ${scopeIcon}" title="${scopeTitle}" style="color:${isGlobal ? 'var(--horae-accent)' : 'var(--horae-primary-light)'}; cursor:pointer;" data-toggle-scope="${idx}" data-scope="${scope}"></i>
@@ -3095,6 +3182,12 @@ function renderCustomTablesList() {
                         <input type="text" value="${escapeHtml(table.name || '')}" placeholder="表格名称" data-table-name="${idx}" data-scope="${scope}">
                     </div>
                     <div class="horae-excel-table-actions">
+                        <button class="horae-table-undo-btn" title="撤回" data-table-id="${tid}" ${hasUndo ? '' : 'disabled'}>
+                            <i class="fa-solid fa-rotate-left"></i>
+                        </button>
+                        <button class="horae-table-redo-btn" title="复原" data-table-id="${tid}" ${hasRedo ? '' : 'disabled'}>
+                            <i class="fa-solid fa-rotate-right"></i>
+                        </button>
                         <button class="clear-table-data-btn" title="清空数据（保留表头）" data-table-index="${idx}" data-scope="${scope}">
                             <i class="fa-solid fa-eraser"></i>
                         </button>
@@ -3151,9 +3244,16 @@ function bindExcelTableEvents() {
 
     // 单元格输入事件 - 自动保存 + 动态调整宽度
     document.querySelectorAll('.horae-excel-table input').forEach(input => {
+        input.addEventListener('focus', (e) => {
+            e.target._horaeSnapshotPushed = false;
+        });
         input.addEventListener('change', (e) => {
             const scope = getScope(e.target);
             const tableIndex = parseInt(e.target.dataset.table);
+            if (!e.target._horaeSnapshotPushed) {
+                pushTableSnapshot(scope, tableIndex);
+                e.target._horaeSnapshotPushed = true;
+            }
             const row = parseInt(e.target.dataset.row);
             const col = parseInt(e.target.dataset.col);
             const value = e.target.value;
@@ -3167,7 +3267,6 @@ function bindExcelTableEvents() {
             } else {
                 delete tables[tableIndex].data[key];
             }
-            // 用户手动编辑数据单元格时，清除 AI 贡献记录防止 rebuild 回填旧值
             if (row > 0 && col > 0) {
                 purgeTableContributions((tables[tableIndex].name || '').trim(), scope);
             }
@@ -3185,6 +3284,7 @@ function bindExcelTableEvents() {
         input.addEventListener('change', (e) => {
             const scope = getScope(e.target);
             const tableIndex = parseInt(e.target.dataset.tableName);
+            pushTableSnapshot(scope, tableIndex);
             const tables = getTablesByScope(scope);
             if (!tables[tableIndex]) return;
             tables[tableIndex].name = e.target.value;
@@ -3197,6 +3297,7 @@ function bindExcelTableEvents() {
         input.addEventListener('change', (e) => {
             const scope = getScope(e.target);
             const tableIndex = parseInt(e.target.dataset.tablePrompt);
+            pushTableSnapshot(scope, tableIndex);
             const tables = getTablesByScope(scope);
             if (!tables[tableIndex]) return;
             tables[tableIndex].prompt = e.target.value;
@@ -3281,6 +3382,19 @@ function bindExcelTableEvents() {
         });
     });
 
+    // 每个表格独立的撤回/复原按钮
+    document.querySelectorAll('.horae-table-undo-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            undoSingleTable(btn.dataset.tableId);
+        });
+    });
+    document.querySelectorAll('.horae-table-redo-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            redoSingleTable(btn.dataset.tableId);
+        });
+    });
 }
 
 /** 显示表格右键菜单 */
@@ -3439,6 +3553,7 @@ function hideContextMenu() {
  * 执行表格操作
  */
 function executeTableAction(tableIndex, row, col, action, scope = 'local') {
+    pushTableSnapshot(scope, tableIndex);
     // 先将DOM中未提交的输入值写入data，防止正在编辑的值丢失
     const container = document.querySelector(`.horae-excel-table-container[data-table-index="${tableIndex}"][data-scope="${scope}"]`);
     if (container) {
@@ -3599,6 +3714,7 @@ function addNewExcelTable(scope = 'local') {
  */
 function deleteCustomTable(index, scope = 'local') {
     if (!confirm('确定要删除此表格吗？')) return;
+    pushTableSnapshot(scope, index);
 
     const tables = getTablesByScope(scope);
     const deletedTable = tables[index];
@@ -3698,6 +3814,7 @@ function purgeTableContributions(tableName, scope = 'local') {
 /** 清空表格数据区（保留第0行和第0列的表头） */
 function clearTableData(index, scope = 'local') {
     if (!confirm('确定要清空此表格的数据区吗？表头将保留。\n\n将同时清除 AI 历史填写记录，防止旧数据回流。')) return;
+    pushTableSnapshot(scope, index);
 
     const tables = getTablesByScope(scope);
     if (!tables[index]) return;
@@ -3770,6 +3887,7 @@ function toggleTableScope(tableIndex, currentScope) {
     const newScope = currentScope === 'global' ? 'local' : 'global';
     const label = newScope === 'global' ? '全局（所有对话共享，数据按角色卡独立）' : '本地（仅当前对话）';
     if (!confirm(`将此表格转为${label}？`)) return;
+    pushTableSnapshot(currentScope, tableIndex);
 
     const srcTables = getTablesByScope(currentScope);
     if (!srcTables[tableIndex]) return;
@@ -4007,7 +4125,7 @@ function updateLocationMemoryDisplay() {
     if (!listEl) return;
     
     const locMem = horaeManager.getLocationMemory();
-    const entries = Object.entries(locMem);
+    const entries = Object.entries(locMem).filter(([, info]) => !info._deleted);
     const currentLoc = horaeManager.getLatestState()?.scene?.location || '';
     
     if (entries.length === 0) {
@@ -4112,7 +4230,11 @@ function updateLocationMemoryDisplay() {
             if (!confirm(`确定删除场景「${name}」的记忆？`)) return;
             const chat = horaeManager.getChat();
             if (chat?.[0]?.horae_meta?.locationMemory) {
-                delete chat[0].horae_meta.locationMemory[name];
+                // 标记为已删除而非直接delete，防止rebuildLocationMemory从历史消息重建
+                chat[0].horae_meta.locationMemory[name] = {
+                    ...chat[0].horae_meta.locationMemory[name],
+                    _deleted: true
+                };
                 await getContext().saveChat();
                 updateLocationMemoryDisplay();
                 showToast(`场景「${name}」已删除`, 'info');
@@ -5858,6 +5980,16 @@ function initSettingsEvents() {
         this.value = settings.autoSummaryBufferLimit;
         saveSettings();
     });
+    $('#horae-setting-auto-summary-batch-msgs').on('change', function() {
+        settings.autoSummaryBatchMaxMsgs = Math.max(5, parseInt(this.value) || 50);
+        this.value = settings.autoSummaryBatchMaxMsgs;
+        saveSettings();
+    });
+    $('#horae-setting-auto-summary-batch-tokens').on('change', function() {
+        settings.autoSummaryBatchMaxTokens = Math.max(10000, parseInt(this.value) || 80000);
+        this.value = settings.autoSummaryBatchMaxTokens;
+        saveSettings();
+    });
     $('#horae-setting-auto-summary-custom-api').on('change', function() {
         settings.autoSummaryUseCustomApi = this.checked;
         saveSettings();
@@ -6172,6 +6304,8 @@ function syncSettingsToUI() {
     $('#horae-setting-auto-summary-keep').val(settings.autoSummaryKeepRecent || 10);
     $('#horae-setting-auto-summary-mode').val(settings.autoSummaryBufferMode || 'messages');
     $('#horae-setting-auto-summary-limit').val(settings.autoSummaryBufferLimit || 20);
+    $('#horae-setting-auto-summary-batch-msgs').val(settings.autoSummaryBatchMaxMsgs || 50);
+    $('#horae-setting-auto-summary-batch-tokens').val(settings.autoSummaryBatchMaxTokens || 80000);
     $('#horae-setting-auto-summary-custom-api').prop('checked', !!settings.autoSummaryUseCustomApi);
     $('#horae-auto-summary-api-options').toggle(!!settings.autoSummaryUseCustomApi);
     $('#horae-setting-auto-summary-api-url').val(settings.autoSummaryApiUrl || '');
@@ -6433,8 +6567,21 @@ async function checkAutoSummary() {
         
         if (!shouldTrigger || bufferMsgIndices.length === 0) return;
         
-        const bufferEvents = [];
+        // 单次摘要批量上限：防止旧档案首次启用时 token 爆炸
+        const MAX_BATCH_MSGS = settings.autoSummaryBatchMaxMsgs || 50;
+        const MAX_BATCH_TOKENS = settings.autoSummaryBatchMaxTokens || 80000;
+        let batchIndices = [];
+        let batchTokenCount = 0;
         for (const i of bufferMsgIndices) {
+            const tok = estimateTokens(chat[i]?.mes || '');
+            if (batchIndices.length > 0 && (batchIndices.length >= MAX_BATCH_MSGS || batchTokenCount + tok > MAX_BATCH_TOKENS)) break;
+            batchIndices.push(i);
+            batchTokenCount += tok;
+        }
+        const remaining = bufferMsgIndices.length - batchIndices.length;
+        
+        const bufferEvents = [];
+        for (const i of batchIndices) {
             const meta = chat[i]?.horae_meta;
             if (!meta?.events) continue;
             for (let j = 0; j < meta.events.length; j++) {
@@ -6450,12 +6597,15 @@ async function checkAutoSummary() {
             }
         }
         
-        showToast(`自动摘要：正在压缩 ${bufferMsgIndices.length} 条消息...`, 'info');
+        const batchMsg = remaining > 0
+            ? `自动摘要：正在压缩 ${batchIndices.length}/${bufferMsgIndices.length} 条消息（剩余 ${remaining} 条将在后续轮次处理）...`
+            : `自动摘要：正在压缩 ${batchIndices.length} 条消息...`;
+        showToast(batchMsg, 'info');
         
         const context = getContext();
         const userName = context?.name1 || '主角';
         
-        const msgIndices = [...bufferMsgIndices].sort((a, b) => a - b);
+        const msgIndices = [...batchIndices].sort((a, b) => a - b);
         const fullTexts = msgIndices.map(idx => {
             const msg = chat[idx];
             const d = msg?.horae_meta?.timestamp?.story_date || '';
@@ -7557,6 +7707,7 @@ async function onPromptReady(eventData) {
 async function onChatChanged() {
     if (!settings.enabled) return;
     
+    clearTableHistory();
     horaeManager.init(getContext(), settings);
     
     refreshAllDisplays();
@@ -7603,7 +7754,8 @@ function onSwipePanel(messageId) {
         const msg = horaeManager.getChat()[messageId];
         if (!msg || msg.is_user) return;
         
-        const parsed = horaeManager.parseHoraeTag(msg.mes || '');
+        let parsed = horaeManager.parseHoraeTag(msg.mes || '');
+        if (!parsed) parsed = horaeManager.parseLooseFormat(msg.mes || '');
         if (parsed) {
             const newMeta = createEmptyMeta();
             newMeta.timestamp = parsed.timestamp || {};

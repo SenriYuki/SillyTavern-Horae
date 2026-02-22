@@ -1251,15 +1251,22 @@ class HoraeManager {
         if (!firstMsg.horae_meta) firstMsg.horae_meta = createEmptyMeta();
         const existing = firstMsg.horae_meta.locationMemory || {};
         const rebuilt = {};
-        // 保留用户手动创建/编辑的条目
+        const deletedNames = new Set();
+        // 保留用户手动创建/编辑的条目，记录已删除的条目
         for (const [name, info] of Object.entries(existing)) {
+            if (info._deleted) {
+                deletedNames.add(name);
+                rebuilt[name] = { ...info };
+                continue;
+            }
             if (info._userEdited) rebuilt[name] = { ...info };
         }
-        // 从消息重放 AI 写入的 scene_desc（按时间顺序，后覆盖前）
+        // 从消息重放 AI 写入的 scene_desc（按时间顺序，后覆盖前），跳过已删除的
         for (let i = 1; i < chat.length; i++) {
             const meta = chat[i]?.horae_meta;
             if (meta?.scene?.scene_desc && meta?.scene?.location) {
                 const loc = meta.scene.location;
+                if (deletedNames.has(loc)) continue;
                 rebuilt[loc] = {
                     desc: meta.scene.scene_desc,
                     firstSeen: rebuilt[loc]?.firstSeen || new Date().toISOString(),
@@ -1341,7 +1348,7 @@ class HoraeManager {
         }
 
         if (mem[locationName]) {
-            if (mem[locationName]._userEdited) return;
+            if (mem[locationName]._userEdited || mem[locationName]._deleted) return;
             mem[locationName].desc = desc;
             mem[locationName].lastUpdated = now;
         } else {
@@ -1479,7 +1486,15 @@ class HoraeManager {
 
     /** 处理AI回复，解析标签并存储元数据 */
     processAIResponse(messageIndex, messageContent) {
-        const parsed = this.parseHoraeTag(messageContent);
+        let parsed = this.parseHoraeTag(messageContent);
+        
+        // 标签解析失败时，自动 fallback 到宽松格式解析
+        if (!parsed) {
+            parsed = this.parseLooseFormat(messageContent);
+            if (parsed) {
+                console.log(`[Horae] #${messageIndex} 未检测到标签，已通过宽松解析提取数据`);
+            }
+        }
         
         if (parsed) {
             const existingMeta = this.getMessageMeta(messageIndex);
@@ -1976,6 +1991,9 @@ event:重要程度|事件简述（30-50字，重要程度：一般/重要/关键
 - 历史：该年代日期（如 1920/3/15 14:00）
 - 奇幻/架空：该世界观日历（如 霜降月第三日 黄昏）
 ${this.generateLocationMemoryPrompt()}${this.generateCustomTablesPrompt()}${this.generateRelationshipPrompt()}${this.generateMoodPrompt()}
+═══ 最终强制提醒 ═══
+你的回复末尾必须包含 <horae>...</horae> 和 <horaeevent>...</horaeevent> 两个标签。
+缺少任何一个标签 = 输出不合格。这是系统级强制要求，不可省略。
 `;
     }
 

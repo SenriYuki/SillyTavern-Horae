@@ -2981,6 +2981,32 @@
 }
 
 /* 表格按钮容器 */
+.horae-table-undo-btn,
+.horae-table-redo-btn {
+    background: none !important;
+    background-image: none !important;
+    border: none !important;
+    color: var(--horae-text-muted) !important;
+    cursor: pointer;
+    padding: 4px 6px;
+    font-size: 13px;
+    opacity: 0.8;
+    filter: none !important;
+    transition: all 0.2s ease;
+}
+
+.horae-table-undo-btn:hover:not(:disabled),
+.horae-table-redo-btn:hover:not(:disabled) {
+    color: var(--horae-primary-light) !important;
+    opacity: 1;
+}
+
+.horae-table-undo-btn:disabled,
+.horae-table-redo-btn:disabled {
+    opacity: 0.2 !important;
+    cursor: not-allowed;
+}
+
 .horae-table-buttons {
     display: flex;
     gap: 8px;

@@ -10,7 +10,7 @@
                 <i class="fa-regular fa-clock"></i>
                 Horae 时光记忆
             </div>
-            <span class="horae-version">v1.5.3</span>
+            <span class="horae-version">v1.5.4</span>
         </div>
         
         <!-- 标签页导航 -->
@@ -443,7 +443,7 @@
                     </span>
                     
                     <div id="horae-custom-tables-list" class="horae-custom-tables-list">
-                        <!-- 动态生成 -->
+                        <!-- 动态生成（每个表格自带撤回/复原按钮） -->
                     </div>
                     
                     <div class="horae-table-buttons">
@@ -564,6 +564,24 @@
                                     <input type="number" id="horae-setting-auto-summary-limit" min="5" max="99999" value="20">
                                 </label>
                                 <span class="horae-setting-sub-hint" id="horae-auto-summary-limit-hint">超过此上限时触发自动压缩。</span>
+                            </div>
+                            <div class="horae-setting-item" style="border-top: 1px solid var(--horae-border); padding-top: 8px; margin-top: 4px;">
+                                <label>
+                                    单次最大消息条数
+                                    <input type="number" id="horae-setting-auto-summary-batch-msgs" min="5" max="500" value="50">
+                                </label>
+                                <span class="horae-setting-sub-hint">每次自动摘要最多处理多少条消息。旧档案首次启用时会分多轮逐步消化。</span>
+                            </div>
+                            <div class="horae-setting-item">
+                                <label>
+                                    单次最大 Token 数
+                                    <input type="number" id="horae-setting-auto-summary-batch-tokens" min="10000" max="1000000" step="10000" value="80000">
+                                </label>
+                                <span class="horae-setting-sub-hint">
+                                    每次摘要送入的文本 Token 上限，超出则截断至此值。<br>
+                                    参考各模型上下文窗口（建议设为 30%~50%）：<br>
+                                    Claude ≈ 80K~200K · GPT-4o ≈ 80K~128K · Gemini ≈ 100K~1000K · DeepSeek ≈ 64K
+                                </span>
                             </div>
                             <div class="horae-setting-item" style="border-top: 1px solid var(--horae-border); padding-top: 8px; margin-top: 4px;">
                                 <label>
@@ -753,7 +771,7 @@
                 </div>
                 
                 <div class="horae-about">
-                    <p>Horae v1.5.3 | 作者: SenriYuki</p>
+                    <p>Horae v1.5.4 | 作者: SenriYuki</p>
                     <p>基于时间锚点的AI记忆增强系统</p>
                 </div>
             </div>
