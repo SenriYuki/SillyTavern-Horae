@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.7.1
+ * 版本: 1.7.2
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -20,7 +20,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.7.1';
+const VERSION = '1.7.2';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -137,6 +137,11 @@ const DEFAULT_SETTINGS = {
     vectorApiKey: '',                  // API 密钥
     vectorApiModel: '',                // 远程 embedding 模型名称
     vectorPureMode: false,             // 纯向量模式（强模型优化，关闭关键词启发式）
+    vectorRerankEnabled: false,        // 启用 Rerank 二次排序
+    vectorRerankFullText: false,       // Rerank 使用全文而非摘要（需要长上下文模型如 Qwen3-Reranker）
+    vectorRerankModel: '',             // Rerank 模型名称
+    vectorRerankUrl: '',               // Rerank API 地址（留空则复用 embedding 地址）
+    vectorRerankKey: '',               // Rerank API 密钥（留空则复用 embedding 密钥）
     vectorTopK: 5,
     vectorThreshold: 0.72,
     vectorFullTextCount: 3,
@@ -7068,6 +7073,32 @@ function initSettingsEvents() {
         saveSettings();
     });
 
+    $('#horae-setting-vector-rerank-enabled').on('change', function() {
+        settings.vectorRerankEnabled = this.checked;
+        saveSettings();
+        $('#horae-vector-rerank-options').toggle(this.checked);
+    });
+
+    $('#horae-setting-vector-rerank-fulltext').on('change', function() {
+        settings.vectorRerankFullText = this.checked;
+        saveSettings();
+    });
+
+    $('#horae-setting-vector-rerank-model').on('change', function() {
+        settings.vectorRerankModel = this.value.trim();
+        saveSettings();
+    });
+
+    $('#horae-setting-vector-rerank-url').on('change', function() {
+        settings.vectorRerankUrl = this.value.trim();
+        saveSettings();
+    });
+
+    $('#horae-setting-vector-rerank-key').on('change', function() {
+        settings.vectorRerankKey = this.value.trim();
+        saveSettings();
+    });
+
     $('#horae-setting-vector-topk').on('change', function() {
         settings.vectorTopK = parseInt(this.value) || 5;
         saveSettings();
@@ -7202,6 +7233,12 @@ function syncSettingsToUI() {
     $('#horae-setting-vector-api-key').val(settings.vectorApiKey || '');
     $('#horae-setting-vector-api-model').val(settings.vectorApiModel || '');
     $('#horae-setting-vector-pure-mode').prop('checked', !!settings.vectorPureMode);
+    $('#horae-setting-vector-rerank-enabled').prop('checked', !!settings.vectorRerankEnabled);
+    $('#horae-vector-rerank-options').toggle(!!settings.vectorRerankEnabled);
+    $('#horae-setting-vector-rerank-fulltext').prop('checked', !!settings.vectorRerankFullText);
+    $('#horae-setting-vector-rerank-model').val(settings.vectorRerankModel || '');
+    $('#horae-setting-vector-rerank-url').val(settings.vectorRerankUrl || '');
+    $('#horae-setting-vector-rerank-key').val(settings.vectorRerankKey || '');
     $('#horae-setting-vector-topk').val(settings.vectorTopK || 5);
     $('#horae-setting-vector-threshold').val(settings.vectorThreshold || 0.72);
     $('#horae-setting-vector-fulltext-count').val(settings.vectorFullTextCount ?? 3);

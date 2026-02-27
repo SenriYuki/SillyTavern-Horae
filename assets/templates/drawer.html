@@ -10,7 +10,7 @@
                 <i class="fa-regular fa-clock"></i>
                 Horae 时光记忆
             </div>
-            <span class="horae-version">v1.7.1</span>
+            <span class="horae-version">v1.7.2</span>
         </div>
         
         <!-- 标签页导航 -->
@@ -631,7 +631,7 @@
                         <span class="horae-setting-hint" style="margin-bottom: 12px;">
                             <i class="fa-solid fa-circle-info"></i>
                             对 Horae 标签数据做向量检索，自动召回相关历史片段注入给 AI。<br>
-                            <strong>本地模式：</strong>下载约 25MB 量化模型到浏览器缓存，占用 50-80MB 内存，⚠ 2GB 以下手机建议关闭。<br>
+                            <strong>本地模式：</strong>下载约 25MB 量化模型到浏览器缓存，占用 50-80MB 内存，⚠ 2GB 以下手机或云酒馆不建议使用。<br>
                             <strong>API 模式：</strong>使用远程 Embedding API，无需本地资源。
                         </span>
                         <div class="horae-setting-item">
@@ -674,7 +674,7 @@
                             <div id="horae-vector-api-options" style="display: none;">
                                 <span class="horae-setting-hint" style="margin-bottom: 8px; color: #e67e22;">
                                     <i class="fa-solid fa-triangle-exclamation"></i>
-                                    <strong>⚠ 只能填写 Embedding（嵌入/向量）模型！</strong><br>
+                                    <strong> 只能填写 Embedding（嵌入/向量）模型！</strong><br>
                                     不要填 LLM 聊天模型（如 gemini 3、gpt-4 等），否则会报错。<br>
                                     推荐：<code>text-embedding-v3</code>（Qwen）、<code>text-embedding-3-small</code>（OpenAI）
                                 </span>
@@ -708,8 +708,58 @@
                                         适用于高维度 API 模型（如 Qwen3-Embedding、text-embedding-3-large 等）。<br>
                                         开启后将<strong>关闭关键词扩展、事件词组匹配、高频词惩罚</strong>等辅助启发式，<br>
                                         完全依赖模型自身的语义理解能力进行召回，减少低质量噪音。<br>
-                                        ⚠ 如果你使用的是小型或低维度模型，<strong>请不要开启</strong>，否则召回质量会下降。
+                                        <i class="fa-solid fa-triangle-exclamation"></i>
+                                         如果你使用的是小型或低维度模型，<strong>请不要开启</strong>，否则召回质量会下降。
                                     </span>
+                                </div>
+                                <div class="horae-setting-item" style="margin-top: 8px;">
+                                    <label>
+                                        <input type="checkbox" id="horae-setting-vector-rerank-enabled">
+                                        启用 Rerank 二次排序
+                                    </label>
+                                    <span class="horae-setting-hint" style="margin-top: 4px;">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        向量召回后，再用 Rerank 模型对候选结果做精细排序，显著提升召回精度，<br>
+                                        把真正相关的排到前面，不太相关的压下去，让 AI 收到的记忆更准确。<br>
+                                        需要额外配置一个 Rerank 模型的 API（和 Embedding 模型不同），<br>
+                                        推荐模型：<code>Qwen3-Reranker</code>、<code>bge-reranker-v2-m3</code>、<code>bce-reranker</code>
+                                    </span>
+                                </div>
+                                <div id="horae-vector-rerank-options" style="display: none;">
+                                    <div class="horae-setting-item">
+                                        <label>
+                                            Rerank API 地址（选填）
+                                            <input type="text" id="horae-setting-vector-rerank-url" placeholder="留空则复用 Embedding API 地址">
+                                        </label>
+                                    </div>
+                                    <div class="horae-setting-item">
+                                        <label>
+                                            Rerank API 密钥（选填）
+                                            <input type="password" id="horae-setting-vector-rerank-key" placeholder="留空则复用 Embedding API 密钥">
+                                        </label>
+                                    </div>
+                                    <div class="horae-setting-item">
+                                        <label>
+                                            Rerank 模型名称
+                                            <input type="text" id="horae-setting-vector-rerank-model" placeholder="gte-rerank">
+                                        </label>
+                                        <span class="horae-setting-sub-hint">Qwen: gte-rerank / gte-rerank-v2<br>Jina: jina-reranker-v2-base-multilingual</span>
+                                    </div>
+                                    <div class="horae-setting-item" style="margin-top: 4px;">
+                                        <label>
+                                            <input type="checkbox" id="horae-setting-vector-rerank-fulltext">
+                                            Rerank 全文精排
+                                        </label>
+                                        <span class="horae-setting-hint" style="margin-top: 4px; color: #e6a23c;">
+                                            <i class="fa-solid fa-triangle-exclamation"></i>
+                                            默认 Rerank 使用摘要进行排序。开启后将使用<strong>原始消息全文</strong>进行精排，<br>
+                                            可以捕捉到摘要遗漏的细节，但对模型的上下文长度要求很高。<br>
+                                            <i class="fa-solid fa-triangle-exclamation"></i>
+                                            <strong> 仅适用于长上下文 Rerank 模型</strong>（如 Qwen3-Reranker 系列，支持 32K）。<br>
+                                            bge-reranker-v2-m3（≤1024 有效）和 bce-reranker（≤512）等短上下文模型<br>
+                                            <strong>请勿开启</strong>，全文会被截断，效果反而更差。
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                             <div class="horae-setting-item">
@@ -935,7 +985,7 @@
                 </div>
                 
                 <div class="horae-about">
-                    <p>Horae v1.7.1 | 作者: SenriYuki</p>
+                    <p>Horae v1.7.2 | 作者: SenriYuki</p>
                     <p>基于时间锚点的AI记忆增强系统</p>
                 </div>
             </div>

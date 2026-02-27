@@ -594,6 +594,46 @@ export class VectorManager {
         }
 
         results.sort((a, b) => b.similarity - a.similarity);
+
+        // Rerank：对候选结果做二次精排
+        if (settings.vectorRerankEnabled && settings.vectorRerankModel && results.length > 1) {
+            const rerankCandidates = results.slice(0, topK * 3);
+            const rerankQuery = userQuery || this.buildStateQuery(state, null);
+            if (rerankQuery) {
+                try {
+                    const useFullText = !!settings.vectorRerankFullText;
+                    const rerankDocs = rerankCandidates.map(r => {
+                        if (useFullText) {
+                            const fullText = this._extractCleanText(chat[r.messageIndex]?.mes);
+                            return fullText || r.document;
+                        }
+                        return r.document;
+                    });
+                    console.log(`[Horae Vector] Rerank 模式: ${useFullText ? '全文精排' : '摘要排序'}`);
+
+                    const reranked = await this._rerank(
+                        rerankQuery,
+                        rerankDocs,
+                        topK,
+                        settings
+                    );
+                    if (reranked && reranked.length > 0) {
+                        console.log(`[Horae Vector] Rerank 完成: ${reranked.length} 条`);
+                        results = reranked.map(rr => {
+                            const original = rerankCandidates[rr.index];
+                            return {
+                                ...original,
+                                similarity: rr.relevance_score,
+                                source: original.source + (useFullText ? '+rerank-full' : '+rerank'),
+                            };
+                        });
+                    }
+                } catch (err) {
+                    console.warn('[Horae Vector] Rerank 失败，使用原始排序:', err.message);
+                }
+            }
+        }
+
         results = results.slice(0, topK);
 
         console.log(`[Horae Vector] === 最终合并: ${results.length} 条 ===`);
@@ -1335,6 +1375,51 @@ export class VectorManager {
             console.error('[Horae Vector] API embedding 失败:', err);
             throw err;
         }
+    }
+
+    /**
+     * Rerank API 调用（Cohere/Jina/Qwen 兼容格式）
+     * @returns {Array<{index: number, relevance_score: number}>}
+     */
+    async _rerank(query, documents, topN, settings) {
+        const baseUrl = (settings.vectorRerankUrl || settings.vectorApiUrl || '').replace(/\/+$/, '');
+        const apiKey = settings.vectorRerankKey || settings.vectorApiKey || '';
+        const model = settings.vectorRerankModel || '';
+
+        if (!baseUrl || !model) throw new Error('Rerank API 地址或模型未配置');
+
+        const endpoint = `${baseUrl}/rerank`;
+        console.log(`[Horae Vector] Rerank 请求: ${documents.length} 条候选 → ${endpoint}`);
+
+        const resp = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+                model,
+                query,
+                documents,
+                top_n: topN,
+            }),
+        });
+
+        if (!resp.ok) {
+            const errText = await resp.text().catch(() => '');
+            throw new Error(`Rerank API ${resp.status}: ${errText.slice(0, 200)}`);
+        }
+
+        const json = await resp.json();
+        const results = json.results || json.data;
+        if (!Array.isArray(results)) {
+            throw new Error('Rerank API 返回格式异常：缺少 results 数组');
+        }
+
+        return results.map(r => ({
+            index: r.index,
+            relevance_score: r.relevance_score ?? r.score ?? 0,
+        })).sort((a, b) => b.relevance_score - a.relevance_score);
     }
 
     // ========================================
