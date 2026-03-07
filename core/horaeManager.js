@@ -84,7 +84,7 @@ const COUNTING_CLASSIFIERS = '个把条块张根口份枚只颗支件套双对�
 // 物品ID：3位数字左补零，如 001, 002, ...
 function padItemId(id) { return String(id).padStart(3, '0'); }
 
-function getItemBaseName(name) {
+export function getItemBaseName(name) {
     return name
         .replace(/[\(（][\d][\d\.\/]*[a-zA-Z\u4e00-\u9fff]*[\)）]$/, '')  // 数字+任意单位
         .replace(new RegExp(`[\\(（][${COUNTING_CLASSIFIERS}][\\)）]$`), '')  // 纯个体量词（AI错误格式）
@@ -217,8 +217,11 @@ class HoraeManager {
                         // 只合并实际存在的字段
                         const mergedItem = { ...existingItem };
                         if (newInfo.icon) mergedItem.icon = newInfo.icon;
-                        // importance：只升不降（空 < ! < !!）
-                        mergedItem.importance = newInfo.importance || existingItem.importance || '';
+                        // importance：只升不降（空 < ! < !!），仅在 AI 累积时生效
+                        const _impRank = { '': 0, '!': 1, '!!': 2 };
+                        const _newR = _impRank[newInfo.importance] ?? 0;
+                        const _oldR = _impRank[existingItem.importance] ?? 0;
+                        mergedItem.importance = _newR >= _oldR ? (newInfo.importance || '') : (existingItem.importance || '');
                         if (newInfo.holder !== undefined) mergedItem.holder = newInfo.holder;
                         if (newInfo.location !== undefined) mergedItem.location = newInfo.location;
                         // 非空描述才覆盖
@@ -671,7 +674,7 @@ class HoraeManager {
             }
         }
         
-        // RPG 状态（仅启用时注入，按位置快照）
+        // RPG 状态（仅启用时注入，按在场角色过滤）
         if (this.settings?.rpgMode) {
             const rpg = this.getRpgStateAt(skipLast);
             const sendBars = this.settings?.sendRpgBars !== false;
@@ -682,9 +685,31 @@ class HoraeManager {
             const _barNames = {};
             for (const b of _barCfg) _barNames[b.key] = b.name;
 
+            // 按在场角色过滤 RPG 数据（无场景数据时发送全部）
+            const presentChars = state.scene.characters_present || [];
+            const userName = this.context?.name1 || '';
+            const allRpgNames = new Set([
+                ...Object.keys(rpg.bars), ...Object.keys(rpg.status || {}),
+                ...Object.keys(rpg.skills), ...Object.keys(rpg.attributes || {})
+            ]);
+            const rpgAllowed = new Set();
+            if (presentChars.length > 0) {
+                for (const p of presentChars) {
+                    const n = p.trim();
+                    if (!n) continue;
+                    if (allRpgNames.has(n)) { rpgAllowed.add(n); continue; }
+                    if (n === userName && allRpgNames.has(userName)) { rpgAllowed.add(userName); continue; }
+                    for (const rn of allRpgNames) {
+                        if (rn.includes(n) || n.includes(rn)) { rpgAllowed.add(rn); break; }
+                    }
+                }
+            }
+            const filterRpg = rpgAllowed.size > 0;
+
             if (sendBars && Object.keys(rpg.bars).length > 0) {
                 lines.push('\n[RPG状态]');
                 for (const [name, bars] of Object.entries(rpg.bars)) {
+                    if (filterRpg && !rpgAllowed.has(name)) continue;
                     const npc = state.npcs[name];
                     const pre = npc?._id ? `N${npc._id} ` : '';
                     const parts = [];
@@ -696,9 +721,9 @@ class HoraeManager {
                     if (sts?.length > 0) parts.push(`状态:${sts.join('/')}`);
                     if (parts.length > 0) lines.push(`${pre}${name}: ${parts.join(' | ')}`);
                 }
-                // 只有状态无属性条的角色
                 for (const [name, effects] of Object.entries(rpg.status || {})) {
                     if (rpg.bars[name] || effects.length === 0) continue;
+                    if (filterRpg && !rpgAllowed.has(name)) continue;
                     const npc = state.npcs[name];
                     const pre = npc?._id ? `N${npc._id} ` : '';
                     lines.push(`${pre}${name}: 状态:${effects.join('/')}`);
@@ -706,11 +731,13 @@ class HoraeManager {
             }
 
             if (sendSkills && Object.keys(rpg.skills).length > 0) {
-                const hasAny = Object.values(rpg.skills).some(arr => arr?.length > 0);
+                const hasAny = Object.entries(rpg.skills).some(([n, arr]) =>
+                    arr?.length > 0 && (!filterRpg || rpgAllowed.has(n)));
                 if (hasAny) {
                     lines.push('\n[技能列表]');
                     for (const [name, skills] of Object.entries(rpg.skills)) {
                         if (!skills?.length) continue;
+                        if (filterRpg && !rpgAllowed.has(name)) continue;
                         const npc = state.npcs[name];
                         const pre = npc?._id ? `N${npc._id} ` : '';
                         lines.push(`${pre}${name}:`);
@@ -728,6 +755,7 @@ class HoraeManager {
             if (sendAttrs && attrCfg.length > 0 && Object.keys(rpg.attributes || {}).length > 0) {
                 lines.push('\n[多维属性]');
                 for (const [name, vals] of Object.entries(rpg.attributes)) {
+                    if (filterRpg && !rpgAllowed.has(name)) continue;
                     const npc = state.npcs[name];
                     const pre = npc?._id ? `N${npc._id} ` : '';
                     const parts = attrCfg.map(a => `${a.name}${vals[a.key] ?? '?'}`);

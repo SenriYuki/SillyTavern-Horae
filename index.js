@@ -3,14 +3,14 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.8.6
+ * 版本: 1.8.7
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
 import { getSlideToggleOptions, saveSettingsDebounced, eventSource, event_types } from '/script.js';
 import { slideToggle } from '/lib.js';
 
-import { horaeManager, createEmptyMeta } from './core/horaeManager.js';
+import { horaeManager, createEmptyMeta, getItemBaseName } from './core/horaeManager.js';
 import { vectorManager } from './core/vectorManager.js';
 import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTime, generateTimeReference, getCurrentSystemTime, formatStoryDate, formatFullDateTime, parseStoryDate } from './utils/timeUtils.js';
 
@@ -20,7 +20,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.8.6';
+const VERSION = '1.8.7';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -2824,20 +2824,23 @@ function openItemEditModal(itemName) {
             location: document.getElementById('edit-item-location').value
         };
         
-        // 更新所有消息中的该物品
+        // 更新所有消息中的该物品（含数量后缀变体，如 sword(3)）
         const chat = horaeManager.getChat();
         const nameChanged = newName !== itemName;
+        const editBaseName = getItemBaseName(itemName).toLowerCase();
         
         for (let i = 0; i < chat.length; i++) {
             const meta = chat[i].horae_meta;
-            if (meta?.items?.[itemName]) {
-                if (nameChanged) {
-                    meta.items[newName] = { ...meta.items[itemName], ...newData };
-                    delete meta.items[itemName];
-                } else {
-                    Object.assign(meta.items[itemName], newData);
-                }
-                injectHoraeTagToMessage(i, meta);
+            if (!meta?.items) continue;
+            const matchKey = Object.keys(meta.items).find(k =>
+                k === itemName || getItemBaseName(k).toLowerCase() === editBaseName
+            );
+            if (!matchKey) continue;
+            if (nameChanged) {
+                meta.items[newName] = { ...meta.items[matchKey], ...newData };
+                delete meta.items[matchKey];
+            } else {
+                Object.assign(meta.items[matchKey], newData);
             }
         }
         
@@ -2921,19 +2924,21 @@ function openAffectionEditModal(charName) {
             }
         }
         
+        let affectedIdx;
         if (lastMessageWithAffection >= 0) {
             chat[lastMessageWithAffection].horae_meta.affection[charName] = { 
                 type: 'absolute', 
                 value: newValue 
             };
+            affectedIdx = lastMessageWithAffection;
         } else {
-            const lastMeta = chat[chat.length - 1]?.horae_meta;
+            affectedIdx = chat.length - 1;
+            const lastMeta = chat[affectedIdx]?.horae_meta;
             if (lastMeta) {
                 if (!lastMeta.affection) lastMeta.affection = {};
                 lastMeta.affection[charName] = { type: 'absolute', value: newValue };
             }
         }
-        
         getContext().saveChat();
         closeEditModal();
         updateCharactersDisplay();
@@ -2993,7 +2998,7 @@ function _cascadeDeleteNpcs(names) {
         }
         if (meta.relationships?.length) {
             const before = meta.relationships.length;
-            meta.relationships = meta.relationships.filter(r => !nameSet.has(r.source) && !nameSet.has(r.target));
+            meta.relationships = meta.relationships.filter(r => !nameSet.has(r.from) && !nameSet.has(r.to));
             if (meta.relationships.length !== before) changed = true;
         }
         if (changed && i > 0) injectHoraeTagToMessage(i, meta);
@@ -3381,17 +3386,12 @@ function openEventEditModal(messageId, eventIndex = 0) {
             const chat = horaeManager.getChat();
             const chatMeta = chat[messageId]?.horae_meta;
             if (chatMeta) {
-                // 确保events数组存在
                 if (!chatMeta.events) {
                     chatMeta.events = chatMeta.event ? [chatMeta.event] : [];
                 }
-                
-                // 删除指定索引的事件
                 if (chatMeta.events.length > eventIndex) {
                     chatMeta.events.splice(eventIndex, 1);
                 }
-                
-                // 清除旧格式
                 delete chatMeta.event;
                 
                 getContext().saveChat();
@@ -4785,32 +4785,59 @@ function buildCharacterOptions() {
     return html;
 }
 
-/** 在 Canvas 上绘制雷达图（自适应 DPI） */
+/** 在 Canvas 上绘制雷达图（自适应 DPI + 动态尺寸 + 跟随主题色） */
 function drawRadarChart(canvas, values, config, maxVal = 100) {
     const n = config.length;
     if (n < 3) return;
     const dpr = window.devicePixelRatio || 1;
-    const cssW = 260, cssH = 260;
+
+    // 从 CSS 变量读取颜色，自动跟随美化主题
+    const themeRoot = canvas.closest('#horae_drawer') || canvas.closest('.horae-rpg-char-detail-body') || document.getElementById('horae_drawer') || document.body;
+    const cs = getComputedStyle(themeRoot);
+    const radarHex = cs.getPropertyValue('--horae-radar-color').trim() || cs.getPropertyValue('--horae-primary').trim() || '#7c3aed';
+    const labelColor = cs.getPropertyValue('--horae-radar-label').trim() || cs.getPropertyValue('--horae-text').trim() || '#e2e8f0';
+    const gridColor = cs.getPropertyValue('--horae-border').trim() || 'rgba(255,255,255,0.1)';
+    const rr = parseInt(radarHex.slice(1, 3), 16) || 124;
+    const rg = parseInt(radarHex.slice(3, 5), 16) || 58;
+    const rb = parseInt(radarHex.slice(5, 7), 16) || 237;
+
+    // 根据最长属性名动态选字号
+    const maxNameLen = Math.max(...config.map(c => c.name.length));
+    const fontSize = maxNameLen > 3 ? 11 : 12;
+
+    const tmpCtx = canvas.getContext('2d');
+    tmpCtx.font = `${fontSize}px sans-serif`;
+    let maxLabelW = 0;
+    for (const c of config) {
+        const w = tmpCtx.measureText(`${c.name} ${maxVal}`).width;
+        if (w > maxLabelW) maxLabelW = w;
+    }
+
+    // 动态布局：保证侧面标签不超出画布
+    const labelGap = 18;
+    const labelMargin = 4;
+    const pad = Math.max(38, Math.ceil(maxLabelW) + labelGap + labelMargin);
+    const r = 92;
+    const cssW = Math.min(400, 2 * (r + pad));
+    const cssH = cssW;
+    const cx = cssW / 2, cy = cssH / 2;
+    const actualR = Math.min(r, cx - pad);
+
     canvas.style.width = cssW + 'px';
-    canvas.style.height = cssH + 'px';
     canvas.width = cssW * dpr;
     canvas.height = cssH * dpr;
     const ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
-
-    const cx = cssW / 2, cy = cssH / 2;
-    const pad = 38;
-    const r = Math.min(cx, cy) - pad;
     ctx.clearRect(0, 0, cssW, cssH);
 
     const angle = i => -Math.PI / 2 + (2 * Math.PI * i) / n;
 
     // 底层网格
-    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.strokeStyle = gridColor;
     ctx.lineWidth = 1;
     for (let lv = 1; lv <= 4; lv++) {
         ctx.beginPath();
-        const lr = (r * lv) / 4;
+        const lr = (actualR * lv) / 4;
         for (let i = 0; i <= n; i++) {
             const a = angle(i % n);
             const x = cx + lr * Math.cos(a), y = cy + lr * Math.sin(a);
@@ -4823,7 +4850,7 @@ function drawRadarChart(canvas, values, config, maxVal = 100) {
         const a = angle(i);
         ctx.beginPath();
         ctx.moveTo(cx, cy);
-        ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+        ctx.lineTo(cx + actualR * Math.cos(a), cy + actualR * Math.sin(a));
         ctx.stroke();
     }
     // 数据区
@@ -4831,31 +4858,30 @@ function drawRadarChart(canvas, values, config, maxVal = 100) {
     for (let i = 0; i <= n; i++) {
         const a = angle(i % n);
         const v = Math.min(maxVal, values[config[i % n].key] || 0);
-        const dr = (v / maxVal) * r;
+        const dr = (v / maxVal) * actualR;
         const x = cx + dr * Math.cos(a), y = cy + dr * Math.sin(a);
         i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     }
-    ctx.fillStyle = 'rgba(124, 58, 237, 0.25)';
+    ctx.fillStyle = `rgba(${rr},${rg},${rb},0.25)`;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(124, 58, 237, 0.8)';
+    ctx.strokeStyle = `rgba(${rr},${rg},${rb},0.8)`;
     ctx.lineWidth = 2;
     ctx.stroke();
     // 顶点圆点 + 标签
-    ctx.font = '12px sans-serif';
+    ctx.font = `${fontSize}px sans-serif`;
     ctx.textAlign = 'center';
     for (let i = 0; i < n; i++) {
         const a = angle(i);
         const v = Math.min(maxVal, values[config[i].key] || 0);
-        const dr = (v / maxVal) * r;
+        const dr = (v / maxVal) * actualR;
         ctx.beginPath();
         ctx.arc(cx + dr * Math.cos(a), cy + dr * Math.sin(a), 3, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(124, 58, 237, 1)';
+        ctx.fillStyle = `rgba(${rr},${rg},${rb},1)`;
         ctx.fill();
-        // 标签偏移量随维度自适应
-        const labelR = r + 22;
+        const labelR = actualR + labelGap;
         const lx = cx + labelR * Math.cos(a);
         const ly = cy + labelR * Math.sin(a);
-        ctx.fillStyle = '#e2e8f0';
+        ctx.fillStyle = labelColor;
         const cosA = Math.cos(a);
         ctx.textAlign = cosA < -0.1 ? 'right' : cosA > 0.1 ? 'left' : 'center';
         ctx.textBaseline = ly < cy - 5 ? 'bottom' : ly > cy + 5 ? 'top' : 'middle';
@@ -4972,7 +4998,7 @@ function updateRpgDisplay() {
                     barsHtml += `<div class="horae-rpg-attr-header"><span>属性</span><button class="horae-rpg-charattr-edit" data-char="${escapeHtml(name)}" title="编辑属性"><i class="fa-solid fa-pen-to-square"></i></button></div>`;
                     if (hasAttrs) {
                         if (viewMode === 'radar') {
-                            barsHtml += `<canvas class="horae-rpg-radar" data-char="${escapeHtml(name)}" width="260" height="260"></canvas>`;
+                            barsHtml += `<canvas class="horae-rpg-radar" data-char="${escapeHtml(name)}"></canvas>`;
                         } else {
                             barsHtml += '<div class="horae-rpg-attr-text">';
                             for (const a of attrCfg) {
@@ -6256,6 +6282,8 @@ function openThemeDesigner() {
         rpgOpacity: savedDesigner?.rpgOpacity ?? 85,
         diceColor: savedDesigner?.diceColor ?? '#1a1a2e',
         diceOpacity: savedDesigner?.diceOpacity ?? 15,
+        radarColor: savedDesigner?.radarColor ?? '',
+        radarLabel: savedDesigner?.radarLabel ?? '',
         overrides: {}
     };
 
@@ -6379,6 +6407,31 @@ function openThemeDesigner() {
                 </div>
             </div>
 
+            <div class="htd-section">
+                <div class="htd-section-title htd-toggle" id="htd-radar-t">
+                    <i class="fa-solid fa-chart-simple"></i> 雷达图
+                    <i class="fa-solid fa-chevron-down htd-arrow"></i>
+                </div>
+                <div id="htd-radar-section" style="display:none;">
+                    <div class="htd-field">
+                        <span class="htd-label">数据色 <em style="opacity:.5">(空=跟随主题色)</em></span>
+                        <div class="htd-color-row">
+                            <input type="color" id="htd-radar-color" value="${st.radarColor || priStr}" class="htd-cpick">
+                            <span class="htd-hex" id="htd-radar-color-hex">${st.radarColor || '跟随主题'}</span>
+                            <button class="horae-btn" id="htd-radar-color-clear" style="font-size:10px;padding:2px 8px;">清除</button>
+                        </div>
+                    </div>
+                    <div class="htd-field">
+                        <span class="htd-label">标签色 <em style="opacity:.5">(空=跟随文字色)</em></span>
+                        <div class="htd-color-row">
+                            <input type="color" id="htd-radar-label" value="${st.radarLabel || '#e2e8f0'}" class="htd-cpick">
+                            <span class="htd-hex" id="htd-radar-label-hex">${st.radarLabel || '跟随文字'}</span>
+                            <button class="horae-btn" id="htd-radar-label-clear" style="font-size:10px;padding:2px 8px;">清除</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="htd-section htd-save-sec">
                 <div class="htd-field"><span class="htd-label">名称</span><input type="text" id="htd-name" class="htd-input" placeholder="我的美化" value="${escapeHtml(savedName)}"></div>
                 <div class="htd-field"><span class="htd-label">作者</span><input type="text" id="htd-author" class="htd-input" placeholder="匿名" value="${escapeHtml(savedAuthor)}"></div>
@@ -6416,6 +6469,9 @@ function openThemeDesigner() {
             const da = (1 - (st.diceOpacity ?? 15) / 100).toFixed(2);
             vars['--horae-dice-bg'] = `rgba(${dc.r},${dc.g},${dc.b},${da})`;
         }
+        // 雷达图颜色变量
+        if (st.radarColor) vars['--horae-radar-color'] = st.radarColor;
+        if (st.radarLabel) vars['--horae-radar-label'] = st.radarLabel;
 
         let previewEl = document.getElementById('horae-designer-preview');
         if (!previewEl) { previewEl = document.createElement('style'); previewEl.id = 'horae-designer-preview'; document.head.appendChild(previewEl); }
@@ -6604,6 +6660,32 @@ function openThemeDesigner() {
         update();
     }, { signal: sig });
 
+    // ---- 雷达图 ----
+    modal.querySelector('#htd-radar-t').addEventListener('click', () => {
+        const sec = modal.querySelector('#htd-radar-section');
+        sec.style.display = sec.style.display === 'none' ? 'block' : 'none';
+    }, { signal: sig });
+    modal.querySelector('#htd-radar-color').addEventListener('input', function () {
+        st.radarColor = this.value;
+        modal.querySelector('#htd-radar-color-hex').textContent = this.value;
+        update();
+    }, { signal: sig });
+    modal.querySelector('#htd-radar-color-clear').addEventListener('click', () => {
+        st.radarColor = '';
+        modal.querySelector('#htd-radar-color-hex').textContent = '跟随主题';
+        update();
+    }, { signal: sig });
+    modal.querySelector('#htd-radar-label').addEventListener('input', function () {
+        st.radarLabel = this.value;
+        modal.querySelector('#htd-radar-label-hex').textContent = this.value;
+        update();
+    }, { signal: sig });
+    modal.querySelector('#htd-radar-label-clear').addEventListener('click', () => {
+        st.radarLabel = '';
+        modal.querySelector('#htd-radar-label-hex').textContent = '跟随文字';
+        update();
+    }, { signal: sig });
+
     // ---- Close ----
     function closeDesigner() {
         abortCtrl.abort();
@@ -6631,12 +6713,14 @@ function openThemeDesigner() {
             const da = (1 - (st.diceOpacity ?? 15) / 100).toFixed(2);
             vars['--horae-dice-bg'] = `rgba(${dc.r},${dc.g},${dc.b},${da})`;
         }
+        if (st.radarColor) vars['--horae-radar-color'] = st.radarColor;
+        if (st.radarLabel) vars['--horae-radar-label'] = st.radarLabel;
         const theme = {
             name, author, version: '1.0', variables: vars,
             images: { ...st.images }, imageOpacity: { ...st.imgOp },
             drawerBg: st.drawerBg,
             isLight: st.bright > 50,
-            _designerState: { hue: st.hue, sat: st.sat, colorLight: st.colorLight, bright: st.bright, accent: st.accent, rpgColor: st.rpgColor, rpgOpacity: st.rpgOpacity, diceColor: st.diceColor, diceOpacity: st.diceOpacity },
+            _designerState: { hue: st.hue, sat: st.sat, colorLight: st.colorLight, bright: st.bright, accent: st.accent, rpgColor: st.rpgColor, rpgOpacity: st.rpgOpacity, diceColor: st.diceColor, diceOpacity: st.diceOpacity, radarColor: st.radarColor, radarLabel: st.radarLabel },
             css: _tdBuildImageCSS(st.images, st.imgOp, vars['--horae-bg'], st.drawerBg)
         };
         if (!settings.customThemes) settings.customThemes = [];
@@ -6668,12 +6752,14 @@ function openThemeDesigner() {
             const da = (1 - (st.diceOpacity ?? 15) / 100).toFixed(2);
             vars['--horae-dice-bg'] = `rgba(${dc.r},${dc.g},${dc.b},${da})`;
         }
+        if (st.radarColor) vars['--horae-radar-color'] = st.radarColor;
+        if (st.radarLabel) vars['--horae-radar-label'] = st.radarLabel;
         const theme = {
             name, author, version: '1.0', variables: vars,
             images: { ...st.images }, imageOpacity: { ...st.imgOp },
             drawerBg: st.drawerBg,
             isLight: st.bright > 50,
-            _designerState: { hue: st.hue, sat: st.sat, colorLight: st.colorLight, bright: st.bright, accent: st.accent, rpgColor: st.rpgColor, rpgOpacity: st.rpgOpacity, diceColor: st.diceColor, diceOpacity: st.diceOpacity },
+            _designerState: { hue: st.hue, sat: st.sat, colorLight: st.colorLight, bright: st.bright, accent: st.accent, rpgColor: st.rpgColor, rpgOpacity: st.rpgOpacity, diceColor: st.diceColor, diceOpacity: st.diceOpacity, radarColor: st.radarColor, radarLabel: st.radarLabel },
             css: _tdBuildImageCSS(st.images, st.imgOp, vars['--horae-bg'], st.drawerBg)
         };
         const blob = new Blob([JSON.stringify(theme, null, 2)], { type: 'application/json' });
@@ -6689,6 +6775,7 @@ function openThemeDesigner() {
         st.overrides = {}; st.drawerBg = '';
         st.rpgColor = '#000000'; st.rpgOpacity = 85;
         st.diceColor = '#1a1a2e'; st.diceOpacity = 15;
+        st.radarColor = ''; st.radarLabel = '';
         st.images = { drawer: '', header: '', body: '', panel: '' };
         st.imgOp = { drawer: 30, header: 50, body: 30, panel: 30 };
         hueInd.style.left = `${(265 / 360) * 100}%`;
@@ -6707,6 +6794,8 @@ function openThemeDesigner() {
         modal.querySelector('#htd-dice-color-hex').textContent = '#1a1a2e';
         modal.querySelector('#htd-dice-op').value = 15;
         modal.querySelector('#htd-dice-opv').textContent = '15';
+        modal.querySelector('#htd-radar-color-hex').textContent = '跟随主题';
+        modal.querySelector('#htd-radar-label-hex').textContent = '跟随文字';
         ['drawer', 'header', 'body', 'panel'].forEach(k => {
             const u = modal.querySelector(`#htd-img-${k}`); if (u) u.value = '';
             const defOp = k === 'header' ? 50 : 30;
@@ -9918,8 +10007,7 @@ async function checkAutoSummary() {
         showToast(`自动摘要失败: ${err.message || err}`, 'error');
     } finally {
         _summaryInProgress = false;
-        // 权威存盘：补偿 onMessageReceived 因竞态保护而跳过的 save，
-        // 并做二次 enforceHiddenState 以防万一
+        // 权威存盘：补偿 onMessageReceived 因竞态保护而跳过的 save
         try {
             await enforceHiddenState();
             await getContext().saveChat();
@@ -11192,6 +11280,44 @@ async function onPromptReady(eventData) {
 }
 
 /**
+ * 分支/聊天切换后重建全局数据，清理孤立摘要
+ */
+function _rebuildGlobalDataForCurrentChat() {
+    const chat = horaeManager.getChat();
+    if (!chat?.length) return;
+    
+    horaeManager.rebuildRelationships();
+    horaeManager.rebuildLocationMemory();
+    horaeManager.rebuildRpgData();
+    
+    // 清理孤立摘要：range 超出当前聊天长度的条目
+    const sums = chat[0]?.horae_meta?.autoSummaries;
+    if (sums?.length) {
+        const chatLen = chat.length;
+        const orphaned = [];
+        for (let i = sums.length - 1; i >= 0; i--) {
+            const s = sums[i];
+            if (s.range && s.range[0] >= chatLen) {
+                orphaned.push(sums.splice(i, 1)[0]);
+            }
+        }
+        if (orphaned.length > 0) {
+            // 清理孤立摘要在消息上留下的 _compressedBy 标记
+            for (const s of orphaned) {
+                for (let j = 0; j < chatLen; j++) {
+                    const evts = chat[j]?.horae_meta?.events;
+                    if (!evts) continue;
+                    for (const e of evts) {
+                        if (e._compressedBy === s.id) delete e._compressedBy;
+                    }
+                }
+            }
+            console.log(`[Horae] 清理了 ${orphaned.length} 条孤立摘要`);
+        }
+    }
+}
+
+/**
  * 聊天切换时触发
  */
 async function onChatChanged() {
@@ -11199,6 +11325,9 @@ async function onChatChanged() {
     
     clearTableHistory();
     horaeManager.init(getContext(), settings);
+    
+    // 分支/聊天切换时重建全局数据，防止旧分支数据残留
+    _rebuildGlobalDataForCurrentChat();
     
     refreshAllDisplays();
     renderCustomTablesList();

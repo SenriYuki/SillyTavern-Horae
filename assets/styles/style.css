@@ -4552,6 +4552,8 @@ body .horae-context-menu {
     display: block;
     margin: 0 auto 8px;
     max-width: 100%;
+    height: auto;
+    aspect-ratio: 1;
 }
 
 /* ========== RPG 角色块（属性条+折叠卡一体） ========== */
