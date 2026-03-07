@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.8.5
+ * 版本: 1.8.6
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -20,7 +20,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.8.5';
+const VERSION = '1.8.6';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -5350,7 +5350,7 @@ function _restoreCompressedFlags(meta, saved) {
  * 校验并修复摘要范围内消息的 is_hidden 和 _compressedBy 状态，
  * 防止 SillyTavern 重渲染或 saveChat 竞态导致隐藏/压缩标记丢失
  */
-function enforceHiddenState() {
+async function enforceHiddenState() {
     const chat = horaeManager.getChat();
     if (!chat?.length) return;
     const sums = chat[0]?.horae_meta?.autoSummaries;
@@ -5362,14 +5362,12 @@ function enforceHiddenState() {
         const summaryId = s.id;
         for (let i = s.range[0]; i <= s.range[1]; i++) {
             if (i === 0 || !chat[i]) continue;
-            // 修复 is_hidden
             if (!chat[i].is_hidden) {
                 chat[i].is_hidden = true;
                 fixed++;
                 const $el = $(`.mes[mesid="${i}"]`);
                 if ($el.length) $el.attr('is_hidden', 'true');
             }
-            // 修复 _compressedBy
             const events = chat[i].horae_meta?.events;
             if (events) {
                 for (const evt of events) {
@@ -5383,7 +5381,7 @@ function enforceHiddenState() {
     }
     if (fixed > 0) {
         console.log(`[Horae] enforceHiddenState: 修复了 ${fixed} 处摘要状态`);
-        getContext().saveChat();
+        await getContext().saveChat();
     }
 }
 
@@ -9915,16 +9913,17 @@ async function checkAutoSummary() {
         await context.saveChat();
         updateTimelineDisplay();
         showToast(`自动摘要完成：#${msgIndices[0]}-#${msgIndices[msgIndices.length - 1]}`, 'success');
-
-        // 延迟二次校验：防止后续异步 saveChat 竞态冲掉 is_hidden
-        setTimeout(() => {
-            enforceHiddenState();
-        }, 800);
     } catch (err) {
         console.error('[Horae] 自动摘要失败:', err);
         showToast(`自动摘要失败: ${err.message || err}`, 'error');
     } finally {
         _summaryInProgress = false;
+        // 权威存盘：补偿 onMessageReceived 因竞态保护而跳过的 save，
+        // 并做二次 enforceHiddenState 以防万一
+        try {
+            await enforceHiddenState();
+            await getContext().saveChat();
+        } catch (_) {}
     }
 }
 
@@ -11033,7 +11032,10 @@ async function onMessageReceived(messageId) {
         horaeManager.rebuildRpgData();
     }
     
-    await getContext().saveChat();
+    // 摘要正在并行进行时跳过 saveChat，避免竞态覆盖 is_hidden
+    if (!_summaryInProgress) {
+        await getContext().saveChat();
+    }
     refreshAllDisplays();
     renderCustomTablesList();
     
