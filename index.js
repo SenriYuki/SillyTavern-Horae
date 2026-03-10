@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.9.0
+ * 版本: 1.9.1
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -20,7 +20,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.9.0';
+const VERSION = '1.9.1';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -2690,6 +2690,9 @@ function updateItemsDisplay() {
         const checkboxDisplay = itemsMultiSelectMode ? 'flex' : 'none';
         const description = info.description || '';
         const descHtml = description ? `<div class="horae-full-item-desc">${description}</div>` : '';
+        const isLocked = !!info._locked;
+        const lockIcon = isLocked ? 'fa-lock' : 'fa-lock-open';
+        const lockTitle = isLocked ? '已锁定（AI无法修改描述和重要程度）' : '点击锁定';
         
         return `
             <div class="horae-full-item horae-editable-item ${importanceClass} ${selectedClass}" data-item-name="${name}">
@@ -2704,6 +2707,9 @@ function updateItemsDisplay() {
                     <div class="horae-full-item-location">${positionStr}</div>
                     ${descHtml}
                 </div>
+                <button class="horae-item-lock-btn" data-item-name="${name}" title="${lockTitle}" style="opacity:${isLocked ? '1' : '0.35'}">
+                    <i class="fa-solid ${lockIcon}"></i>
+                </button>
                 <button class="horae-item-edit-btn" data-edit-type="item" data-edit-name="${name}" title="编辑">
                     <i class="fa-solid fa-pen"></i>
                 </button>
@@ -4324,6 +4330,37 @@ function bindItemsEvents() {
             if (itemsMultiSelectMode) {
                 toggleItemSelection(itemName);
             }
+        });
+    });
+
+    document.querySelectorAll('.horae-item-lock-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const name = btn.dataset.itemName;
+            if (!name) return;
+            const state = horaeManager.getLatestState();
+            const itemInfo = state.items?.[name];
+            if (!itemInfo) return;
+            const chat = horaeManager.getChat();
+            for (let i = chat.length - 1; i >= 0; i--) {
+                const meta = chat[i]?.horae_meta;
+                if (!meta?.items) continue;
+                const key = Object.keys(meta.items).find(k => k === name || k.replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u, '').trim() === name);
+                if (key) {
+                    meta.items[key]._locked = !meta.items[key]._locked;
+                    getContext().saveChat();
+                    updateItemsDisplay();
+                    showToast(meta.items[key]._locked ? `已锁定「${name}」（AI无法修改描述和重要程度）` : `已解锁「${name}」`, meta.items[key]._locked ? 'success' : 'info');
+                    return;
+                }
+            }
+            const first = chat[0];
+            if (!first.horae_meta) first.horae_meta = createEmptyMeta();
+            if (!first.horae_meta.items) first.horae_meta.items = {};
+            first.horae_meta.items[name] = { ...itemInfo, _locked: true };
+            getContext().saveChat();
+            updateItemsDisplay();
+            showToast(`已锁定「${name}」（AI无法修改描述和重要程度）`, 'success');
         });
     });
 }
@@ -10340,9 +10377,22 @@ async function batchAIScan() {
 
     const targets = [];
     let skippedEmpty = 0;
+    const isAntiParaphrase = !!settings.antiParaphraseMode;
     for (let i = 0; i < chat.length; i++) {
         const msg = chat[i];
-        if (msg.is_user) continue;
+        if (msg.is_user) {
+            if (isAntiParaphrase && i + 1 < chat.length && !chat[i + 1].is_user) {
+                const nextMsg = chat[i + 1];
+                const nextMeta = nextMsg.horae_meta;
+                if (nextMeta?.events?.length > 0) { i++; continue; }
+                if (isEmptyOrCodeLayer(nextMsg.mes) && isEmptyOrCodeLayer(msg.mes)) { i++; skippedEmpty++; continue; }
+                const combined = `[USER行动]\n${msg.mes}\n\n[AI回复]\n${nextMsg.mes}`;
+                targets.push({ index: i + 1, text: combined });
+                i++;
+            }
+            continue;
+        }
+        if (isAntiParaphrase) continue;
         if (isEmptyOrCodeLayer(msg.mes)) { skippedEmpty++; continue; }
         const meta = msg.horae_meta;
         if (meta?.events?.length > 0) continue;

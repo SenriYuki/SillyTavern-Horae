@@ -190,7 +190,17 @@ export class VectorManager {
         try {
             await this._openDB();
             const stored = await this._loadAllVectors();
+            const staleKeys = [];
             for (const item of stored) {
+                if (item.messageIndex >= chat.length) {
+                    staleKeys.push(item.messageIndex);
+                    continue;
+                }
+                const doc = this._buildDocument(chat[item.messageIndex]?.horae_meta);
+                if (doc && this._hashString(doc) !== item.hash) {
+                    staleKeys.push(item.messageIndex);
+                    continue;
+                }
                 this.vectors.set(item.messageIndex, {
                     vector: item.vector,
                     hash: item.hash,
@@ -198,6 +208,10 @@ export class VectorManager {
                 });
                 this._updateTermCounts(item.document, 1);
                 this.totalDocuments++;
+            }
+            if (staleKeys.length > 0) {
+                for (const idx of staleKeys) await this._deleteVector(idx);
+                console.log(`[Horae Vector] 清理了 ${staleKeys.length} 条过期/分支外向量`);
             }
             console.log(`[Horae Vector] 已加载 ${this.vectors.size} 条向量 (chatId: ${chatId})`);
         } catch (err) {
@@ -1276,7 +1290,7 @@ export class VectorManager {
             const tags = stripTags.split(/[,，\s]+/).map(t => t.trim()).filter(Boolean);
             for (const tag of tags) {
                 const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                text = text.replace(new RegExp(`<${escaped}>[\\s\\S]*?</${escaped}>`, 'gi'), '');
+                text = text.replace(new RegExp(`<${escaped}(?:\\s[^>]*)?>[\\s\\S]*?</${escaped}>`, 'gi'), '');
             }
         }
         return text.replace(/<[^>]*>/g, '').trim();
@@ -1436,7 +1450,16 @@ export class VectorManager {
     // ========================================
 
     async _openDB() {
-        if (this.db) return;
+        if (this.db) {
+            try {
+                this.db.transaction(STORE_NAME, 'readonly');
+                return;
+            } catch (_) {
+                console.warn('[Horae Vector] DB connection stale, reconnecting...');
+                try { this.db.close(); } catch (__) {}
+                this.db = null;
+            }
+        }
         return new Promise((resolve, reject) => {
             const req = indexedDB.open(DB_NAME, DB_VERSION);
             req.onupgradeneeded = () => {
@@ -1446,7 +1469,19 @@ export class VectorManager {
                     store.createIndex('chatId', 'chatId', { unique: false });
                 }
             };
-            req.onsuccess = () => { this.db = req.result; resolve(); };
+            req.onblocked = () => {
+                console.warn('[Horae Vector] DB upgrade blocked by another tab, closing old connection');
+            };
+            req.onsuccess = () => {
+                this.db = req.result;
+                this.db.onversionchange = () => {
+                    this.db.close();
+                    this.db = null;
+                    console.log('[Horae Vector] DB closed due to version change in another tab');
+                };
+                this.db.onclose = () => { this.db = null; };
+                resolve();
+            };
             req.onerror = () => reject(req.error);
         });
     }

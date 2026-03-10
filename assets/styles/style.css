@@ -2648,6 +2648,41 @@
     border-color: var(--horae-primary);
 }
 
+.horae-item-lock-btn {
+    position: absolute;
+    top: 4px;
+    right: 30px;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--horae-bg-secondary);
+    border: 1px solid var(--horae-border);
+    border-radius: var(--horae-radius-sm);
+    color: var(--horae-text-muted);
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.15s ease;
+    font-size: 11px;
+}
+
+.horae-editable-item:hover .horae-item-lock-btn {
+    opacity: 1;
+}
+
+.horae-item-lock-btn[style*="opacity:1"] {
+    opacity: 0.85 !important;
+    color: var(--horae-primary);
+}
+
+.horae-item-lock-btn:hover {
+    background: var(--horae-primary);
+    color: white;
+    border-color: var(--horae-primary);
+    opacity: 1 !important;
+}
+
 /* === 编辑弹窗 === */
 .horae-edit-modal-body {
     display: flex;

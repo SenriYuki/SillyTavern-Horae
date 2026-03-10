@@ -214,18 +214,18 @@ class HoraeManager {
                     
                     if (existingKey) {
                         const existingItem = state.items[existingKey];
-                        // 只合并实际存在的字段
                         const mergedItem = { ...existingItem };
-                        if (newInfo.icon) mergedItem.icon = newInfo.icon;
-                        // importance：只升不降（空 < ! < !!），仅在 AI 累积时生效
-                        const _impRank = { '': 0, '!': 1, '!!': 2 };
-                        const _newR = _impRank[newInfo.importance] ?? 0;
-                        const _oldR = _impRank[existingItem.importance] ?? 0;
-                        mergedItem.importance = _newR >= _oldR ? (newInfo.importance || '') : (existingItem.importance || '');
+                        const locked = !!existingItem._locked;
+                        if (!locked && newInfo.icon) mergedItem.icon = newInfo.icon;
+                        if (!locked) {
+                            const _impRank = { '': 0, '!': 1, '!!': 2 };
+                            const _newR = _impRank[newInfo.importance] ?? 0;
+                            const _oldR = _impRank[existingItem.importance] ?? 0;
+                            mergedItem.importance = _newR >= _oldR ? (newInfo.importance || '') : (existingItem.importance || '');
+                        }
                         if (newInfo.holder !== undefined) mergedItem.holder = newInfo.holder;
                         if (newInfo.location !== undefined) mergedItem.location = newInfo.location;
-                        // 非空描述才覆盖
-                        if (newInfo.description !== undefined && newInfo.description.trim()) {
+                        if (!locked && newInfo.description !== undefined && newInfo.description.trim()) {
                             mergedItem.description = newInfo.description;
                         }
                         if (!mergedItem.description) mergedItem.description = existingItem.description || '';
@@ -1037,9 +1037,14 @@ class HoraeManager {
             else if (trimmedLine.startsWith('atmosphere:')) {
                 result.scene.atmosphere = trimmedLine.substring(11).trim();
             }
-            // scene_desc:地点的固定物理特征描述
+            // scene_desc:地点的固定物理特征描述（支持同一回复多场景配对）
             else if (trimmedLine.startsWith('scene_desc:')) {
-                result.scene.scene_desc = trimmedLine.substring(11).trim();
+                const desc = trimmedLine.substring(11).trim();
+                result.scene.scene_desc = desc;
+                if (result.scene.location && desc) {
+                    if (!result.scene._descPairs) result.scene._descPairs = [];
+                    result.scene._descPairs.push({ location: result.scene.location, desc });
+                }
             }
             // characters:爱丽丝,鲍勃
             else if (trimmedLine.startsWith('characters:')) {
@@ -1668,7 +1673,17 @@ class HoraeManager {
         // 从消息重放 AI 写入的 scene_desc（按时间顺序，后覆盖前），跳过已删除的
         for (let i = 1; i < chat.length; i++) {
             const meta = chat[i]?.horae_meta;
-            if (meta?.scene?.scene_desc && meta?.scene?.location) {
+            const pairs = meta?.scene?._descPairs;
+            if (pairs?.length > 0) {
+                for (const p of pairs) {
+                    if (deletedNames.has(p.location)) continue;
+                    rebuilt[p.location] = {
+                        desc: p.desc,
+                        firstSeen: rebuilt[p.location]?.firstSeen || new Date().toISOString(),
+                        lastUpdated: new Date().toISOString()
+                    };
+                }
+            } else if (meta?.scene?.scene_desc && meta?.scene?.location) {
                 const loc = meta.scene.location;
                 if (deletedNames.has(loc)) continue;
                 rebuilt[loc] = {
@@ -1925,8 +1940,13 @@ class HoraeManager {
                 this.removeCompletedAgenda(parsed.deletedAgenda);
             }
 
-            // 场景记忆：将 scene_desc 存入 locationMemory
-            if (parsed.scene?.scene_desc && parsed.scene?.location) {
+            // 场景记忆：将 scene_desc 存入 locationMemory（支持同一回复多场景配对）
+            const descPairs = parsed.scene?._descPairs;
+            if (descPairs?.length > 0) {
+                for (const p of descPairs) {
+                    this._updateLocationMemory(p.location, p.desc);
+                }
+            } else if (parsed.scene?.scene_desc && parsed.scene?.location) {
                 this._updateLocationMemory(parsed.scene.location, parsed.scene.scene_desc);
             }
             
