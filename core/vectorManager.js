@@ -6,6 +6,7 @@
  */
 
 import { calculateDetailedRelativeTime } from '../utils/timeUtils.js';
+import { boostMemoryScores, extractEmotionTags } from './memoryBoost.js';
 
 const DB_NAME = 'HoraeVectors';
 const DB_VERSION = 1;
@@ -671,6 +672,10 @@ export class VectorManager {
         }
 
         results = results.slice(0, topK);
+
+        // === memoryBoost 后处理 ===
+        const emotionTags = extractEmotionTags(horaeManager);
+        results = boostMemoryScores(results, userQuery, chat.length - 1, emotionTags);
 
         console.log(`[Horae Vector] === 最终合并: ${results.length} 条 ===`);
         for (const r of results) {
