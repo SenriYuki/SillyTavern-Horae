@@ -230,6 +230,8 @@
     },
     "toast": {
         "saveSuccess": "저장 완료!",
+        "autoFillPrevTimelineStart": "AI 메시지 #{{id}} 타임라인 자동 보완 중...",
+        "autoFillPrevTimelineDone": "AI 메시지 #{{id}} 타임라인 자동 보완 완료",
         "tableExported": "테이블 내보내기 완료",
         "tableImported": "테이블 가져오기 완료",
         "importFailed": "가져오기 실패: {{error}}",

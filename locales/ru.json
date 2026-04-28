@@ -226,6 +226,8 @@
     },
     "toast": {
         "saveSuccess": "Успешно сохранено!",
+        "autoFillPrevTimelineStart": "Автодополнение таймлайна ИИ-сообщения #{{id}}...",
+        "autoFillPrevTimelineDone": "Автодополнение таймлайна ИИ-сообщения #{{id}} завершено",
         "tableExported": "Таблица экспортирована",
         "tableImported": "Таблица импортирована",
         "importFailed": "Ошибка импорта: {{error}}",

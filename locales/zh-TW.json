@@ -195,6 +195,8 @@
     },
     "toast": {
         "saveSuccess": "儲存成功！",
+        "autoFillPrevTimelineStart": "正在自動補全 AI 訊息 #{{id}} 的時間線...",
+        "autoFillPrevTimelineDone": "AI 訊息 #{{id}} 時間線自動補全完成",
         "tableExported": "表格已匯出",
         "tableImported": "表格已匯入",
         "importFailed": "匯入失敗: {{error}}",

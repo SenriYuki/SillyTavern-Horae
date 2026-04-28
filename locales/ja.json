@@ -232,6 +232,8 @@
     },
     "toast": {
         "saveSuccess": "保存しました！",
+        "autoFillPrevTimelineStart": "AIメッセージ #{{id}} のタイムラインを自動補完しています...",
+        "autoFillPrevTimelineDone": "AIメッセージ #{{id}} のタイムライン自動補完が完了しました",
         "tableExported": "テーブルをエクスポートしました",
         "tableImported": "テーブルをインポートしました",
         "importFailed": "インポート失敗：{{error}}",

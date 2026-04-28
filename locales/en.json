@@ -93,6 +93,7 @@
         "basicSettings": "Basic Settings",
         "enableHorae": "Enable Horae",
         "autoParse": "Auto-parse AI response tags",
+        "autoFillPrevTimelineOnSend": "Auto-fill previous message timeline before send",
         "injectContext": "Auto-inject state context",
         "showPanel": "Show message metadata panel",
         "showTopIcon": "Show top navigation icon",
@@ -228,6 +229,8 @@
     },
     "toast": {
         "saveSuccess": "Saved successfully!",
+        "autoFillPrevTimelineStart": "Auto-filling timeline for AI message #{{id}}...",
+        "autoFillPrevTimelineDone": "Timeline auto-fill completed for AI message #{{id}}",
         "tableExported": "Table exported",
         "tableImported": "Table imported",
         "importFailed": "Import failed: {{error}}",

@@ -115,6 +115,7 @@ const DEFAULT_SETTINGS = {
     aiOutputLanguage: 'auto',
     enabled: true,
     autoParse: true,
+    autoFillPrevTimelineOnSend: true, // 发送前自动补全上一条AI消息的时间线
     injectContext: true,
     useMainPresetForAiTasks: false, // AI分析/批量扫描/手动压缩是否使用酒馆主预设（generate）
     showMessagePanel: true,
@@ -10966,6 +10967,11 @@ function initSettingsEvents() {
         settings.autoParse = this.checked;
         saveSettings();
     });
+
+    $('#horae-setting-auto-fill-prev-timeline').on('change', function() {
+        settings.autoFillPrevTimelineOnSend = this.checked;
+        saveSettings();
+    });
     
     $('#horae-setting-inject-context').on('change', function() {
         settings.injectContext = this.checked;
@@ -11582,7 +11588,7 @@ function initSettingsEvents() {
 
     // ── Horae 全局配置 导出/导入/重置 ──
     const _SETTINGS_EXPORT_KEYS = [
-        'enabled','autoParse','injectContext','useMainPresetForAiTasks','showMessagePanel','showTopIcon',
+        'enabled','autoParse','autoFillPrevTimelineOnSend','injectContext','useMainPresetForAiTasks','showMessagePanel','showTopIcon',
         'injectionDepthSource','injectionPosition',
         'sendTimeline','sendCharacters','sendItems',
         'sendLocationMemory','sendRelationships','sendMood',
@@ -12435,6 +12441,7 @@ function _syncVectorSourceUI() {
 function syncSettingsToUI() {
     $('#horae-setting-enabled').prop('checked', settings.enabled);
     $('#horae-setting-auto-parse').prop('checked', settings.autoParse);
+    $('#horae-setting-auto-fill-prev-timeline').prop('checked', settings.autoFillPrevTimelineOnSend !== false);
     $('#horae-setting-inject-context').prop('checked', settings.injectContext);
     $('#horae-setting-use-main-preset').prop('checked', !!settings.useMainPresetForAiTasks);
     $('#horae-setting-show-panel').prop('checked', settings.showMessagePanel);
@@ -16574,7 +16581,8 @@ async function _generateForAiTasks(prompt, opts = {}) {
 }
 
 /** 使用AI分析消息内容 */
-async function analyzeMessageWithAI(messageContent) {
+async function analyzeMessageWithAI(messageContent, opts = {}) {
+    const { noContextInjectionMarker = false } = opts;
     const context = getContext();
     const userName = context?.name1 || t('ui.protagonist');
 
@@ -16597,6 +16605,7 @@ async function analyzeMessageWithAI(messageContent) {
         );
         const response = await _generateForAiTasks(analysisPrompt, {
             noVectorRecallMarker: shouldMarkNoRecall,
+            noContextInjectionMarker: !!noContextInjectionMarker,
         });
         
         if (response) {
@@ -16609,6 +16618,98 @@ async function analyzeMessageWithAI(messageContent) {
     }
     
     return null;
+}
+
+/**
+ * 发送前补齐上一条AI楼层的时间线（仅 event/time）
+ * 只在「最后一条是USER消息」时触发，避免干扰 regenerate/swipe。
+ */
+async function _autoFillPreviousAiTimelineBeforeInjection(chat) {
+    if (!settings.autoFillPrevTimelineOnSend) return;
+    if (settings.sendTimeline === false) return;
+    if (!Array.isArray(chat) || chat.length < 2) return;
+
+    const lastIndex = chat.length - 1;
+    const lastMsg = chat[lastIndex];
+    if (!lastMsg?.is_user) return;
+
+    let targetIndex = -1;
+    for (let i = lastIndex - 1; i >= 0; i--) {
+        const msg = chat[i];
+        if (!msg || msg.is_user) continue;
+        if (msg.horae_meta?._skipHorae) continue;
+        targetIndex = i;
+        break;
+    }
+
+    if (targetIndex < 0) return;
+
+    const targetMsg = chat[targetIndex];
+    const existingMeta = horaeManager.getMessageMeta(targetIndex) || createEmptyMeta();
+    const existingEvents = Array.isArray(existingMeta.events)
+        ? existingMeta.events
+        : (existingMeta.event ? [existingMeta.event] : []);
+    const hasTimeline = existingEvents.some(evt => evt?.summary && String(evt.summary).trim());
+    if (hasTimeline) return;
+
+    const sourceText = typeof targetMsg?.mes === 'string' ? targetMsg.mes.trim() : '';
+    if (!sourceText) return;
+
+    console.log(`[Horae] 前置补全：检测到上一条AI楼层 #${targetIndex} 缺少时间线，尝试自动补全`);
+    showToast(t('toast.autoFillPrevTimelineStart', {id: targetIndex}), 'info');
+
+    // 先尝试本地解析，失败再调用AI补全
+    let parsed = horaeManager.parseHoraeTag(sourceText);
+    if (!parsed) {
+        parsed = horaeManager.parseLooseFormat(sourceText);
+    }
+    if (!parsed) {
+        try {
+            parsed = await analyzeMessageWithAI(sourceText, { noContextInjectionMarker: true });
+        } catch (err) {
+            console.warn(`[Horae] 前置补全失败 #${targetIndex}:`, err);
+            return;
+        }
+    }
+    if (!parsed) return;
+
+    const parsedEvents = Array.isArray(parsed.events)
+        ? parsed.events.filter(evt => evt?.summary && String(evt.summary).trim())
+        : [];
+    const legacyEvent = parsed?.event?.summary ? parsed.event : null;
+    if (parsedEvents.length === 0 && !legacyEvent) {
+        console.log(`[Horae] 前置补全跳过：#${targetIndex} 未提取到有效 event`);
+        return;
+    }
+
+    const timelineOnlyParsed = {
+        timestamp: parsed.timestamp || {},
+        scene: {},
+        costumes: {},
+        items: {},
+        deletedItems: [],
+        events: parsedEvents,
+        event: legacyEvent,
+        affection: {},
+        npcs: {},
+        agenda: [],
+        deletedAgenda: [],
+        mood: {},
+        relationships: [],
+    };
+
+    const mergedMeta = horaeManager.mergeParsedToMeta(existingMeta, timelineOnlyParsed);
+    horaeManager.setMessageMeta(targetIndex, mergedMeta);
+    injectHoraeTagToMessage(targetIndex, mergedMeta);
+
+    try {
+        await getContext().saveChat();
+    } catch (err) {
+        console.warn('[Horae] 前置补全保存失败:', err);
+    }
+
+    console.log(`[Horae] 前置补全完成：已补齐上一条AI楼层 #${targetIndex} 的时间线`);
+    showToast(t('toast.autoFillPrevTimelineDone', {id: targetIndex}), 'success');
 }
 
 // ============================================
@@ -17097,9 +17198,13 @@ async function onPromptReady(eventData) {
     if (eventData.dryRun) return;
     
     try {
+        const chat = horaeManager.getChat();
+
+        // 发送前：可选补全上一条AI楼层的时间线
+        await _autoFillPreviousAiTimelineBeforeInjection(chat);
+
         // swipe/regenerate检测
         let skipLast = 0;
-        const chat = horaeManager.getChat();
         if (chat && chat.length > 0) {
             const lastMsg = chat[chat.length - 1];
             if (lastMsg && !lastMsg.is_user && lastMsg.horae_meta && (
