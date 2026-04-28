@@ -875,13 +875,6 @@
                                 </label>
                                 <span class="horae-setting-sub-hint" id="horae-auto-summary-limit-hint" data-i18n="settings.bufferLimitHint">触发条件：时间线数量 >= 保留数 + 每次总结的事件数</span>
                             </div>
-                            <div class="horae-setting-item">
-                                <label data-i18n="settings.resummaryThreshold">
-                                    总结数量达到多少时进行二次总结
-                                    <input type="number" id="horae-setting-auto-summary-resummary-threshold" min="0" max="999" value="10">
-                                </label>
-                                <span class="horae-setting-sub-hint" data-i18n="settings.resummaryThresholdHint">二次总结也达到数量时会进行三次总结（以此类推）</span>
-                            </div>
                             <div class="horae-setting-hint" data-i18n="settings.autoSummaryExample" style="margin:8px 0; padding:8px; border-radius:6px; background:var(--horae-bg-secondary); font-size:11px; line-height:1.6;">
                                 <i class="fa-solid fa-lightbulb" style="color:var(--horae-accent);"></i>
                                 <b>举例</b>：假设保留=5，每次总结的事件数=5（按AI条数）<br>
@@ -889,6 +882,13 @@
                                 → 触发后优先总结保留区之前的连续未总结部分<br>
                                 → 中间夹着的用户消息会一起带上，但不参与计数
                             </div>
+                            <div class="horae-setting-item">
+                                <label data-i18n="settings.resummaryThreshold">
+                                    总结数量达到多少时进行二次总结
+                                    <input type="number" id="horae-setting-auto-summary-resummary-threshold" min="0" max="999" value="10">
+                                </label>
+                                <span class="horae-setting-sub-hint" data-i18n="settings.resummaryThresholdHint">二次总结也达到数量时会进行三次总结（以此类推）</span>
+                            </div>                        
                             <div class="horae-setting-item" style="border-top: 1px solid var(--horae-border); padding-top: 8px; margin-top: 4px;">
                                 <label data-i18n="settings.batchMaxMessages">
                                     单次最大消息条数
@@ -1009,7 +1009,7 @@
                                     <i class="fa-solid fa-triangle-exclamation"></i>
                                     <strong> 只能填写 Embedding（嵌入/向量）模型！</strong><br>
                                     不要填 LLM 聊天模型（如 gemini 3、gpt-4 等），否则会报错。<br>
-                                    推荐：<code>text-embedding-v3</code>（Qwen）、<code>text-embedding-3-small</code>（OpenAI）
+                                    推荐：<code>qwen3-embedding-8B</code>（Qwen）
                                 </span>
                                 <div class="horae-setting-item">
                                     <label data-i18n="vector.apiUrl">
@@ -1034,7 +1034,7 @@
                                             <i class="fa-solid fa-arrows-rotate"></i>
                                         </button>
                                     </div>
-                                    <span class="horae-setting-sub-hint" data-i18n="vector.fetchModelsHint">填好地址和密钥后点击 <i class="fa-solid fa-arrows-rotate"></i> 拉取。<br>推荐: text-embedding-v3 (Qwen) / text-embedding-3-small (OpenAI)</span>
+                                    <span class="horae-setting-sub-hint" data-i18n="vector.fetchModelsHint">填好地址和密钥后点击 <i class="fa-solid fa-arrows-rotate"></i> 拉取。<br>推荐: qwen3-embedding-8B</span>
                                 </div>
                                 <div class="horae-setting-item" style="margin-top:6px;">
                                     <button id="horae-btn-test-vector-api" class="horae-btn" data-i18n="vector.testApi" style="width:100%;">
@@ -1091,7 +1091,7 @@
                                                 <i class="fa-solid fa-arrows-rotate"></i>
                                             </button>
                                         </div>
-                                        <span class="horae-setting-sub-hint" data-i18n="vector.rerankFetchHint">填好地址和密钥后点击 <i class="fa-solid fa-arrows-rotate"></i> 拉取。<br>推荐: gte-rerank (Qwen) / jina-reranker-v2-base-multilingual (Jina)</span>
+                                        <span class="horae-setting-sub-hint" data-i18n="vector.rerankFetchHint">填好地址和密钥后点击 <i class="fa-solid fa-arrows-rotate"></i> 拉取。<br>推荐: qwen3-Reranker-4B / 8B</span>
                                     </div>
                                     <div class="horae-setting-item" style="margin-top: 4px;">
                                         <label data-i18n="vector.rerankFulltext">

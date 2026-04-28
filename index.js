@@ -2368,12 +2368,31 @@ async function compressSelectedTimelineEvents() {
             return;
         }
         
-        let summaryText = response.trim()
+        const cleanedText = response.trim()
             .replace(/<think(?:ing)?[\s>][\s\S]*?<\/think(?:ing)?>/gi, '')
             .replace(/<horae>[\s\S]*?<\/horae>/gi, '')
             .replace(/<horaeevent>[\s\S]*?<\/horaeevent>/gi, '')
             .replace(/<!--horae[\s\S]*?-->/gi, '')
             .trim();
+        const hasOpenSummaryTag = /<horaesummary>/i.test(cleanedText);
+        const hasCloseSummaryTag = /<\/horaesummary>/i.test(cleanedText);
+        if (hasOpenSummaryTag && !hasCloseSummaryTag) {
+            overlay.remove();
+            showToast('总结失败：AI回复截断', 'warning');
+            return;
+        }
+        if (!hasOpenSummaryTag && !hasCloseSummaryTag) {
+            overlay.remove();
+            showToast('总结失败：AI回复掉格式', 'warning');
+            return;
+        }
+        if (!hasOpenSummaryTag || !hasCloseSummaryTag) {
+            overlay.remove();
+            showToast('总结失败：AI回复掉格式', 'warning');
+            return;
+        }
+        const summaryMatch = cleanedText.match(/<horaesummary>([\s\S]*?)<\/horaesummary>/i);
+        let summaryText = (summaryMatch?.[1] || '').trim();
         if (!summaryText) {
             overlay.remove();
             showToast(t('toast.aiSummaryEmpty'), 'warning');
@@ -13410,6 +13429,36 @@ function _cleanSummaryText(raw) {
         .trim();
 }
 
+function _extractHoraeSummaryText(raw) {
+    const cleaned = _cleanSummaryText(raw);
+    if (!cleaned) return { ok: false, reason: 'empty', text: '' };
+
+    const hasOpenSummaryTag = /<horaesummary>/i.test(cleaned);
+    const hasCloseSummaryTag = /<\/horaesummary>/i.test(cleaned);
+    if (hasOpenSummaryTag && !hasCloseSummaryTag) {
+        return { ok: false, reason: 'truncated', text: '' };
+    }
+    if (!hasOpenSummaryTag && !hasCloseSummaryTag) {
+        return { ok: false, reason: 'format_missing', text: '' };
+    }
+    if (!hasOpenSummaryTag || !hasCloseSummaryTag) {
+        return { ok: false, reason: 'format_unclosed', text: '' };
+    }
+
+    const summaryMatch = cleaned.match(/<horaesummary>([\s\S]*?)<\/horaesummary>/i);
+    const text = (summaryMatch?.[1] || '').trim();
+    if (!text) return { ok: false, reason: 'empty', text: '' };
+    return { ok: true, reason: 'ok', text };
+}
+
+function _showHoraeSummaryFormatWarning(_stageLabel, reason) {
+    if (reason === 'truncated') {
+        showToast('总结失败：AI回复截断', 'warning');
+        return;
+    }
+    showToast('总结失败：AI回复掉格式', 'warning');
+}
+
 function _splitMsgIndicesByLimits(chat, indices, maxMsgs, maxTokens) {
     const sorted = [...new Set(indices || [])]
         .filter(i => Number.isInteger(i) && i >= 0 && chat?.[i])
@@ -13742,9 +13791,12 @@ async function _generateSummaryFromResummaryPayload(chat, payload, userName) {
 
         const prompt = _buildAutoResummaryPrompt(userName, eventText, chunk.length);
         const response = await generateForSummary(prompt);
-        const cleaned = _cleanSummaryText(response);
-        if (!cleaned) return '';
-        chunkSummaries.push(cleaned);
+        const extracted = _extractHoraeSummaryText(response);
+        if (!extracted.ok) {
+            _showHoraeSummaryFormatWarning('二次总结', extracted.reason);
+            return '';
+        }
+        chunkSummaries.push(extracted.text);
     }
     if (chunkSummaries.length === 1) return chunkSummaries[0];
 
@@ -13765,9 +13817,12 @@ async function _generateSummaryFromResummaryPayload(chat, payload, userName) {
             const eventText = group.map((text, i) => `[段${i + 1}] ${text}`).join('\n');
             const prompt = _buildAutoResummaryPrompt(userName, eventText, group.length);
             const response = await generateForSummary(prompt);
-            const cleaned = _cleanSummaryText(response);
-            if (!cleaned) return '';
-            next.push(cleaned);
+            const extracted = _extractHoraeSummaryText(response);
+            if (!extracted.ok) {
+                _showHoraeSummaryFormatWarning('二次总结', extracted.reason);
+                return '';
+            }
+            next.push(extracted.text);
         }
         current = next;
     }
@@ -14780,13 +14835,16 @@ async function checkAutoSummary() {
             return;
         }
         
-        // 清洗 AI 回复中的 think/horae 标签，只保留纯文本摘要
-        let summaryText = response.trim()
-            .replace(/<think(?:ing)?[\s>][\s\S]*?<\/think(?:ing)?>/gi, '')
-            .replace(/<horae>[\s\S]*?<\/horae>/gi, '')
-            .replace(/<horaeevent>[\s\S]*?<\/horaeevent>/gi, '')
-            .replace(/<!--horae[\s\S]*?-->/gi, '')
-            .trim();
+        const extracted = _extractHoraeSummaryText(response);
+        if (!extracted.ok) {
+            if (extracted.reason === 'empty') {
+                showToast(t('toast.autoSummaryCleanedEmpty'), 'warning');
+            } else {
+                _showHoraeSummaryFormatWarning('自动总结', extracted.reason);
+            }
+            return;
+        }
+        let summaryText = extracted.text;
         if (!summaryText) {
             showToast(t('toast.autoSummaryCleanedEmpty'), 'warning');
             return;
@@ -14889,6 +14947,7 @@ function getDefaultCompressPrompt() {
 - 具体的日期、人名、地名、特定物品名必须精确保留原文。
 - 输出纯文本摘要！绝对不要添加任何Markdown标记（无加粗、无列表）、换行符或多余格式，必须写成一个包含高密度信息的厚实段落。
 - {{user}} 是主角名，语言风格必须是客观、精准的叙事体。
+- 【重要】：最终输出的整段摘要文本，必须在其首尾分别使用 <horaesummary> 和 </horaesummary> 标签进行完整包裹。
 
 
 =====【全文摘要】=====
@@ -14908,6 +14967,7 @@ function getDefaultCompressPrompt() {
 - 具体的日期、人名、地名、专有名词必须精确保留。
 - 输出纯文本摘要！绝对不要添加任何小标题、序号或加粗标记，写成一个连贯的段落。
 - {{user}} 是主角名，语言风格必须冷峻、客观、信息密集。
+- 【重要】：最终输出的整段摘要文本，必须在其首尾分别使用 <horaesummary> 和 </horaesummary> 标签进行完整包裹。
 `;
 }
 
@@ -15031,10 +15091,7 @@ function getDefaultAutoSummaryPrompt() {
     if (lang === 'ru') return _getDefaultAutoSummaryPromptRu();
     if (lang !== 'zh-CN' && lang !== 'zh-TW') return _getDefaultAutoSummaryPromptEn();
     return `=====【综合剧情压缩】=====
-你是资深的剧情情报梳理专家。请将以下的【全文对话记录】与【已有事件概要】相融合，提炼出一段信息密度极高的综合剧情摘要（300-500字）。
-
-【全文对话记录】：
-{{fulltext}}
+你是资深的剧情情报梳理专家。请将以下的【已有事件概要】相融合，提炼出一段信息密度极高的综合剧情摘要（300-500字）。
 
 【已有事件概要】（仅作主线参考，严禁照搬或偷懒拼接）：
 {{events}}
@@ -15052,9 +15109,10 @@ function getDefaultAutoSummaryPrompt() {
 【输出要求】
 - 严格按【时间流（日期先后）】顺序叙述，将所有信息融合成一篇连贯、厚实的故事梗概。
 - 具体的日期、人名、地名、特定物品名、重要数值必须保留原文。
-- 纯文本输出！绝对禁止添加任何Markdown标记（无小标题、无列表、无加粗）、多余格式，严禁出现 <horae> 等任何XML标签。
+- 纯文本输出！摘要正文中禁止添加任何Markdown标记（无小标题、无列表、无加粗）或多余格式。除用于首尾包裹的特定标签外，文中严禁出现其他XML标签。
 - {{user}} 是主角名。
-- 语言风格：冷峻客观、时间线清晰、信息高度浓缩的叙事体。`;
+- 语言风格：冷峻客观、时间线清晰、信息高度浓缩的叙事体。
+- 【重要】：最终输出的整段摘要文本，必须在其首尾分别使用 <horaesummary> 和 </horaesummary> 标签进行完整包裹。`;
 }
 
 /** 默认的二次总结提示词（仅基于时间线/已有摘要） */
@@ -15078,73 +15136,90 @@ function getDefaultAutoResummaryPrompt() {
 - 严禁将具体动作抽象化（❌“两人进行了交易” ✅“U用50金币换取了艾伦的地图”）。
 - 具体的日期、人名、地名、特定物品名必须精确保留原文。
 - 输出纯文本摘要！绝对不要添加任何Markdown标记（无加粗、无列表）、换行符或多余格式，必须写成一个包含高密度信息的厚实段落。
-- {{user}} 是主角名，语言风格必须是客观、精准的叙事体。`;
+- {{user}} 是主角名，语言风格必须是客观、精准的叙事体。
+- 【重要】：最终输出的整段摘要文本，必须在其首尾分别使用 <horaesummary> 和 </horaesummary> 标签进行完整包裹。`;
 }
 
 function _getDefaultAutoSummaryPromptEn() {
-    return `You are a plot compression assistant. Read the following conversation log and compress it into a refined plot summary (300-600 chars), preserving key information and causal relationships.
+    return `You are a plot compression assistant. Read the following event outline and compress it into a refined plot summary (300-600 chars), preserving key information and causal relationships.
 
-{{fulltext}}
-
-Existing event outline (for reference only, do not rely solely on this list):
+Event outline (only source of truth):
 {{events}}
 
 Requirements:
+- Use ONLY information present in the event outline; do not invent missing details
 - Narrate in chronological order, preserving important turning points and key details
 - Character names and place names must be kept as-is
-- Output plain text summary only, no tags or formatting (no <horae> or other XML tags)
-- Preserve characters' key dialogues and emotional changes
+- Preserve explicit dates/times, key items, and important numeric facts when present
+- Output exactly one wrapped summary block:
+<horaesummary>
+(summary text)
+</horaesummary>
+- No markdown and no extra text outside <horaesummary>...</horaesummary>
+- Preserve key relationship/emotion changes when they are explicitly present
 - {{user}} is the protagonist's name
 - Style: concise, objective narrative`;
 }
 
 function _getDefaultAutoSummaryPromptJa() {
-    return `あなたはストーリー圧縮アシスタントです。以下の会話ログを読み、精錬されたストーリー要約（200〜500文字）に圧縮し、キー情報と因果関係を保持してください。
+    return `あなたはストーリー圧縮アシスタントです。以下のイベント概要を読み、精錬されたストーリー要約（200〜500文字）に圧縮し、キー情報と因果関係を保持してください。
 
-{{fulltext}}
-
-既存のイベント概要（参考用のみ、このリストだけに頼らないこと）：
+イベント概要（唯一の情報源）：
 {{events}}
 
 要件：
+- イベント概要に書かれている情報のみを使用し、不足情報を捏造しない
 - 時系列順に記述し、重要な転換点とキーとなる詳細を保持
 - 人名・地名は原文のまま保持
-- プレーンテキストの要約のみ出力、タグやフォーマットは不要（<horae>等のXMLタグ禁止）
-- キャラクターの重要な台詞と感情の変化を保持
+- 明示された日付/時刻、重要アイテム、数値情報は可能な限り保持
+- 出力は次の1ブロックのみ：
+<horaesummary>
+（要約本文）
+</horaesummary>
+- <horaesummary>...</horaesummary> の外に余計な文章やMarkdownを出力しない
+- 明示されている関係性・感情変化は保持
 - {{user}} は主人公の名前
 - 文体：簡潔で客観的なナラティブ`;
 }
 
 function _getDefaultAutoSummaryPromptKo() {
-    return `당신은 스토리 압축 어시스턴트입니다. 아래 대화 기록을 읽고 정제된 스토리 요약(200~500자)으로 압축하여, 핵심 정보와 인과 관계를 유지하세요.
+    return `당신은 스토리 압축 어시스턴트입니다. 아래 이벤트 개요를 읽고 정제된 스토리 요약(200~500자)으로 압축하여, 핵심 정보와 인과 관계를 유지하세요.
 
-{{fulltext}}
-
-기존 이벤트 개요 (참고용, 이 목록에만 의존하지 마세요):
+이벤트 개요 (유일한 정보원):
 {{events}}
 
 요구사항:
+- 이벤트 개요에 명시된 정보만 사용하고, 없는 내용을 추측/창작하지 마세요
 - 시간순으로 서술하며, 중요한 전환점과 핵심 세부사항 유지
 - 인명·지명은 원문 그대로 유지
-- 순수 텍스트 요약만 출력, 태그나 서식 없음 (<horae> 등의 XML 태그 금지)
-- 캐릭터의 핵심 대사와 감정 변화 유지
+- 명시된 날짜/시간, 핵심 아이템, 중요 수치는 유지
+- 출력은 아래 1개 블록만 허용:
+<horaesummary>
+(요약 본문)
+</horaesummary>
+- <horaesummary>...</horaesummary> 바깥에는 추가 문장/마크다운 금지
+- 명시된 관계/감정 변화는 유지
 - {{user}} 는 주인공의 이름
 - 문체: 간결하고 객관적인 서술체`;
 }
 
 function _getDefaultAutoSummaryPromptRu() {
-    return `Вы — ассистент по сжатию сюжета. Прочитайте следующий лог диалога и сожмите его в отточенное сюжетное резюме (300–700 символов), сохраняя ключевую информацию и причинно-следственные связи.
+    return `Вы — ассистент по сжатию сюжета. Прочитайте следующий обзор событий и сожмите его в отточенное сюжетное резюме (300–700 символов), сохраняя ключевую информацию и причинно-следственные связи.
 
-{{fulltext}}
-
-Существующий обзор событий (только для справки, не полагайтесь исключительно на этот список):
+Обзор событий (единственный источник данных):
 {{events}}
 
 Требования:
+- Используйте ТОЛЬКО информацию из обзора событий, не додумывайте отсутствующие детали
 - Излагайте в хронологическом порядке, сохраняя важные поворотные моменты и ключевые детали
 - Имена персонажей и названия мест сохранять как есть
-- Выводите только текстовое резюме, без тегов и форматирования (запрещены XML-теги вроде <horae>)
-- Сохраняйте ключевые диалоги персонажей и эмоциональные изменения
+- Сохраняйте явные даты/время, ключевые предметы и важные числовые факты
+- Выводите строго один блок:
+<horaesummary>
+(текст резюме)
+</horaesummary>
+- Вне <horaesummary>...</horaesummary> не добавляйте Markdown и лишний текст
+- Сохраняйте изменения отношений/эмоций, если они явно указаны
 - {{user}} — имя главного героя
 - Стиль: лаконичное, объективное повествование`;
 }
