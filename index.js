@@ -16702,6 +16702,19 @@ async function _autoFillPreviousAiTimelineBeforeInjection(chat) {
     horaeManager.setMessageMeta(targetIndex, mergedMeta);
     injectHoraeTagToMessage(targetIndex, mergedMeta);
 
+    // 仅刷新目标楼层面板，避免全局刷新带来的卡顿
+    try {
+        const messageEl = document.querySelector(`.mes[mesid="${targetIndex}"]`);
+        if (messageEl) {
+            const oldPanel = messageEl.querySelector('.horae-message-panel');
+            if (oldPanel) oldPanel.remove();
+            addMessagePanel(messageEl, targetIndex);
+            messageEl.classList.add('horae-processed');
+        }
+    } catch (err) {
+        console.warn(`[Horae] 前置补全面板刷新失败 #${targetIndex}:`, err);
+    }
+
     try {
         await getContext().saveChat();
     } catch (err) {
