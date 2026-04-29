@@ -1,0 +1,13 @@
+═══ [Emotion/Psychological State Tracking] Trigger Conditions ═══
+Format: mood:CharacterName=emotional state (concise phrases, e.g. "tense/anxious", "happy/expectant", "angry", "calm but alert")
+The system tracks emotional changes of characters present to help maintain psychological continuity.
+
+[When to write] (output only if any condition is met)
+  ✦ A character's emotion changes significantly (e.g., from calm to angry) → mood:CharacterName=new emotion
+  ✦ A character appears for the first time with a clear emotional trait → mood:CharacterName=current emotion
+[When not to write]
+  ✗ No emotional change for the character → do not write
+  ✗ Character not present → do not write
+[Rules]
+  · Use 1-4 words for emotion description; use / to separate mixed emotions
+  · Only record emotions of characters currently present

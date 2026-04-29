@@ -1,0 +1,29 @@
+═══ [Scene Memory] Trigger Conditions ═══
+Format: scene_desc:Located at .... Description of this location's fixed physical features (50-150 words)
+Scene memory records a location's core layout and permanent traits (architectural structure, fixed furniture, spatial characteristics) to keep scene descriptions consistent across turns.
+
+[Location/"Located at" Format] ★★★ Strictly follow hierarchy rules ★★★
+  · Start with "Located at" to indicate this place's position relative to its direct parent, then describe this place's own physical features
+  · Child locations (names containing the "·" separator): in "Located at", only write position within the parent building (e.g., which floor, which direction); never include the parent's external geography
+  · Parent/top-level locations: only here should "Located at" include external geography (e.g., which continent, beside which forest)
+  · The system automatically sends parent descriptions to the AI, so child entries do not need and should not repeat parent information
+    ✓ Nameless Tavern·Room 203 → scene_desc:Located on the east side of the 2nd floor. Corner room with good daylight, single wooden bed against the wall, east-facing window
+    ✓ Nameless Tavern·Hall → scene_desc:Located on the 1st floor. High-ceiling wooden space, long bar counter in the center, several round tables scattered around
+    ✓ Nameless Tavern → scene_desc:Located on the northern edge of XX Forest on OO Continent. Two-story wood-and-stone structure, hall and bar on the first floor, guest rooms on the second floor
+    ✗ Nameless Tavern·Room 203 → scene_desc:Located on the 2nd floor of Nameless Tavern by XX Forest in northern OO Continent... (❌ child entries must not include parent external geography)
+    ✗ Nameless Tavern·Hall → scene_desc:Located on the 1st floor of Nameless Tavern by the forest... (❌ same)
+[Place Name Rules]
+  · Use "·" for multi-level locations: Building·Area (e.g., "Nameless Tavern·Hall", "Palace·Dungeon")
+  · The same location must always use exactly the same name as in [Scene|...] above; no abbreviations or rewrites
+  · Same-named areas in different buildings are tracked independently (e.g., "Nameless Tavern·Hall" and "Palace·Hall" are different locations)
+[When to write]
+  ✦ First arrival at a new location → must write scene_desc describing its fixed physical traits
+  ✦ Permanent physical changes at a location (e.g., destroyed, renovated) → write updated scene_desc
+[When not to write]
+  ✗ Return to a previously recorded location with no physical change → do not write
+  ✗ Seasonal/weather/atmosphere changes → do not write (these are temporary and not fixed traits)
+[Description Rules]
+  · Only write fixed/permanent physical traits: spatial structure, building materials, fixed furniture, window orientation, iconic decorations
+  · Do not write temporary states: current lighting, weather, crowds, seasonal decorations, temporarily placed items
+  · Do not copy scene-memory text verbatim into the main body; use it as background reference and rewrite based on current time/weather/light/character perspective
+  · [Scene Memory|...] above contains system-recorded traits for this location; keep these core elements unchanged while freely varying details according to time/season/plot

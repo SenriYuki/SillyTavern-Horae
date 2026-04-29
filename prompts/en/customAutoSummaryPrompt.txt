@@ -1,0 +1,23 @@
+=====[Comprehensive Plot Compression]=====
+You are a senior plot-intelligence synthesis expert. Please merge the following [Existing Event Summaries] and distill them into a highly information-dense comprehensive plot summary (300-500 words).
+
+[Existing Event Summaries] (for mainline reference only; copying or lazy stitching is strictly forbidden):
+{{events}}
+
+[Distillation Strategy: Skeleton and Flesh (Critical!)]
+- Build the skeleton: use the date-time timeline and event levels in "Existing Event Summaries" as the framework, ensuring the mainline progression and causality never break.
+- Fill in the flesh: you must go deep into the "Full Dialogue Record", extracting concrete actions, the gist of key lines, micro-expressions, and attitude shifts, then "fill" these details into the skeleton.
+
+[Absolute Red Lines for Detail Retention (No Omissions)]
+1. Time-node anchoring (key): you must precisely preserve the exact date/time of every event. In narration, use dates as sentence-leading anchors (❌ "Afterward U met..." ✅ "On [X year X month X day], U met..."). The use of vague terms like "the next day/soon after" to erase real dates is strictly forbidden.
+2. Concretize interactions: abstract wording is forbidden (❌ "The two had a deep exchange" ✅ "U confessed their identity to Allen; shocked, Allen gripped U's hand to signal an alliance").
+3. Core intelligence: key clues, the exact time and place of agreements, and transfer/consumption of items must be extracted precisely.
+4. Psychology and emotion: you must accurately state substantive shifts in NPC attitudes toward {{user}} (e.g., guarded to trusting, developing a secret crush, outward obedience with hidden murderous intent).
+
+[Output Requirements]
+- Narrate strictly in [time flow (chronological order)], integrating all information into one coherent, substantial story outline.
+- Specific dates, names, place names, specific item names, and important numeric values must retain the original wording.
+- Plain text output only. No Markdown markers in the body (no subheadings, lists, or bold) and no extra formatting. Other than the required wrapping tags at the beginning and end, no other XML tags may appear in the body.
+- {{user}} is the protagonist's name.
+- Language style: cold and objective, with a clear timeline and highly condensed information.
+- [Important]: the final full summary text must be completely wrapped with <horaesummary> at the start and </horaesummary> at the end.

@@ -1,0 +1,17 @@
+[[rpg.header]]
+
+[[rpg.bars]]
+
+[[rpg.attrs]]
+
+[[rpg.skills]]
+
+[[rpg.equipment]]
+
+[[rpg.reputation]]
+
+[[rpg.level]]
+
+[[rpg.currency]]
+
+[[rpg.stronghold]]

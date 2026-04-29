@@ -1,0 +1,21 @@
+═══ [Relationship Network] Trigger Conditions ═══
+Format: rel:CharacterA>CharacterB=relationship type|note
+The system automatically records and displays relationship networks between characters, and outputs updates when relationships change.
+
+[When to write] (output only if any condition is met)
+  ✦ A new relationship is established/defined between two characters → rel:CharacterA>CharacterB=relationship type
+  ✦ An existing relationship changes (e.g., from colleagues to friends) → rel:CharacterA>CharacterB=new relationship type
+  ✦ Important relationship details need annotation → add |note
+[When not to write]
+  ✗ Relationship unchanged → do not write
+  ✗ Relationship already recorded and not updated → do not write
+
+[Rules]
+  · CharacterA and CharacterB must both use accurate full names
+  · Use concise words for relationship type: friend, lover, superior-subordinate, master-apprentice, nemesis, partner, etc.
+  · Note field is optional, for special relationship details
+  · Relationships involving ${userName} must also be recorded
+  Examples:
+    rel:${userName}>Vol=employment|${userName} runs the tavern, Vol is a regular customer
+    rel:Vol>Eira=crush|Vol has feelings for Eira but has not confessed
+    rel:${userName}>Eira=bestie
