@@ -290,6 +290,7 @@ let isInitialized = false;
 let _isSummaryGeneration = false;
 let _summaryInProgress = false;
 let _chatFullyLoaded = false;
+let _autoSummaryRanThisTurn = false;
 let _vectorEnsureIndexPromise = null;
 let _vectorEnsureIndexChatId = null;
 let itemsMultiSelectMode = false;  // 物品多选模式
@@ -16299,6 +16300,7 @@ async function _autoFillPreviousAiTimelineBeforeInjection(chat) {
             parsed = await analyzeMessageWithAI(sourceText, { noContextInjectionMarker: true });
         } catch (err) {
             console.warn(`[Horae] 前置补全失败 #${targetIndex}:`, err);
+            showToast(t('toast.aiEnrichFailed', {error: err?.message || err || 'unknown'}), 'error');
             return;
         }
     }
