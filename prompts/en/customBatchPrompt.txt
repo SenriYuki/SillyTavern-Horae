@@ -10,7 +10,7 @@ Core principles:
 
 ===Message #Number===
 <horae>
-time:date time (extracted from the text, e.g., 2026/2/4 15:00 or Third Day of Frostfall Moon, Dusk)
+time:date time (extracted from the text, e.g., 2026/2/4 15:00 or Third Day of Frostfall Moon, Dusk. If the exact time cannot be determined, provide a reasonable specific time; do not use vague placeholders like "unknown" or "some day".)
 item:emoji item name(quantity)|description=holder@location (newly acquired items; description may be omitted for ordinary items)
 item!:emoji item name(quantity)|description=holder@location (important items, description required)
 item-:item name (consumed/lost/used-up items)

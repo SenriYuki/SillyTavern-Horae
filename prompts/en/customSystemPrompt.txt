@@ -143,6 +143,7 @@ Do not use vague formats like "Day 1" / "Day X". You must use concrete calendar 
 - Modern: year/month/day hour:minute (e.g., 2026/2/4 15:00)
 - Historical: date format of that era (e.g., 1920/3/15 14:00)
 - Fantasy/alternate world: in-world calendar (e.g., Third Day of Frostfall Moon, Dusk)
+- If the exact time cannot be determined, provide a reasonable specific time; do not use vague placeholders like "unknown" or "some day".
 
 ${systemPromptAddition}
 ═══ Final Mandatory Reminder ═══

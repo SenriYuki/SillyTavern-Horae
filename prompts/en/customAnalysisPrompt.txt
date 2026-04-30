@@ -5,7 +5,7 @@ Please analyze the following text, extract key information, and output it in the
 
 [Output Format]
 <horae>
-time:date time (required, e.g., 2026/2/4 15:00 or First Day of Frostfall Moon 19:50)
+time:date time (required, e.g., 2026/2/4 15:00 or First Day of Frostfall Moon 19:50. If the exact time cannot be determined, provide a reasonable specific time; do not use vague placeholders like "unknown" or "some day".)
 location:current location (required)
 atmosphere:atmosphere
 characters:characters present, comma-separated (required)
