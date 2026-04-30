@@ -1,23 +1,28 @@
 /**
  * Prompt default resource loader
- * - Loads prompts/<lang>.json
+ * - Loads prompts/<lang>/*.txt
  * - Provides sync lookup from in-memory cache
  */
 
 const _cache = new Map(); // lang -> prompts object | null
 let _basePath = '';
+const _promptFileMap = Object.freeze({
+    customSystemPrompt: 'customSystemPrompt.txt',
+    customAntiParaphrasePrompt: 'customAntiParaphrasePrompt.txt',
+    customBatchPrompt: 'customBatchPrompt.txt',
+    customAnalysisPrompt: 'customAnalysisPrompt.txt',
+    customCompressPrompt: 'customCompressPrompt.txt',
+    customAutoSummaryPrompt: 'customAutoSummaryPrompt.txt',
+    customAutoResummaryPrompt: 'customAutoResummaryPrompt.txt',
+    customTablesPrompt: 'customTablesPrompt.txt',
+    customLocationPrompt: 'customLocationPrompt.txt',
+    customRelationshipPrompt: 'customRelationshipPrompt.txt',
+    customMoodPrompt: 'customMoodPrompt.txt',
+    customRpgPrompt: 'customRpgPrompt.txt',
+});
 
 function _normalizeLf(text) {
     return typeof text === 'string' ? text.replace(/\r\n?/g, '\n') : text;
-}
-
-function _normalizePromptsObject(rawPrompts) {
-    if (!rawPrompts || typeof rawPrompts !== 'object') return null;
-    const out = {};
-    for (const [k, v] of Object.entries(rawPrompts)) {
-        if (typeof v === 'string') out[k] = _normalizeLf(v);
-    }
-    return out;
 }
 
 function _normalizeLang(raw) {
@@ -46,23 +51,31 @@ async function _loadLang(lang) {
     if (!lang) return null;
     if (_cache.has(lang)) return _cache.get(lang);
     if (!_basePath) return null;
-    try {
-        const url = `${_basePath}/prompts/${lang}.json`;
-        const resp = await fetch(url);
-        if (!resp.ok) {
-            _cache.set(lang, null);
-            return null;
+
+    const prompts = {};
+    const entries = Object.entries(_promptFileMap);
+
+    await Promise.all(entries.map(async ([key, filename]) => {
+        const url = `${_basePath}/prompts/${lang}/${filename}`;
+        try {
+            const resp = await fetch(url);
+            if (!resp.ok) return;
+            const text = _normalizeLf(await resp.text());
+            if (typeof text === 'string' && text.trim().length > 0) {
+                prompts[key] = text;
+            }
+        } catch {
+            // Ignore single-file failures; caller fallback handles missing keys.
         }
-        const data = await resp.json();
-        const prompts = (data && typeof data === 'object' && data.prompts && typeof data.prompts === 'object')
-            ? _normalizePromptsObject(data.prompts)
-            : null;
-        _cache.set(lang, prompts);
-        return prompts;
-    } catch {
+    }));
+
+    if (Object.keys(prompts).length === 0) {
         _cache.set(lang, null);
         return null;
     }
+
+    _cache.set(lang, prompts);
+    return prompts;
 }
 
 export async function initPromptDefaults(basePath, preferredLang = 'en') {

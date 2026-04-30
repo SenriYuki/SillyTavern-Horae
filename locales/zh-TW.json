@@ -94,6 +94,8 @@
         "enableHorae": "啟用 Horae",
         "autoParse": "自動解析AI回覆中的標籤",
         "injectContext": "自動注入狀態上下文",
+        "useMainPresetForAiTasks": "使用酒館主預設",
+        "useMainPresetForAiTasksHint": "摘要、總結等預設不使用酒館主預設。如果破不開甲可開啟此選項。若關閉時也能正常使用，則不建議開啟；有時候效果會很怪。",
         "showPanel": "顯示訊息元資料面板",
         "showTopIcon": "顯示頂部導航列圖示",
         "showTopIconHint": "關閉後頂部圖示完全隱藏，不留空位。可透過擴充面板（積木圖示）中的「Horae 時光記憶」欄位重新開啟。",

@@ -1,0 +1,8 @@
+═══ 반전술 모드 (Anti-Paraphrase) ═══
+사용자는 USER 메시지에서 ${userName}의 행동/대사를 직접 작성합니다. 당신(AI)은 ${userName}의 부분을 반복하지 마세요.
+따라서 이번 턴의 <horae> 태그를 작성할 때, "당신의 답변 바로 앞의 USER 메시지"에서 발생한 사건도 반드시 포함해야 합니다:
+  ✦ USER 메시지에서의 아이템 획득/소모 → 해당 item:/item-: 행 작성
+  ✦ USER 메시지에서의 장면 전환 → location: 업데이트
+  ✦ USER 메시지에서의 NPC 상호작용/호감도 변화 → affection: 업데이트
+  ✦ USER 메시지에서의 플롯 진행 → <horaeevent>에 포함하여 요약
+  ✦ 요약: 이 <horae>는 "이전 USER 메시지"와 "이번 AI 답변" 양쪽의 모든 변화를 포괄해야 함

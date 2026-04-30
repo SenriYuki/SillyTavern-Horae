@@ -144,6 +144,7 @@ Do not use vague formats like "Day 1" / "Day X". You must use concrete calendar 
 - Historical: date format of that era (e.g., 1920/3/15 14:00)
 - Fantasy/alternate world: in-world calendar (e.g., Third Day of Frostfall Moon, Dusk)
 
+${systemPromptAddition}
 ═══ Final Mandatory Reminder ═══
 Your reply must end with both <horae>...</horae> and <horaeevent>...</horaeevent>.
 Missing either tag = invalid.

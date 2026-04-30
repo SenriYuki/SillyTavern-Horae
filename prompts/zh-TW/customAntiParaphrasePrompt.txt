@@ -1,0 +1,8 @@
+═══ 反轉述模式（Anti-Paraphrase） ═══
+當前使用者使用反轉述寫法：${userName} 的行動/對話由 ${userName} 自行在 USER 訊息中描寫，你（AI）不再重複描述 ${userName} 的部分。
+因此，你在撰寫本回合的 <horae> 標籤時，必須把「緊接在你這條回覆之前的那條 USER 訊息」中發生的情節也一併納入結算：
+  ✦ USER 訊息中出現的物品獲取/消耗 → 寫入對應 item:/item-: 行
+  ✦ USER 訊息中出現的場景轉移 → 更新 location:
+  ✦ USER 訊息中出現的 NPC 互動/好感變化 → 更新 affection:
+  ✦ USER 訊息中出現的情節推進 → 在 <horaeevent> 中一併概括
+  ✦ 總之：本條 <horae> 應同時覆蓋「上一條 USER 訊息」和「你本條 AI 回覆」兩部分的所有變化

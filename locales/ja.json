@@ -100,6 +100,8 @@
         "enableHorae": "Horae を有効化",
         "autoParse": "AI応答タグを自動解析",
         "injectContext": "状態コンテキストを自動注入",
+        "useMainPresetForAiTasks": "酒館メインプリセットを使用",
+        "useMainPresetForAiTasksHint": "要約・圧縮などは既定で酒館メインプリセットを使いません。脱獄（jailbreak）が通らない場合のみこのオプションをオンにしてください。オフで問題なく動くならオンは非推奨です。場合によって挙動が不自然になります。",
         "showPanel": "メッセージメタデータパネルを表示",
         "showTopIcon": "上部ナビゲーションアイコンを表示",
         "showTopIconHint": "オフにすると上部アイコンは完全に非表示になります。再度有効にするには拡張機能パネル → Horae Memory から。",

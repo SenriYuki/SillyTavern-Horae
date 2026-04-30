@@ -1,0 +1,8 @@
+═══ Anti-Paraphrase Mode ═══
+The user writes ${userName}'s actions/dialogue themselves in USER messages; you (AI) do NOT repeat ${userName}'s parts.
+Therefore, when writing this turn's <horae> tags, you MUST also include events from "the USER message immediately preceding your reply":
+  ✦ Items acquired/consumed in USER message → write corresponding item:/item-: lines
+  ✦ Scene transitions in USER message → update location:
+  ✦ NPC interactions/affection changes in USER message → update affection:
+  ✦ Plot progression in USER message → include in <horaeevent> summary
+  ✦ In short: this <horae> must cover ALL changes from BOTH "the previous USER message" AND "your current AI reply"

@@ -95,6 +95,8 @@
         "autoParse": "自动解析AI回复中的标签",
         "autoFillPrevTimelineOnSend": "发送时自动补全上一条消息时间线",
         "injectContext": "自动注入状态上下文",
+        "useMainPresetForAiTasks": "使用酒馆主预设",
+        "useMainPresetForAiTasksHint": "摘要、总结等默认不使用酒馆预设。如果破不开甲，开启这个选项。如果不开也能用，那不推荐开，有些时候会很奇怪。",
         "showPanel": "显示消息元数据面板",
         "showTopIcon": "显示顶部导航栏图标",
         "showTopIconHint": "关闭后顶部图标完全隐藏，不留空位。可通过扩展面板（积木图标）中的「Horae 时光记忆」栏位重新开启。",

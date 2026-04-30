@@ -95,6 +95,8 @@
         "autoParse": "Auto-parse AI response tags",
         "autoFillPrevTimelineOnSend": "Auto-fill previous message timeline before send",
         "injectContext": "Auto-inject state context",
+        "useMainPresetForAiTasks": "Use Tavern main preset",
+        "useMainPresetForAiTasksHint": "Summary/compression tasks do not use the Tavern preset by default. Enable this only if jailbreak fails. If it works with this off, keep it off; enabling it can behave oddly in some cases.",
         "showPanel": "Show message metadata panel",
         "showTopIcon": "Show top navigation icon",
         "showTopIconHint": "When off, the top icon is completely hidden. Re-enable via Extensions panel → Horae Memory.",
