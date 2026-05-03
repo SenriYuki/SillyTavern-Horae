@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.12.6
+ * 版本: 1.12.7
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -22,7 +22,7 @@ import { initPromptDefaults, ensurePromptDefaults, getPromptDefaultSync } from '
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.12.6';
+const VERSION = '1.12.7';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -217,12 +217,10 @@ const DEFAULT_SETTINGS = {
     vectorRerankModel: '',             // Rerank 模型名称
     vectorRerankUrl: '',               // Rerank API 地址（留空则复用 embedding 地址）
     vectorRerankKey: '',               // Rerank API 密钥（留空则复用 embedding 密钥）
-    vectorRerankCandidates: 25,        // Rerank 候选条数（开 rerank 时 embedding 召回上限）
-    vectorRerankRecallThreshold: 0.3,  // Rerank 模式下的 embedding 召回阈值（远低于 vectorThreshold）
-    vectorRerankMinScore: 0.95,         // Rerank 后的相关性最低分（低于此值丢弃）
-    vectorFallbackEnabled: false,      // 首次召回为空时用上一楼 AI 回复内容重试
-    vectorFallbackMinScore: 0.85,       // 非 Rerank 模式下 fallback 触发阈值（最高分低于此值即 fallback）
-    vectorRecallPresets: [],            // 用户自定义向量召回参数预设
+    vectorRerankCandidates: 25,        // Rerank 候选条数（embedding 召回上限）
+    vectorRerankRecallThreshold: 0.3,  // Rerank 路径的 embedding 召回阈值
+    vectorRerankMinScore: 0.5,         // Rerank 最低分；低于此分丢弃
+    vectorRecallPresets: [],           // 用户自定义召回参数预设
     vectorRecallPresetSelected: 'builtin:small',
     vectorTopK: 5,
     vectorThreshold: 0.72,
@@ -583,7 +581,7 @@ const BUILTIN_VECTOR_RECALL_PRESETS = [
             vectorRerankFullText: false,
             vectorRerankCandidates: 25,
             vectorRerankRecallThreshold: 0.3,
-            vectorRerankMinScore: 0.95,
+            vectorRerankMinScore: 0.85,
             vectorTopK: 5,
             vectorThreshold: 0.85,
             vectorFullTextCount: 3,
@@ -609,6 +607,16 @@ function _sanitizeVectorRecallPresetValues(values = {}) {
     const fullTextThreshold = parseFloat(values.vectorFullTextThreshold);
     out.vectorFullTextThreshold = Number.isFinite(fullTextThreshold) ? Math.min(1, Math.max(0.6, fullTextThreshold)) : 0.9;
     return out;
+}
+
+// 清理已废弃的 vectorFallback* 字段
+function _migrateLegacyVectorSettings(saved) {
+    if (!saved || typeof saved !== 'object') return false;
+    let changed = false;
+    if ('vectorFallbackEnabled' in saved) { delete saved.vectorFallbackEnabled; changed = true; }
+    if ('vectorFallbackMinScore' in saved) { delete saved.vectorFallbackMinScore; changed = true; }
+    if ('vectorRerankScoreMode' in saved) { delete saved.vectorRerankScoreMode; changed = true; }
+    return changed;
 }
 
 function _collectCurrentVectorRecallPresetValues() {
@@ -832,6 +840,7 @@ function loadSettings() {
         changed = true;
     }
     if (_normalizeAutoSummarySettingsInPlace(saved || {}) || _normalizePromptSettingsInPlace() || _normalizeVectorRecallPresetsInPlace() || _normalizeRpgSettingsInPlace()) changed = true;
+    if (_migrateLegacyVectorSettings(settings)) changed = true;
     if (changed) saveSettings();
 }
 
@@ -12235,6 +12244,7 @@ function initSettingsEvents() {
                 _normalizeAutoSummarySettingsInPlace(imported);
                 _normalizePromptSettingsInPlace();
                 _normalizeVectorRecallPresetsInPlace();
+                _migrateLegacyVectorSettings(settings);
                 _ensureLocalizedRpgDefaults();
                 _normalizeRpgSettingsInPlace();
                 await ensurePromptDefaults(detectEffectiveAiLang(settings));
@@ -13058,6 +13068,17 @@ function initSettingsEvents() {
         saveSettings();
     });
 
+    $('#horae-vector-debug-toggle').on('click', function () {
+        const $body = $('#horae-vector-debug-body');
+        const $icon = $(this).find('.horae-collapse-icon');
+        const isHidden = $body.is(':hidden');
+        $body.slideToggle(160);
+        $icon.toggleClass('collapsed', !isHidden);
+        if (isHidden) _renderVectorDebugInfo();
+    });
+    $('#horae-btn-vector-debug-refresh').on('click', _renderVectorDebugInfo);
+    $('#horae-btn-vector-debug-copy').on('click', _copyVectorDebugInfo);
+
     $('#horae-setting-vector-topk').on('change', function () {
         settings.vectorTopK = parseInt(this.value) || 5;
         saveSettings();
@@ -13116,6 +13137,8 @@ function _syncVectorSourceUI() {
     const isApi = settings.vectorSource === 'api';
     $('#horae-vector-local-options').toggle(!isApi);
     $('#horae-vector-api-options').toggle(isApi);
+    $('#horae-vector-api-recall-options').toggle(isApi);
+    $('#horae-vector-api-rerank-section').toggle(isApi);
 }
 
 function _renderVectorRecallPresetSelect() {
@@ -13161,6 +13184,97 @@ function _getSelectedVectorRecallPreset() {
         return preset ? { type: 'custom', index: idx, name: preset.name, values: preset.values } : null;
     }
     return null;
+}
+
+function _formatDebugSimilarity(v) {
+    if (typeof v !== 'number' || !Number.isFinite(v)) return '-';
+    return v.toFixed(3);
+}
+
+function _renderVectorDebugInfo() {
+    const $box = $('#horae-vector-debug-content');
+    if (!$box.length) return;
+    const info = (typeof vectorManager !== 'undefined' && vectorManager?.getLastDebugInfo) ? vectorManager.getLastDebugInfo() : null;
+    if (!info) {
+        $box.html(`<div class="horae-empty-hint">${t('vector.debugEmpty') || ''}</div>`);
+        return;
+    }
+    const escape = (s) => $('<div>').text(s == null ? '' : String(s)).html();
+    const ts = new Date(info.timestamp || Date.now()).toLocaleString();
+
+    const queryRows = [
+        [t('vector.debugQueryUser'), info.query?.user],
+        [t('vector.debugQueryState'), info.query?.state],
+        [t('vector.debugQueryMerged'), info.query?.merged],
+    ].map(([k, v]) => `<div class="horae-vector-debug-row"><span class="horae-vector-debug-key">${escape(k)}</span><span class="horae-vector-debug-val">${escape(v || '-')}</span></div>`).join('');
+
+    const settingsLine = info.settings
+        ? `topK=${info.settings.topK} / threshold=${info.settings.threshold}${typeof info.settings.effectiveThreshold === 'number' && info.settings.effectiveThreshold !== info.settings.threshold ? ` (eff=${info.settings.effectiveThreshold.toFixed(3)})` : ''} / pureMode=${info.settings.pureMode} / rerank=${info.settings.useRerank}${info.settings.useRerank ? ` / minScore=${_formatDebugSimilarity(info.settings.rerankMinScore)} / candidates=${info.settings.rerankCandidates}` : ''}`
+        : '';
+
+    const renderHits = (rows) => {
+        if (!rows || rows.length === 0) return `<div class="horae-empty-hint">${escape(t('vector.debugNone') || '-')}</div>`;
+        return `<table class="horae-vector-debug-table"><thead><tr><th>#</th><th>${escape(t('vector.debugColScore'))}</th><th>${escape(t('vector.debugColSource'))}</th><th>${escape(t('vector.debugColPreview'))}</th></tr></thead><tbody>${rows.map(r => `<tr><td>${r.messageIndex}</td><td>${_formatDebugSimilarity(r.similarity)}</td><td>${escape(r.source || '-')}</td><td>${escape(r.docPreview || '')}</td></tr>`).join('')}</tbody></table>`;
+    };
+
+    let rerankBlock = '';
+    if (info.rerank) {
+        if (info.rerank.error) {
+            rerankBlock = `<div class="horae-empty-hint">${escape(t('vector.debugRerankError'))}: ${escape(info.rerank.error)}</div>`;
+        } else if (info.rerank.enabled && Array.isArray(info.rerank.output)) {
+            const rerankRows = info.rerank.output.map(r => `<tr class="${r.passed ? '' : 'horae-vector-debug-dropped'}"><td>${r.messageIndex ?? '-'}</td><td>${_formatDebugSimilarity(r.relevance)}</td><td>${r.passed ? '✓' : '✗'}</td></tr>`).join('');
+            rerankBlock = `
+                <div class="horae-vector-debug-row"><span class="horae-vector-debug-key">${escape(t('vector.debugRerankInfo'))}</span><span class="horae-vector-debug-val">minScore=${_formatDebugSimilarity(info.rerank.minScore)} / fullText=${info.rerank.useFullText} / passed=${info.rerank.passedCount}/${info.rerank.output.length}${info.rerank.retainedTop1 ? ' / Top1 retained' : ''}</span></div>
+                <table class="horae-vector-debug-table"><thead><tr><th>#</th><th>${escape(t('vector.debugColScore'))}</th><th>${escape(t('vector.debugColPassed'))}</th></tr></thead><tbody>${rerankRows}</tbody></table>
+            `;
+        }
+    }
+
+    $box.html(`
+        <div class="horae-vector-debug-meta">
+            <span><i class="fa-regular fa-clock"></i> ${escape(ts)}</span>
+            <span><i class="fa-solid fa-database"></i> ${escape(t('vector.debugIndexedCount'))}: ${info.indexedCount ?? '-'}</span>
+        </div>
+        <div class="horae-vector-debug-section">
+            <div class="horae-vector-debug-title">${escape(t('vector.debugQueryTitle'))}</div>
+            ${queryRows}
+            <div class="horae-vector-debug-row"><span class="horae-vector-debug-key">${escape(t('vector.debugSettings'))}</span><span class="horae-vector-debug-val">${escape(settingsLine)}</span></div>
+        </div>
+        <div class="horae-vector-debug-section">
+            <div class="horae-vector-debug-title">${escape(t('vector.debugStructured'))} (${(info.structured || []).length})</div>
+            ${renderHits(info.structured)}
+        </div>
+        <div class="horae-vector-debug-section">
+            <div class="horae-vector-debug-title">${escape(t('vector.debugEmbedding'))} (${(info.embedding || []).length})</div>
+            ${renderHits(info.embedding)}
+        </div>
+        ${rerankBlock ? `<div class="horae-vector-debug-section"><div class="horae-vector-debug-title">${escape(t('vector.debugRerank'))}</div>${rerankBlock}</div>` : ''}
+        <div class="horae-vector-debug-section">
+            <div class="horae-vector-debug-title">${escape(t('vector.debugFinal'))} (${(info.final || []).length})</div>
+            ${renderHits(info.final)}
+        </div>
+        <div class="horae-vector-debug-section">
+            <div class="horae-vector-debug-title">${escape(t('vector.debugRecallText'))}</div>
+            <pre class="horae-vector-debug-pre">${escape(info.recallText || '')}</pre>
+        </div>
+    `);
+}
+
+function _copyVectorDebugInfo() {
+    const info = (typeof vectorManager !== 'undefined' && vectorManager?.getLastDebugInfo) ? vectorManager.getLastDebugInfo() : null;
+    if (!info) {
+        showToast(t('vector.debugEmpty'), 'info');
+        return;
+    }
+    try {
+        const text = JSON.stringify(info, null, 2);
+        navigator.clipboard.writeText(text).then(
+            () => showToast(t('vector.debugCopied'), 'success'),
+            () => showToast(t('vector.debugCopyFailed'), 'error'),
+        );
+    } catch (err) {
+        showToast(t('vector.debugCopyFailed') + ': ' + (err?.message || ''), 'error');
+    }
 }
 
 function _syncVectorRecallPresetInputs() {

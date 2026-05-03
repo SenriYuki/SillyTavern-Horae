@@ -1,4 +1,4 @@
-# Horae v1.12.6 - Memory Engine for SillyTavern
+# Horae v1.12.7 - Memory Engine for SillyTavern
 
 **English** | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md)
 
@@ -61,7 +61,7 @@ Long-form RP players know the pain: AI memory is basically a goldfish. Yesterday
 
 ## Compatibility
 
-- **SillyTavern**: 1.12.6+ (AI analysis requires 1.13.5+)
+- **SillyTavern**: 1.12.7+ (AI analysis requires 1.13.5+)
 - **Platforms**: Desktop + Mobile
 
 ---
@@ -84,7 +84,7 @@ window.Horae?.getEvents(10)      // → last 10 events
 window.Horae?.getSettings()
 
 // Version string
-window.Horae?.version            // → "1.12.6"
+window.Horae?.version            // → "1.12.7"
 ```
 
 Settings change events are broadcast via SillyTavern's `eventSource`:

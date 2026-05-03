@@ -10,7 +10,7 @@
                 <i class="fa-regular fa-clock"></i>
                 Horae 时光记忆
             </div>
-            <span class="horae-version">1.12.6</span>
+            <span class="horae-version">1.12.7</span>
         </div>
         
         <!-- 标签页导航 -->
@@ -1087,21 +1087,97 @@
                                         <i class="fa-solid fa-plug-circle-check"></i> 测试向量 API 连线
                                     </button>
                                 </div>
+                            </div>
+                            <div class="horae-vector-setting-group">
                                 <div class="horae-setting-item">
-                                    <label data-i18n="vector.pureMode">
-                                        <input type="checkbox" id="horae-setting-vector-pure-mode">
-                                        纯向量模式（强模型优化）
-                                    </label>
-                                    <span class="horae-setting-hint" data-i18n="vector.pureModeHint" style="margin-top: 4px;">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                        适用于高维度 API 模型（如 Qwen3-Embedding、text-embedding-3-large 等）。<br>
-                                        开启后将<strong>关闭关键词扩展、事件词组匹配、高频词惩罚</strong>等辅助启发式，<br>
-                                        完全依赖模型自身的语义理解能力进行召回，减少低质量噪音。<br>
-                                        <i class="fa-solid fa-triangle-exclamation"></i>
-                                         如果你使用的是小型或低维度模型，<strong>请不要开启</strong>，否则召回质量会下降。
+                                    <label data-i18n="vector.recallPreset">召回参数预设</label>
+                                    <div class="horae-prompt-presets-bar" style="margin-bottom: 6px;">
+                                        <i class="fa-solid fa-sliders" style="opacity:.5;font-size:12px"></i>
+                                        <select id="horae-vector-recall-preset-select" class="horae-edit-field"></select>
+                                        <button id="horae-vector-recall-preset-load" class="horae-rpg-btn-sm" data-i18n-title="tooltip.loadPreset" title="">
+                                            <i class="fa-solid fa-arrows-rotate"></i>
+                                        </button>
+                                    </div>
+                                    <div class="horae-prompt-presets-bar horae-prompt-presets-actions" style="margin-top:0;justify-content:flex-end;flex-wrap:wrap;row-gap:4px;">
+                                        <button id="horae-vector-recall-preset-save" class="horae-rpg-btn-sm" data-i18n="vector.saveRecallPreset">
+                                            <i class="fa-solid fa-floppy-disk"></i> 保存
+                                        </button>
+                                        <button id="horae-vector-recall-preset-new" class="horae-rpg-btn-sm" data-i18n="vector.newRecallPreset">
+                                            <i class="fa-solid fa-plus"></i> 新建
+                                        </button>
+                                        <button id="horae-vector-recall-preset-delete" class="horae-rpg-btn-sm" data-i18n="vector.deleteRecallPreset">
+                                            <i class="fa-solid fa-trash"></i> 删除
+                                        </button>
+                                    </div>
+                                    <span class="horae-setting-sub-hint" data-i18n="vector.recallPresetHint">
+                                        选择预设后会立即套用当前召回参数。小模型建议适合本地模型和免费 Embedding；大模型建议适合高维 API Embedding；搭配 Rerank 建议会使用更大的候选池再精排。
                                     </span>
                                 </div>
-                                <div class="horae-setting-item" style="margin-top: 8px;">
+                            </div>
+                            <div class="horae-vector-setting-group">
+                                <div class="horae-vector-setting-group-title" data-i18n="vector.basicRecallSettings">基础向量召回</div>
+                                <div id="horae-vector-api-recall-options" style="display: none;">
+                                    <div class="horae-setting-item">
+                                        <label data-i18n="vector.pureMode">
+                                            <input type="checkbox" id="horae-setting-vector-pure-mode">
+                                            纯向量模式（强模型优化）
+                                        </label>
+                                        <span class="horae-setting-hint" data-i18n="vector.pureModeHint" style="margin-top: 4px;">
+                                            <i class="fa-solid fa-circle-info"></i>
+                                            适用于高维度 API 模型（如 Qwen3-Embedding、text-embedding-3-large 等）。<br>
+                                            开启后将<strong>关闭关键词扩展、事件词组匹配、高频词惩罚</strong>等辅助启发式，<br>
+                                            完全依赖模型自身的语义理解能力进行召回，减少低质量噪音。<br>
+                                            <i class="fa-solid fa-triangle-exclamation"></i>
+                                             如果你使用的是小型或低维度模型，<strong>请不要开启</strong>，否则召回质量会下降。
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="horae-setting-item">
+                                    <label data-i18n="vector.topK">
+                                        召回条数 (Top-K)
+                                        <input type="number" id="horae-setting-vector-topk" min="1" max="10" value="5">
+                                    </label>
+                                    <span class="horae-setting-sub-hint" data-i18n="vector.topKHint">每次发送消息时，从向量库召回最相关的 K 条记忆注入上下文。</span>
+                                </div>
+                            <div class="horae-setting-item">
+                                <label data-i18n="vector.threshold">
+                                    最低相似度阈值
+                                    <input type="number" id="horae-setting-vector-threshold" min="0.3" max="0.95" step="0.01" value="0.72">
+                                </label>
+                                <span class="horae-setting-sub-hint" data-i18n="vector.thresholdHint">相似度低于此值的记忆不会被召回。提高此值可减少噪音。</span>
+                            </div>
+                            <div class="horae-setting-item">
+                                <label data-i18n="vector.fulltextCount">
+                                    全文回顾条数
+                                    <input type="number" id="horae-setting-vector-fulltext-count" min="0" max="5" value="3">
+                                </label>
+                                <span class="horae-setting-sub-hint" data-i18n="vector.fulltextCountHint">排名前 N 且达到全文阈值的召回结果会发送原始正文而非摘要。设为 0 关闭此功能。</span>
+                            </div>
+                            <div class="horae-setting-item">
+                                <label data-i18n="vector.fulltextThreshold">
+                                    全文回顾阈值
+                                    <input type="number" id="horae-setting-vector-fulltext-threshold" min="0.6" max="1.0" step="0.01" value="0.9">
+                                </label>
+                                <span class="horae-setting-sub-hint" data-i18n="vector.fulltextThresholdHint">只有相似度达到此值的高置信度结果才会发送全文，避免不相关内容浪费 Token。</span>
+                            </div>
+                            <div class="horae-setting-item">
+                                <label data-i18n="vector.stripTags">
+                                    内容剔除标签
+                                    <input type="text" id="horae-setting-vector-strip-tags" class="horae-edit-field" placeholder="snow, theater, side">
+                                </label>
+                                <span class="horae-setting-sub-hint" data-i18n="vector.stripTagsHint">
+                                    用逗号分隔标签名。以下场景会整段移除这些标签包裹的内容：<br>
+                                    · <b>向量检索</b>全文回顾 &amp; Rerank 全文精排<br>
+                                    · <b>时间线解析</b>：防止小剧场内的 horae 标签污染正文时间线<br>
+                                    · <b>AI 智能补全</b>：发送消息给 AI 分析前先剔除<br>
+                                    例：填 <code>snow, theater</code> 会剔除 <code>&lt;snow&gt;...&lt;/snow&gt;</code> 和 <code>&lt;theater&gt;...&lt;/theater&gt;</code>。<br>
+                                    HTML 注释 <code>&lt;!-- ... --&gt;</code> 已默认剔除，无需填写。
+                                </span>
+                            </div>
+                            </div>
+                            <div id="horae-vector-api-rerank-section" class="horae-vector-setting-group" style="display: none;">
+                                <div class="horae-vector-setting-group-title" data-i18n="vector.rerankSettings">Rerank 二次排序</div>
+                                <div class="horae-setting-item">
                                     <label data-i18n="vector.enableRerank">
                                         <input type="checkbox" id="horae-setting-vector-rerank-enabled">
                                         启用 Rerank 二次排序
@@ -1173,75 +1249,9 @@
                                             Rerank 最低分
                                             <input type="number" id="horae-setting-vector-rerank-min-score" min="0" max="1" step="0.05" value="0.5">
                                         </label>
-                                        <span class="horae-setting-sub-hint" data-i18n="vector.rerankMinScoreHint">Rerank 给出的相关性分数低于此值的结果会被丢弃，不进入上下文。建议 0.9+。</span>
+                                        <span class="horae-setting-sub-hint" data-i18n="vector.rerankMinScoreHint">低于此分的 Rerank 结果会被丢弃。不同模型分数尺度差异较大：严格 ≈ 0.85，平衡 ≈ 0.5，宽松 ≈ 0.2，请按所用模型调整。</span>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="horae-setting-item">
-                                <label data-i18n="vector.recallPreset">召回参数预设</label>
-                                <div class="horae-prompt-presets-bar" style="margin-bottom: 6px;">
-                                    <i class="fa-solid fa-sliders" style="opacity:.5;font-size:12px"></i>
-                                    <select id="horae-vector-recall-preset-select" class="horae-edit-field"></select>
-                                    <button id="horae-vector-recall-preset-load" class="horae-rpg-btn-sm" data-i18n-title="tooltip.loadPreset" title="">
-                                        <i class="fa-solid fa-arrows-rotate"></i>
-                                    </button>
-                                </div>
-                                <div class="horae-prompt-presets-bar horae-prompt-presets-actions" style="margin-top:0;justify-content:flex-end;flex-wrap:wrap;row-gap:4px;">
-                                    <button id="horae-vector-recall-preset-save" class="horae-rpg-btn-sm" data-i18n="vector.saveRecallPreset">
-                                        <i class="fa-solid fa-floppy-disk"></i> 保存
-                                    </button>
-                                    <button id="horae-vector-recall-preset-new" class="horae-rpg-btn-sm" data-i18n="vector.newRecallPreset">
-                                        <i class="fa-solid fa-plus"></i> 新建
-                                    </button>
-                                    <button id="horae-vector-recall-preset-delete" class="horae-rpg-btn-sm" data-i18n="vector.deleteRecallPreset">
-                                        <i class="fa-solid fa-trash"></i> 删除
-                                    </button>
-                                </div>
-                                <span class="horae-setting-sub-hint" data-i18n="vector.recallPresetHint">
-                                    选择预设后会立即套用当前召回参数。小模型建议适合本地模型和免费 Embedding；大模型建议适合高维 API Embedding；搭配 Rerank 建议会使用更大的候选池再精排。
-                                </span>
-                            </div>
-                            <div class="horae-setting-item">
-                                <label data-i18n="vector.topK">
-                                    召回条数 (Top-K)
-                                    <input type="number" id="horae-setting-vector-topk" min="1" max="10" value="5">
-                                </label>
-                                <span class="horae-setting-sub-hint" data-i18n="vector.topKHint">每次发送消息时，从向量库召回最相关的 K 条记忆注入上下文。</span>
-                            </div>
-                            <div class="horae-setting-item">
-                                <label data-i18n="vector.threshold">
-                                    最低相似度阈值
-                                    <input type="number" id="horae-setting-vector-threshold" min="0.3" max="0.95" step="0.01" value="0.72">
-                                </label>
-                                <span class="horae-setting-sub-hint" data-i18n="vector.thresholdHint">相似度低于此值的记忆不会被召回。提高此值可减少噪音。</span>
-                            </div>
-                            <div class="horae-setting-item">
-                                <label data-i18n="vector.fulltextCount">
-                                    全文回顾条数
-                                    <input type="number" id="horae-setting-vector-fulltext-count" min="0" max="5" value="3">
-                                </label>
-                                <span class="horae-setting-sub-hint" data-i18n="vector.fulltextCountHint">排名前 N 且达到全文阈值的召回结果会发送原始正文而非摘要。设为 0 关闭此功能。</span>
-                            </div>
-                            <div class="horae-setting-item">
-                                <label data-i18n="vector.fulltextThreshold">
-                                    全文回顾阈值
-                                    <input type="number" id="horae-setting-vector-fulltext-threshold" min="0.6" max="1.0" step="0.01" value="0.9">
-                                </label>
-                                <span class="horae-setting-sub-hint" data-i18n="vector.fulltextThresholdHint">只有相似度达到此值的高置信度结果才会发送全文，避免不相关内容浪费 Token。</span>
-                            </div>
-                            <div class="horae-setting-item">
-                                <label data-i18n="vector.stripTags">
-                                    内容剔除标签
-                                    <input type="text" id="horae-setting-vector-strip-tags" class="horae-edit-field" placeholder="snow, theater, side">
-                                </label>
-                                <span class="horae-setting-sub-hint" data-i18n="vector.stripTagsHint">
-                                    用逗号分隔标签名。以下场景会整段移除这些标签包裹的内容：<br>
-                                    · <b>向量检索</b>全文回顾 &amp; Rerank 全文精排<br>
-                                    · <b>时间线解析</b>：防止小剧场内的 horae 标签污染正文时间线<br>
-                                    · <b>AI 智能补全</b>：发送消息给 AI 分析前先剔除<br>
-                                    例：填 <code>snow, theater</code> 会剔除 <code>&lt;snow&gt;...&lt;/snow&gt;</code> 和 <code>&lt;theater&gt;...&lt;/theater&gt;</code>。<br>
-                                    HTML 注释 <code>&lt;!-- ... --&gt;</code> 已默认剔除，无需填写。
-                                </span>
                             </div>
                             <div class="horae-vector-status">
                                 <span id="horae-vector-status-text" data-i18n="vector.modelNotLoaded">模型未加载</span>
@@ -1262,6 +1272,27 @@
                                     <i class="fa-solid fa-trash-can"></i>
                                     <span data-i18n="vector.clearIndex">清除索引</span>
                                 </button>
+                            </div>
+                            <div class="horae-settings-section horae-vector-debug-section" style="margin-top:10px;">
+                                <div class="horae-section-header horae-collapse-header" id="horae-vector-debug-toggle">
+                                    <i class="fa-solid fa-bug"></i>
+                                    <span data-i18n="vector.debugTitle">最近一次召回详情</span>
+                                    <i class="fa-solid fa-chevron-down horae-collapse-icon collapsed"></i>
+                                </div>
+                                <div id="horae-vector-debug-body" style="display: none;">
+                                    <span class="horae-setting-sub-hint" data-i18n="vector.debugHint">展示最近一次「向量召回」的查询、各阶段命中、Rerank 输入输出与最终注入文本，用于调参与排查。</span>
+                                    <div class="horae-vector-buttons" style="margin-top:6px;">
+                                        <button id="horae-btn-vector-debug-refresh" class="horae-vector-btn">
+                                            <i class="fa-solid fa-rotate"></i>
+                                            <span data-i18n="vector.debugRefresh">刷新</span>
+                                        </button>
+                                        <button id="horae-btn-vector-debug-copy" class="horae-vector-btn">
+                                            <i class="fa-solid fa-copy"></i>
+                                            <span data-i18n="vector.debugCopy">复制 JSON</span>
+                                        </button>
+                                    </div>
+                                    <div id="horae-vector-debug-content" class="horae-vector-debug-content"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1483,7 +1514,7 @@
                 </div>
                 
                 <div class="horae-about">
-                    <p>Horae v1.12.6 | 作者: SenriYuki</p>
+                    <p>Horae v1.12.7 | 作者: SenriYuki</p>
                     <p>基于时间锚点的AI记忆增强系统</p>
                 </div>
             </div>

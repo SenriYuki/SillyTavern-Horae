@@ -1169,6 +1169,20 @@
     margin-bottom: 0;
 }
 
+.horae-vector-setting-group {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--horae-border);
+}
+
+.horae-vector-setting-group-title {
+    margin-bottom: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--horae-accent);
+    letter-spacing: 0.02em;
+}
+
 .horae-setting-item label {
     display: flex;
     align-items: center;
@@ -4324,6 +4338,101 @@ body .horae-context-menu {
 
 .horae-vector-btn:active {
     transform: translateY(0);
+}
+
+/* ========== 向量召回 Debug 面板 ========== */
+.horae-vector-debug-section {
+    border: 1px solid var(--horae-border, rgba(255,255,255,0.08));
+    border-radius: var(--horae-radius, 8px);
+    padding: 8px 10px;
+    background: var(--horae-bg-secondary, rgba(255,255,255,0.02));
+}
+.horae-vector-debug-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--horae-text);
+}
+.horae-vector-debug-content .horae-vector-debug-section {
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: var(--horae-bg-secondary, rgba(255,255,255,0.03));
+    border: 1px solid var(--horae-border, rgba(255,255,255,0.06));
+}
+.horae-vector-debug-meta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 11px;
+    color: var(--horae-text-secondary);
+    padding: 4px 0;
+}
+.horae-vector-debug-title {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--horae-text);
+    opacity: 0.85;
+}
+.horae-vector-debug-row {
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+    padding: 2px 0;
+    font-size: 12px;
+    border-bottom: 1px dashed var(--horae-border, rgba(255,255,255,0.05));
+}
+.horae-vector-debug-row:last-child { border-bottom: none; }
+.horae-vector-debug-key {
+    flex: 0 0 96px;
+    color: var(--horae-text-secondary);
+    font-size: 11px;
+}
+.horae-vector-debug-val {
+    flex: 1;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+.horae-vector-debug-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    margin-top: 4px;
+}
+.horae-vector-debug-table th,
+.horae-vector-debug-table td {
+    padding: 3px 6px;
+    border-bottom: 1px solid var(--horae-border, rgba(255,255,255,0.05));
+    text-align: left;
+    vertical-align: top;
+}
+.horae-vector-debug-table th {
+    color: var(--horae-text-secondary);
+    font-weight: 500;
+    background: rgba(255,255,255,0.02);
+}
+.horae-vector-debug-table td:nth-child(1),
+.horae-vector-debug-table td:nth-child(2),
+.horae-vector-debug-table td:nth-child(3) {
+    white-space: nowrap;
+}
+.horae-vector-debug-table tr.horae-vector-debug-dropped {
+    opacity: 0.55;
+}
+.horae-vector-debug-pre {
+    max-height: 220px;
+    overflow: auto;
+    font-size: 11px;
+    line-height: 1.5;
+    background: rgba(0,0,0,0.18);
+    border: 1px solid var(--horae-border, rgba(255,255,255,0.06));
+    border-radius: 6px;
+    padding: 6px 8px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--horae-text);
 }
 
 /* ========== RPG 模式 ========== */
