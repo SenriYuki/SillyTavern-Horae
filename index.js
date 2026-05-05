@@ -172,8 +172,8 @@ const DEFAULT_SETTINGS = {
     autoSummaryApiUrl: '',          // 独立API端点地址（OpenAI兼容）
     autoSummaryApiKey: '',          // 独立API密钥
     autoSummaryModel: '',           // 独立API模型名称
-    subApiScopeAutoSummary: true,   // 副API应用范围：自动总结
-    subApiScopeManualSummary: true, // 副API应用范围：手动总结（时间线压缩）
+    subApiScopeAutoSummary: false,   // 副API应用范围：自动总结
+    subApiScopeManualSummary: false, // 副API应用范围：手动总结（时间线压缩）
     subApiScopeBrief: false,        // 副API应用范围：摘要（预留）
     antiParaphraseMode: false,      // 反转述模式：AI回复时结算上一条USER的内容
     sideplayMode: false,            // 番外/小剧场模式：启用后可标记消息跳过Horae
@@ -10997,6 +10997,9 @@ function rescanMessageMeta(messageId, panelEl) {
         if ((!newMeta.agenda || newMeta.agenda.length === 0) && existingMeta?.agenda?.length > 0) {
             newMeta.agenda = existingMeta.agenda;
         }
+        if ((!newMeta.deletedAgenda || newMeta.deletedAgenda.length === 0) && existingMeta?.deletedAgenda?.length > 0) {
+            newMeta.deletedAgenda = existingMeta.deletedAgenda;
+        }
 
         // 处理表格更新
         if (newMeta._tableUpdates) {
@@ -11065,6 +11068,9 @@ function savePanelData(panelEl, messageId) {
     }
     if (existingMeta?.mood && Object.keys(existingMeta.mood).length > 0) {
         meta.mood = JSON.parse(JSON.stringify(existingMeta.mood));
+    }
+    if (existingMeta?.deletedAgenda?.length > 0) {
+        meta.deletedAgenda = JSON.parse(JSON.stringify(existingMeta.deletedAgenda));
     }
 
     // 分离日期时间
@@ -11331,6 +11337,13 @@ function buildHoraeTagFromMeta(meta) {
                 const datePart = item.date ? `${item.date}|` : '';
                 lines.push(`agenda:${datePart}${item.text}`);
             }
+        }
+    }
+
+    if (meta.deletedAgenda?.length > 0) {
+        for (const text of meta.deletedAgenda) {
+            const normalized = String(text || '').trim();
+            if (normalized) lines.push(`agenda-:${normalized}`);
         }
     }
 

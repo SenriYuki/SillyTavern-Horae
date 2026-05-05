@@ -66,6 +66,7 @@ export function createEmptyMeta() {
         affection: {},
         npcs: {},
         agenda: [],
+        deletedAgenda: [],
         mood: {},
         relationships: [],
     };
@@ -1621,11 +1622,24 @@ class HoraeManager {
             if (!meta.agenda) meta.agenda = [];
             const chat0 = this.getChat()?.[0];
             const deletedSet = new Set(chat0?.horae_meta?._deletedAgendaTexts || []);
+            const localDeletedSet = new Set(parsed.deletedAgenda || []);
             for (const item of parsed.agenda) {
                 if (deletedSet.has(item.text)) continue;
+                if (localDeletedSet.has(item.text)) continue;
                 const isDupe = meta.agenda.some(a => a.text === item.text);
                 if (!isDupe) {
                     meta.agenda.push(item);
+                }
+            }
+        }
+
+        if (parsed.deletedAgenda && parsed.deletedAgenda.length > 0) {
+            if (!meta.deletedAgenda) meta.deletedAgenda = [];
+            for (const text of parsed.deletedAgenda) {
+                const normalized = String(text || '').trim();
+                if (!normalized) continue;
+                if (!meta.deletedAgenda.includes(normalized)) {
+                    meta.deletedAgenda.push(normalized);
                 }
             }
         }
@@ -3328,6 +3342,9 @@ class HoraeManager {
                 }
                 _applyPreserved(meta);
                 this.setMessageMeta(i, meta);
+                if (parsed.deletedAgenda?.length > 0) {
+                    this.removeCompletedAgenda(parsed.deletedAgenda);
+                }
                 processed++;
             } else if (analyzeCallback) {
                 try {
@@ -3340,6 +3357,9 @@ class HoraeManager {
                         }
                         _applyPreserved(meta);
                         this.setMessageMeta(i, meta);
+                        if (analyzed.deletedAgenda?.length > 0) {
+                            this.removeCompletedAgenda(analyzed.deletedAgenda);
+                        }
                         processed++;
                     }
                 } catch (error) {

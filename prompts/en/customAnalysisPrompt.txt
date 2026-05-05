@@ -22,8 +22,8 @@ item!!:emoji item name(quantity)|description=holder@exact location (key items, d
 item-:item name (consumed/lost items)
 affection:character name=affection value (only NPC affection toward {{user}}, do not record {{user}} themselves, do not append notes after the number)
 npc:character name|appearance=personality@relationship with {{user}}~gender:male or female~age:number~race:race name~occupation:occupation name
-agenda:date established|todo content (write only when new agreements/plans/foreshadowing appear; relative time must include absolute date in parentheses)
-agenda-:content keyword (write when todo is completed/invalid/canceled; system auto-removes matching todo)
+agenda:date established|todo content ([MUST CHECK REFERENCE STATE] Write only when a truly new plan/agreement appears that absolutely did not exist before. If a similar todo already exists in the reference state, duplicate creation is forbidden)
+agenda-:existing todo entry from the reference state ([FORCED WRITE-OFF] When the text causes a referenced todo to be executed, completed, abandoned, canceled, or invalidated, you must remove it with this command)
 </horae>
 <horaeevent>
 event:importance level|event description
@@ -34,9 +34,15 @@ event:importance level|event description
 · NPC: first appearance must be complete (including ~gender/age/race/occupation). Afterward, write only changed fields; if unchanged, do not write.
   Delimiters: | separates name, = separates appearance and personality, @ separates relationship, ~ separates extended fields
 · Affection: first value is determined by relationship (stranger 0-20/acquaintance 30-50/friend 50-70), then write only when changed.
-· Todo: write only when new agreements/plans/foreshadowing appear. For completed/invalid todos, use agenda-: to remove.
-  Add: agenda:2026/02/10|Allen invites {{user}} on a Valentine's evening date(2026/02/14 18:00)
-  Complete: agenda-:Allen invites {{user}} on a Valentine's evening date
+· Todo state transitions (critical; strictly follow this code-level logic):
+  [Forced cleanup of stale history]: Check the [To-Do Items] list in [Reference State]. If any todo is executed, canceled, or the current time has already passed its scheduled time node in [Text to Analyze] (even if not explicitly mentioned, treat it as expired), you must remove it with `agenda-:`.
+  🔴 Strict write-off syntax: after `agenda-:`, you must copy the full original todo entry text exactly, character-for-character (do not copy the bullet marker). Abbreviation, paraphrase, or summarization is forbidden.
+  Write-off example: agenda-:1988/09/29 Have a formal dinner in town(After 1988/09/29 18:00)
+  [Merge overwrite and anti-duplication]: Before creating a new `agenda:`, compare against existing [To-Do Items].
+  1. Repeated mention only: if the plan itself did not change, do not output it again.
+  2. Detail update: if new details are added to the same existing plan, you must first delete all related old entries with `agenda-:`, then output one rebuilt `agenda:` entry that merges all old and new details. Old and new versions must never coexist.
+  3. Batch merge: if multiple plans are produced in the same turn or single dialogue, merge them into one line. Splitting into multiple `agenda:` lines is forbidden.
+  New example: agenda:1988/09/29|Wake up at 9:00 tomorrow morning, then go shopping, and strictly forbid wearing school uniform(1988/09/30 09:00)
 · event: place it inside <horaeevent>, not inside <horae>.
 
 ═══ [Event Summary (event)] Writing Rules ═══
