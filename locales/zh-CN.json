@@ -273,7 +273,7 @@
         "subApiScopeAutoSummary": "自动总结",
         "subApiScopeManualSummary": "手动总结",
         "subApiScopeBrief": "摘要",
-        "subApiScopeBriefHint": "开启摘要使用副API后，“自动补全上一消息”会同步开启，格式提示词将不会在发送新消息时注入，因此摘要不会跟着正文一起输出，而是在发新消息时使用副API补全，手动点击楼层界面中的AI分析一样会使用副API",
+        "subApiScopeBriefHint": "开启摘要使用副API后，“自动补全上一消息”会同步开启，格式提示词将不会在发送新消息时注入，因此摘要不会跟着正文一起输出，而是在发新消息时使用副API补全，手动点击楼层界面中的AI分析一样会使用副API\n开启后，如果高级设置里的注入深度是系统@D 0，建议改成系统@D 1",
         "subApiScopeSingleAnalysis": "单条分析",
         "summaryFetchModelsHint": "填好地址和密钥后点击拉取可用模型列表",
         "testSubApi": "测试副 API",

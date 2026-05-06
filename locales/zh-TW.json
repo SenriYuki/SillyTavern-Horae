@@ -253,7 +253,7 @@
         "subApiScopeAutoSummary": "自動總結",
         "subApiScopeManualSummary": "手動總結",
         "subApiScopeBrief": "摘要",
-        "subApiScopeBriefHint": "開啟摘要使用副API後，「自動補全上一訊息」會同步開啟，格式提示詞將不會在發送新訊息時注入，因此摘要不會跟著正文一起輸出，而是在發新訊息時使用副API補全，手動點擊樓層介面中的AI分析一樣會使用副API",
+        "subApiScopeBriefHint": "開啟摘要使用副API後，「自動補全上一訊息」會同步開啟，格式提示詞將不會在發送新訊息時注入，因此摘要不會跟著正文一起輸出，而是在發新訊息時使用副API補全，手動點擊樓層介面中的AI分析一樣會使用副API\n開啟後，若進階設定中的注入深度為系統 @D 0，建議改為系統 @D 1",
         "subApiScopeSingleAnalysis": "單條分析",
         "customTables": "自訂表格",
         "customTablesHint": "建立Excel風格表格，讓AI按你的需求填寫特定資訊。\n長按表頭可新增/刪除行列。每個表格可設置提示詞指導AI如何填寫。\n本地表格跟隨當前對話儲存；角色表格綁定角色卡（結構跟隨角色，資料按對話獨立）；全域表格所有對話共享。\n點擊表格名稱前的圖示可切換作用域。🔒 鎖定行列可防止AI修改特定內容。",

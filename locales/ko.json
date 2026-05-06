@@ -275,7 +275,7 @@
         "subApiScopeAutoSummary": "자동 요약",
         "subApiScopeManualSummary": "수동 요약",
         "subApiScopeBrief": "摘要",
-        "subApiScopeBriefHint": "요약에서 보조 API를 켜면 \"이전 메시지 자동 보완\"도 함께 켜집니다. 새 메시지를 보낼 때 형식 프롬프트가 주입되지 않으므로 요약은 본문과 함께 출력되지 않고, 새 메시지 전송 시 보조 API로 보완됩니다. 층 UI에서 수동으로 실행하는 AI 분석도 동일하게 보조 API를 사용합니다.",
+        "subApiScopeBriefHint": "요약에서 보조 API를 켜면 \"이전 메시지 자동 보완\"도 함께 켜집니다. 새 메시지를 보낼 때 형식 프롬프트가 주입되지 않으므로 요약은 본문과 함께 출력되지 않고, 새 메시지 전송 시 보조 API로 보완됩니다. 층 UI에서 수동으로 실행하는 AI 분석도 동일하게 보조 API를 사용합니다.\n활성화 후 고급 설정의 주입 깊이가 시스템 @D 0이라면, 시스템 @D 1로 변경하는 것을 권장합니다.",
         "subApiScopeSingleAnalysis": "단일 분석",
         "summaryFetchModelsHint": "URL과 키를 입력한 후 클릭하여 가져오세요. 저비용 모델로 충분합니다.",
         "testSubApi": "서브 API 연결 테스트",

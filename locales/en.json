@@ -273,7 +273,7 @@
         "subApiScopeAutoSummary": "Auto Summary",
         "subApiScopeManualSummary": "Manual Summary",
         "subApiScopeBrief": "Brief",
-        "subApiScopeBriefHint": "When Brief uses Sub-API, \"Auto-complete previous message\" is also enabled. Format prompts are no longer injected when sending a new message, so the brief will not be output together with the main reply. Instead, it is completed via a Sub-API request when sending a new message. Manual AI analysis from the floor panel will also use Sub-API.",
+        "subApiScopeBriefHint": "When Brief uses Sub-API, \"Auto-complete previous message\" is also enabled. Format prompts are no longer injected when sending a new message, so the brief will not be output together with the main reply. Instead, it is completed via a Sub-API request when sending a new message. Manual AI analysis from the floor panel will also use Sub-API.\nAfter enabling, if Injection Depth in Advanced Settings is set to System @D 0, it is recommended to change it to System @D 1.",
         "subApiScopeSingleAnalysis": "Single Analysis",
         "summaryFetchModelsHint": "Fill in URL and key, then click to fetch. A low-cost model will suffice.",
         "testSubApi": "Test Sub-API Connection",

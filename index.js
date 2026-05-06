@@ -401,6 +401,18 @@ function _getDefaultEquipTemplates() {
 /** 遍历 DOM 中所有带 data-i18n 的元素，替换文本为当前语言翻译 */
 function applyI18nToDOM(root) {
     const container = root || document;
+    const appendTranslatedText = (el, text) => {
+        el.textContent = '';
+        if (text.includes('\n')) {
+            const parts = text.split('\n');
+            parts.forEach((line, i) => {
+                el.appendChild(document.createTextNode(line));
+                if (i < parts.length - 1) el.appendChild(document.createElement('br'));
+            });
+        } else {
+            el.appendChild(document.createTextNode(text));
+        }
+    };
     container.querySelectorAll('[data-i18n]').forEach(el => {
         let rawKey = el.getAttribute('data-i18n');
         let target = 'content';
@@ -457,7 +469,7 @@ function applyI18nToDOM(root) {
                 el.appendChild(savedIcons[si]);
             }
         } else {
-            el.textContent = translated;
+            appendTranslatedText(el, translated);
         }
     });
     container.querySelectorAll('[data-i18n-title]').forEach(el => {

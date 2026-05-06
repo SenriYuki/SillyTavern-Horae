@@ -277,7 +277,7 @@
         "subApiScopeAutoSummary": "自動要約",
         "subApiScopeManualSummary": "手動要約",
         "subApiScopeBrief": "摘要",
-        "subApiScopeBriefHint": "摘要で副APIを有効にすると、「前のメッセージを自動補完」も同時に有効になります。新規メッセージ送信時にフォーマット用プロンプトは注入されなくなるため、摘要は本文と同時には出力されず、新規メッセージ送信時に副APIで補完されます。フロア画面で手動実行するAI分析も副APIを使用します。",
+        "subApiScopeBriefHint": "摘要で副APIを有効にすると、「前のメッセージを自動補完」も同時に有効になります。新規メッセージ送信時にフォーマット用プロンプトは注入されなくなるため、摘要は本文と同時には出力されず、新規メッセージ送信時に副APIで補完されます。フロア画面で手動実行するAI分析も副APIを使用します。\n有効化後、詳細設定の注入深度がシステム @D 0 の場合は、システム @D 1 に変更することを推奨します。",
         "subApiScopeSingleAnalysis": "単一分析",
         "summaryFetchModelsHint": "URLとキーを入力してからクリックで取得。低コストモデルで十分です。",
         "testSubApi": "サブAPI接続テスト",
