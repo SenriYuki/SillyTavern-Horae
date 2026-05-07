@@ -13982,6 +13982,7 @@ function _shouldSkipSystemPromptInjectionOnSend() {
  */
 async function generateForSummary(prompt, options = {}) {
     const taskType = options?.taskType || '';
+    const messageIndex = Number.isInteger(options?.messageIndex) ? options.messageIndex : null;
     // 从 DOM 补读一次副API设置，防止浏览器自动填充未触发 input 事件导致设置为空
     _syncSubApiSettingsFromDom();
     const scopeEnabled = _isSubApiScopeEnabled(taskType);
@@ -13992,7 +13993,7 @@ async function generateForSummary(prompt, options = {}) {
     console.log(`[Horae] generateForSummary: task=${taskType || 'default'}, useCustom=${useCustom}, hasUrl=${hasUrl}, hasKey=${hasKey}, hasModel=${hasModel}`);
     if (useCustom && hasUrl && hasKey && hasModel) {
         console.log(`[Horae] 使用副API生成`);
-        return await generateWithDirectApi(prompt, { taskType });
+        return await generateWithDirectApi(prompt, { taskType, messageIndex });
     }
     if (useCustom && (!hasUrl || !hasKey || !hasModel)) {
         const missing = [!hasUrl && 'API地址', !hasKey && 'API密钥', !hasModel && '模型名称'].filter(Boolean).join('、');
@@ -14017,6 +14018,7 @@ async function generateForSummary(prompt, options = {}) {
     const shouldSkipSystemInject = !!options?.noSystemPromptInjectionMarker;
     return await _generateForAiTasks(prompt, {
         taskType,
+        messageIndex,
         noVectorRecallMarker: shouldMarkNoRecall,
         noContextInjectionMarker: shouldSkipContextInject,
         noTimelineInjectionMarker: shouldSkipTimelineInject,
@@ -15039,6 +15041,7 @@ function _vectorErrorHint(err) {
 /** 直接请求API端点，完全独立于酒馆主连接，支持真并行 */
 async function generateWithDirectApi(prompt, options = {}) {
     const taskType = options?.taskType || '';
+    const messageIndex = Number.isInteger(options?.messageIndex) ? options.messageIndex : null;
     console.log(taskType, "taskType");
     const skipSnapshotTimelineInjection = taskType === 'autoSummary';
     const _model = settings.autoSummaryModel.trim();
@@ -15084,15 +15087,19 @@ async function generateWithDirectApi(prompt, options = {}) {
     // generateRaw 的 user_input 在 prompt-ready 阶段不一定落到 eventData.chat[].content，
     // 所以把 marker 明确作为 system prompt 放进 ordered_prompts，确保 onPromptReady 能识别并短路。
     orderedPrompts.push({ role: 'system', content: skipInjectionMarkers });
-    orderedPrompts.push('user_input');
+    // orderedPrompts.push('user_input');
     if (!skipSnapshotTimelineInjection) {
-        const rawDataPrompt = horaeManager.generateCompactPrompt(0, { includeTimeline: true });
-        const { mainPrompt: snapshotPrompt, timelinePrompt } = _splitTimelineSection(rawDataPrompt);
+        console.log(`分析的楼层号:${messageIndex}`);
+        const promptSplit = _buildPromptSplitBeforeMessage(messageIndex);
+        const snapshotPrompt = _getSnapshotPromptBeforeMessage(messageIndex, promptSplit);
+        const timelinePrompt = _getTimelinePromptBeforeMessage(messageIndex, promptSplit);
         if (snapshotPrompt?.trim()) orderedPrompts.push({ role: 'system', content: snapshotPrompt.trim() });
         if (timelinePrompt?.trim()) orderedPrompts.push({ role: 'system', content: timelinePrompt.trim() });
     } else {
         console.log('[Horae] autoSummary task: skip snapshot/timeline ordered_prompts injection (direct API)');
     }
+
+    orderedPrompts.push('user_input');
 
     // console.log(`副API组装提示词:\n${JSON.stringify(orderedPrompts)}`);
 
@@ -17322,11 +17329,12 @@ async function clearAllData() {
 /**
  * AI任务生成入口（可按设置切换 generateRaw / generate）
  * @param {string} prompt
- * @param {{ noVectorRecallMarker?: boolean, noContextInjectionMarker?: boolean, noTimelineInjectionMarker?: boolean, noSystemPromptInjectionMarker?: boolean }} opts
+ * @param {{ messageIndex?: number, noVectorRecallMarker?: boolean, noContextInjectionMarker?: boolean, noTimelineInjectionMarker?: boolean, noSystemPromptInjectionMarker?: boolean }} opts
  */
 async function _generateForAiTasks(prompt, opts = {}) {
     const {
         taskType = '',
+        messageIndex = null,
         noVectorRecallMarker = false,
         noContextInjectionMarker = false,
         noTimelineInjectionMarker = false,
@@ -17345,10 +17353,12 @@ async function _generateForAiTasks(prompt, opts = {}) {
     // generateRaw 的 user_input 在 prompt-ready 阶段不一定落到 eventData.chat[].content，
     // 所以把 marker 明确作为 system prompt 放进 ordered_prompts，确保 onPromptReady 能识别并短路。
     orderedPrompts.push({ role: 'system', content: skipInjectionMarkers });
-    orderedPrompts.push('user_input');
+
     if (!skipSnapshotTimelineInjection) {
-        const rawDataPrompt = horaeManager.generateCompactPrompt(0, { includeTimeline: true });
-        const { mainPrompt: snapshotPrompt, timelinePrompt } = _splitTimelineSection(rawDataPrompt);
+        console.log(`分析的楼层:${messageIndex}`);
+        const promptSplit = _buildPromptSplitBeforeMessage(messageIndex);
+        const snapshotPrompt = _getSnapshotPromptBeforeMessage(messageIndex, promptSplit);
+        const timelinePrompt = _getTimelinePromptBeforeMessage(messageIndex, promptSplit);
         if (snapshotPrompt?.trim()) orderedPrompts.push({ role: 'system', content: snapshotPrompt.trim() });
         if (timelinePrompt?.trim()) orderedPrompts.push({ role: 'system', content: timelinePrompt.trim() });
     } else {
@@ -17363,6 +17373,8 @@ async function _generateForAiTasks(prompt, opts = {}) {
             skipWIAN: false,
         });
     }
+
+    orderedPrompts.push('user_input');
 
     const resp = await TavernHelper.generateRaw({
         user_input: prompt,
@@ -17412,8 +17424,6 @@ async function analyzeMessageWithAI(messageContent, opts = {}) {
         .replace(/<horae>[\s\S]*?<\/horae>/gi, '')
         .replace(/<horaeevent>[\s\S]*?<\/horaeevent>/gi, '')
 
-    console.log(`去除正文标签后的正文:\n${messageContent}`);
-
     const template = settings.customAnalysisPrompt || getDefaultAnalysisPrompt();
     let analysisPrompt = template
         .replace(/\{\{user\}\}/gi, userName)
@@ -17437,6 +17447,7 @@ async function analyzeMessageWithAI(messageContent, opts = {}) {
         console.log(`[Horae] 使用generateForSummary`)
         const response = await generateForSummary(analysisPrompt, {
             taskType: 'brief',
+            messageIndex,
             noVectorRecallMarker: shouldMarkNoRecall,
             noContextInjectionMarker: !!noContextInjectionMarker,
             // noTimelineInjectionMarker: !!noTimelineInjectionMarker,
@@ -18028,6 +18039,74 @@ function _splitTimelineSection(promptText) {
     const mainPrompt = mainLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 
     return { mainPrompt, timelinePrompt };
+}
+
+/**
+ * Resolve skipLast from analysis target message index.
+ * The returned skipLast makes compact prompt include only messages before target message.
+ */
+function _resolveSkipLastBeforeMessage(messageIndex) {
+    const chat = horaeManager.getChat();
+    const chatLength = Array.isArray(chat) ? chat.length : 0;
+    if (chatLength <= 0) return 0;
+    if (!Number.isInteger(messageIndex) || messageIndex < 0) return 0;
+
+    const clampedIndex = Math.min(messageIndex, chatLength);
+    return Math.max(0, chatLength - clampedIndex);
+}
+
+/**
+ * Build raw story timeline from all events before target index.
+ * This path intentionally bypasses generateCompactPrompt timeline filtering rules.
+ */
+function _buildRawTimelinePromptBySkipLast(skipLast) {
+    const events = horaeManager.getEvents(0, 'all', skipLast) || [];
+    if (!events.length) return '';
+
+    const lines = ['[剧情轨迹]'];
+    for (const row of events) {
+        const summary = String(row?.event?.summary || '').replace(/\s+/g, ' ').trim();
+        if (!summary) continue;
+
+        const msgNum = Number.isInteger(row?.messageIndex) ? `#${row.messageIndex}` : '#?';
+        const date = row?.timestamp?.story_date || '?';
+        const time = row?.timestamp?.story_time || '';
+        const timeStr = time ? `${date} ${time}` : date;
+        lines.push(`● ${msgNum} ${timeStr}: ${summary}`);
+    }
+
+    return lines.length > 1 ? lines.join('\n').trim() : '';
+}
+
+/**
+ * Build snapshot/timeline split prompt before a target message.
+ * If messageIndex is invalid, fallback to current behavior (full latest prompt).
+ */
+function _buildPromptSplitBeforeMessage(messageIndex) {
+    const skipLast = _resolveSkipLastBeforeMessage(messageIndex);
+    const snapshotPrompt = horaeManager.generateCompactPrompt(skipLast, { includeTimeline: false });
+    const timelinePrompt = _buildRawTimelinePromptBySkipLast(skipLast);
+    return {
+        skipLast,
+        snapshotPrompt: snapshotPrompt || '',
+        timelinePrompt: timelinePrompt || '',
+    };
+}
+
+/**
+ * Get story timeline prompt before a target message index.
+ */
+function _getTimelinePromptBeforeMessage(messageIndex, preparedSplit = null) {
+    const split = preparedSplit || _buildPromptSplitBeforeMessage(messageIndex);
+    return split.timelinePrompt || '';
+}
+
+/**
+ * Get state snapshot prompt before a target message index.
+ */
+function _getSnapshotPromptBeforeMessage(messageIndex, preparedSplit = null) {
+    const split = preparedSplit || _buildPromptSplitBeforeMessage(messageIndex);
+    return split.snapshotPrompt || '';
 }
 
 /**

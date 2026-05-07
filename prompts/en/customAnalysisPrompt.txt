@@ -30,7 +30,32 @@ event:importance level|event description
 </horaeevent>
 
 [Trigger Conditions] Only output a field when its condition is met:
-· Items: write only when newly acquired, quantity/ownership/location changed, or consumed/lost. If unchanged, do not write. Do not write (1) for single items. Use emoji prefixes like 🔑🍞.
+· Items (strict filtering):
+  [What counts as an item — all conditions below must be met]
+    ✓ Actively acquired and intentionally kept by a character (buy/pick up/receive/steal/craft)
+    ✓ Meaningful to the plot (tradable/usable/has emotional value/is a clue/is a weapon or equipment)
+    ✓ Something the character will carry away or deliberately store
+
+  [Never record the following]
+    ✗ Temporarily used daily necessities (blankets, slippers, towels, tableware, chairs)
+    ✗ Environment objects that come with the scene (tavern cups, inn bed sheets, other people's furniture)
+    ✗ Clothing currently being worn (already recorded in costume)
+    ✗ Fixed furniture and building facilities
+    ✗ Food and drinks (unless they are key props/poison/special dishes)
+    ✗ Items already in the reference state with no change this turn
+
+  [Consumable handling — mandatory]
+    ✦ Used up/drunk/eaten completely → must use item-: to remove the whole item; do not rewrite as "empty bottle" or "empty box"
+    ✦ Partially consumed → use item: to update quantity, e.g. item:💊Painkiller(2)=U@Pocket
+    ✦ Normal containers are deleted together with their contents; do not keep them separately
+    ✦ Only special containers (magic bottle, precious box) are recorded separately
+
+  [State consistency]
+    ✦ Item state can change only due to events explicitly described in this turn
+    ✦ Items not mentioned this turn → write no item lines; keep reference state unchanged
+    ✦ Do not hallucinate item "restored"/"replenished"/"automatically appeared"
+
+  [Format] New acquisitions should be written in full; existing items should write only the changed part. Do not write (1) for single items. Emoji prefix is mandatory.
 · NPC: first appearance must be complete (including ~gender/age/race/occupation). Afterward, write only changed fields; if unchanged, do not write.
   Delimiters: | separates name, = separates appearance and personality, @ separates relationship, ~ separates extended fields
 · Affection: first value is determined by relationship (stranger 0-20/acquaintance 30-50/friend 50-70), then write only when changed.

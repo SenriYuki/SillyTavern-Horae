@@ -40,43 +40,92 @@ event:importance level|detailed event summary (importance levels: General/Import
 
 
 ═══ [Items] Trigger Conditions and Rules ═══
-Refer to IDs (#ID) in [Item List], and strictly decide whether to output based on the conditions below.
 
-[When to write] (output if any condition is met)
-  ✦ New item acquired → item:/item!:/item!!:
-  ✦ Existing item's quantity/ownership/location/properties changed → item: (write only changed parts)
-  ✦ Item consumed/lost/used up → item-:item name
-[When not to write]
-  ✗ Item has no change at all → do not output any item line
-  ✗ Item is only mentioned but state does not change → do not write
+[What is an "item" — all of the following must be true]
+  ✓ The character actively acquires it and intentionally keeps it (buy/pick up/receive/steal/craft)
+  ✓ It has real narrative value (tradable/usable/emotional value/clue/quest prop)
+  ✓ The character will carry it away, store it, or deliberately safeguard it
 
-[Format]
-  Newly acquired: item:emoji item name(quantity)|description=holder@exact location (description can be omitted. But if the item has special meaning, such as a gift or keepsake, add description.)
-  Newly acquired (important): item!:emoji item name(quantity)|description=holder@exact location (important item; description required: appearance + function + source)
-  Newly acquired (key): item!!:emoji item name(quantity)|description=holder@exact location (key item; description must be detailed)
-  Existing item changed: item:emoji item name(new quantity)=new holder@new location (update only changed parts; if "|" is omitted, original description is retained)
+[The following absolutely do NOT count as items — never record]
+  ✗ Daily necessities used temporarily and returned (blanket, pillow, slippers, towel, toothbrush, tableware)
+  ✗ Scene-provided environment props (tavern cup, inn bed sheet, restaurant bowls/chopsticks)
+  ✗ Worn clothing/accessories (already tracked in the costume field; do not duplicate)
+  ✗ Fixed furniture and building facilities (bed, table, door, window)
+  ✗ Other people's personal belongings (unless explicitly transferred to the character)
+  ✗ Pure background objects (roadside stones, clouds in the sky, flowers in scenery)
+
+[When to write] (output an item line only if at least one condition below is met)
+  ✦ A new item is obtained (explicitly taken/accepted/bought/picked up and kept) → item:/item!:/item!!:
+  ✦ Quantity of an existing item changes (partially used or gained more) → item: (write only the change)
+  ✦ Ownership of an existing item changes (gifted/stolen/traded) → item: (write only the change)
+  ✦ Location of an existing item changes (e.g., taken from bag and put on table) → item: (write only the change)
+  ✦ Item is fully consumed/lost/destroyed/discarded → item-:item name
+
+[When to absolutely NOT write]
+  ✗ No change to the item at all → output no item line
+  ✗ Item is only mentioned/seen/recalled with no state change → do not write
+  ✗ Item is picked up temporarily and put back in the same place → do not write
+  ✗ Re-describing an existing item with different wording → forbidden
+
+[Consumable lifecycle — mandatory enforcement]
+  ✦ Consumable is used up → must remove the entire entry with item-:
+    ❌ Wrong: after potion is drunk, rewrite as "empty potion bottle" or "potion(0)"
+    ✅ Correct: item-:Healing Potion
+  ✦ Container has independent value (magic bottle, special container, reusable) → record container and contents separately
+    Example:
+      item!:🧪Alchemy Flask|A reusable magical container, silver body engraved with runes={{user}}@Backpack
+      item:💧Healing Potion(3 doses)|Red liquid, restores a small amount of HP when drunk={{user}}@Inside Alchemy Flask
+      After potion is used up: item-:Healing Potion (alchemy flask remains)
+  ✦ Ordinary containers (glass bottle, paper bag, plastic box) → remove together with contents; do not keep empty container separately
+
+[State-consistency principles — prevent hallucinations]
+  ✦ Item state can change only due to explicit story events (use, trade, damage, etc.)
+  ✦ Never auto-"restore"/"refill"/"repair" items when no related story event exists
+  ✦ If current item state is uncertain, keep the state from reference data unchanged
+  ✦ Scene transitions (bath/sleep/location change) do not automatically change item states
+
+[Format specification]
+  New acquisition: item:emoji item name(quantity)|description=holder@exact location
+  New acquisition (important): item!:emoji item name(quantity)|description=holder@exact location
+  New acquisition (key): item!!:emoji item name(quantity)|description=holder@exact location
+  Existing item changed: item:emoji item name(new quantity)=new holder@new location
   Consumed/lost: item-:item name
 
-[Field-Level Rules]
-  · Description: record essential attributes of item (appearance/function/source). Can be omitted for ordinary items; required at first entry for important/key items
-    ★ Appearance features (color, material, size, etc., for later consistency)
+[Description field rules]
+  · Normal items: description may be omitted
+  · Important item (item!): description is required; include appearance + function + source
+  · Key item (item!!): description must be detailed
+  · Description should include:
+    ★ Appearance features (color/material/size; useful for consistency later)
     ★ Function/use
     ★ Source (who gave it/how it was obtained)
-       - Examples (if examples appear below, they are demonstrations only; do not reuse original sentences directly in main text):
-         - Example 1: item!:🌹Eternal Rose Bouquet|deep-red preserved roses tied with a black ribbon, a Valentine's gift from C to U=U@on U's room desk
-         - Example 2: item!:🎫Lucky Ten-Draw Voucher|a golden-glowing paper ticket, newbie benefit for one ten-pull in the system prize pool=U@space ring
-         - Example 3: item!!:🏧Interdimensional Currency Auto-Exchange Machine|looks like a small ATM and can exchange currencies across dimensions at real-time rates=U@tavern bar counter
-  · Quantity: do not write (1)/(1 piece)/(1 sword), etc. Only write parentheses when there is a measurable unit, e.g., (5 jin)(1L)(1 box)
-  · Location: must be a precise fixed location
-    ❌ in front of someone on the ground, by someone's feet, beside someone, floor, on the table
-    ✅ tavern hall floor, on the restaurant bar counter, home kitchen, in backpack, on U's room desk
-  · Do not count fixed furniture or building facilities as items
-  · Temporary borrowing ≠ ownership transfer
+  · Examples:
+    item:🍎Apple(3)={{user}}@Backpack
+    item!:🌹Eternal Rose Bouquet|Deep-red preserved roses tied with a black ribbon, a Valentine's gift from Allen={{user}}@Room Desk
+    item!!:🗝️Key of Fate|Bronze key with dragon pattern on the grip, said to open the underground royal vault, obtained from the old king's relics={{user}}@Inner Pocket
 
+[Quantity field rules]
+  · For a single item, do not write quantity: 🍎Apple, not 🍎Apple(1)
+  · For multiple items of the same type, write quantity: 🍎Apple(5)
+  · If an item has a measurement unit, include the unit: 🍺Ale(50L), 🧂Salt(2 jin), 💰Gold Coins(100)
 
-Example (Ale Lifecycle):
-  Acquired: item:🍺Aged Ale(50L)|ale found in the storage room, sour in taste=U@tavern back-kitchen ingredient cabinet
-  Quantity change: item:🍺Aged Ale(25L)=U@tavern back-kitchen ingredient cabinet
+[Location field rules]
+  · Must be an exact fixed location; vague location is forbidden
+    ❌ Wrong: on the ground, beside, in front, nearby, in hand
+    ✅ Correct: in backpack, on tavern bar counter, {{user}} room desk, waist scabbard, inner pocket
+  · Location should represent storage location, not a temporary holding state
+  · For multi-level locations, specify clearly: {{user}} home·bedroom·bedside cabinet
+
+[Ownership-transfer rules]
+  · Temporary borrowing ≠ ownership transfer (a borrowed book to read does not change owner)
+  · Explicit gifting/purchase/theft = ownership transfer
+  · If keeping on behalf of someone, annotate clearly: ={{user}}(kept for Allen)@Backpack
+
+[Example: full item lifecycle]
+  Acquired: item:🍺Aged Ale(50L)|Ale found in storage room, sour taste={{user}}@Tavern Back Kitchen Ingredient Cabinet
+  Partially used: item:🍺Aged Ale(25L)
+  Moved location: item:🍺Aged Ale(25L)={{user}}@Under-Bar Storage Slot
+  Gave part away: item:🍺Aged Ale(10L)
   Used up: item-:Aged Ale
 
 ═══ [NPC] Trigger Conditions and Rules ═══
