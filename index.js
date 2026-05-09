@@ -15102,8 +15102,10 @@ async function generateWithDirectApi(prompt, options = {}) {
 
     orderedPrompts.push('user_input');
 
-    orderedPrompts.push({
-        role: 'system', content: `【格式字面性声明】
+    // 摘要才注入思维链
+    if (taskType === "brief") {
+        orderedPrompts.push({
+            role: 'system', content: `【格式字面性声明】
 <horae> 内每一行的结构是：字段名 + 英文冒号 + 值。
 - 字段名（time、location、characters、costume、item、item!、item!!、item-、
   affection、npc、agenda、agenda-、event）必须原样英文输出，不得翻译为中文。
@@ -15161,13 +15163,14 @@ async function generateWithDirectApi(prompt, options = {}) {
 思考结束后直接输出 <horae> 和 <horaeevent>，不要在两者之间插入任何解释。
 ` });
 
-    orderedPrompts.push({
-        role: 'assistant', content: `<thinking>
+        orderedPrompts.push({
+            role: 'assistant', content: `<thinking>
 收到，我按检查点梳理，然后严格按 "英文字段名:值" 的字面语法输出。
 字段名不翻译、字段名后只用英文冒号，值内部的 | = @ ~ 保持原定义。
 event 唯一且只放在 <horaeevent> 内。
 
 1. 本楼核心事件：` });
+    }
 
 
     // console.log(`副API组装提示词:\n${JSON.stringify(orderedPrompts)}`);
@@ -17537,8 +17540,10 @@ async function _generateForAiTasks(prompt, opts = {}) {
 
     orderedPrompts.push('user_input');
 
-    orderedPrompts.push({
-        role: 'system', content: `【格式字面性声明】
+    // 摘要才注入思维链
+    if (taskType === "brief") {
+        orderedPrompts.push({
+            role: 'system', content: `【格式字面性声明】
 <horae> 内每一行的结构是：字段名 + 英文冒号 + 值。
 - 字段名（time、location、characters、costume、item、item!、item!!、item-、
   affection、npc、agenda、agenda-、event）必须原样英文输出，不得翻译为中文。
@@ -17596,13 +17601,14 @@ async function _generateForAiTasks(prompt, opts = {}) {
 思考结束后直接输出 <horae> 和 <horaeevent>，不要在两者之间插入任何解释。
 ` });
 
-    orderedPrompts.push({
-        role: 'assistant', content: `<thinking>
+        orderedPrompts.push({
+            role: 'assistant', content: `<thinking>
 收到，我按检查点梳理，然后严格按 "英文字段名:值" 的字面语法输出。
 字段名不翻译、字段名后只用英文冒号，值内部的 | = @ ~ 保持原定义。
 event 唯一且只放在 <horaeevent> 内。
 
 1. 本楼核心事件：` });
+    }
 
 
     const resp = await TavernHelper.generateRaw({
