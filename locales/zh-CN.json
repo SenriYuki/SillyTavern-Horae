@@ -805,7 +805,7 @@
         "title": "向量记忆（语义搜索）",
         "localModel": "本地模型",
         "apiMode": "API 模式",
-        "hint": "对 Horae 标签数据做向量检索，自动为 AI 召回相关历史。\n本地模式：约 25MB 量化模型下载至浏览器缓存，占用约 50–80MB 内存。不建议内存小于 2GB 的设备或云端酒馆使用。请确保已配置 --max-old-space-size。\nAPI 模式：使用远程嵌入 API，无需本地资源。支持 OpenAI Embeddings 与 Gemini v1beta/batchEmbedContents；Gemini 官方地址请填 Google Generative Language API 基础地址。\n\n推荐使用硅基流动平台，某二手平台有低价key，有key之后直接在下面的API密钥里面输入你的key，然后打开向量记忆开关就可以了。",
+        "hint": "对 Horae 标签数据做向量检索，自动为 AI 召回相关历史。\n本地模式：约 25MB 量化模型下载至浏览器缓存，占用约 50–80MB 内存。不建议内存小于 2GB 的设备或云端酒馆使用。请确保已配置 --max-old-space-size。\nAPI 模式：使用远程嵌入 API，无需本地资源。支持 OpenAI Embeddings 与 Gemini v1beta/batchEmbedContents；Gemini 官方地址请填 Google Generative Language API 基础地址。",
         "enableVector": "启用向量记忆",
         "vectorSource": "向量来源",
         "sourceLocal": "本地模型（浏览器内）",
