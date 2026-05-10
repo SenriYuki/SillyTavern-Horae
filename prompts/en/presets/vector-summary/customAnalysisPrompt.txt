@@ -1,0 +1,53 @@
+Please analyze the following AI reply text, extract key information, and output it in the specified format. Core principle: only extract information explicitly mentioned in the text. If a field is absent, do not write it. Fabrication is forbidden.
+
+[Reference State (known info before this message; read-only reference, do not treat as new facts for this message)]
+{{context}}
+
+[Previous User Action]
+{{previousUserMessage}}
+
+[Text to Analyze]
+{{content}}
+
+[Output Format]
+<horae>
+time:date time (required, e.g., 2026/2/4 15:00 or First Day of Frostfall Moon 19:50. If the exact time cannot be determined, provide a reasonable specific time; do not use vague placeholders like "unknown" or "some day".)
+location:current location (required)
+atmosphere:atmosphere
+characters:characters present, comma-separated (required)
+costume:character name=full outfit description (required, one line per character, do not merge with semicolons)
+item:emoji item name(quantity)|description=holder@exact location (only newly acquired or changed items)
+item!:emoji item name(quantity)|description=holder@exact location (important items, description required)
+item!!:emoji item name(quantity)|description=holder@exact location (key items, description must be detailed)
+item-:item name (consumed/lost items)
+affection:character name=affection value (only NPC affection toward {{user}}, do not record {{user}} themselves, do not append notes after the number)
+npc:character name|appearance=personality@relationship with {{user}}~gender:male or female~age:number~race:race name~occupation:occupation name
+agenda:date established|todo content (write only when new agreements/plans/foreshadowing appear; relative time must include absolute date in parentheses)
+agenda-:content keyword (write when todo is completed/invalid/canceled; system auto-removes matching todo)
+</horae>
+<horaeevent>
+event:importance level|event description
+</horaeevent>
+
+[Trigger Conditions] Only output a field when its condition is met:
+· Items: write only when newly acquired, quantity/ownership/location changed, or consumed/lost. If unchanged, do not write. Do not write (1) for single items. Use emoji prefixes like 🔑🍞.
+· NPC: first appearance must be complete (including ~gender/age/race/occupation). Afterward, write only changed fields; if unchanged, do not write.
+  Delimiters: | separates name, = separates appearance and personality, @ separates relationship, ~ separates extended fields
+· Affection: first value is determined by relationship (stranger 0-20/acquaintance 30-50/friend 50-70), then write only when changed.
+· Todo: write only when new agreements/plans/foreshadowing appear. For completed/invalid todos, use agenda-: to remove.
+  Add: agenda:2026/02/10|Allen invites {{user}} on a Valentine's evening date(2026/02/14 18:00)
+  Complete: agenda-:Allen invites {{user}} on a Valentine's evening date
+· event: place it inside <horaeevent>, not inside <horae>.
+
+═══ [Event Summary (event)] Writing Rules ═══
+★ Core goal: provide future AI with a lossless "previously-on" summary. It must be concrete and information-dense, within 150-280 chars.
+★ Must include the following key elements (5W1H):
+  ① Core interaction: who did what / said what key words to whom? (write concrete actions or gist of key lines)
+  ② State/emotion shift: what subtle change occurred in characters' psychology, attitude, or relationship? (e.g., from guarded to trusting, developing a crush)
+  ③ New intel/result: what plot progressed this turn? (what clues were obtained, what consensus was reached, what incident occurred)
+  ④ Foreshadowing/suspense (if any): what unresolved issue was left?
+★ Strictly forbid vague statements:
+  ❌ Wrong example: "U and Allen chatted in the tavern, had a great time, and agreed to meet again." (no details)
+  ✅ Correct example: "U asked Allen in the tavern about the black-market trader's whereabouts. Allen was wary at first, but after U offered 10 gold coins, he revealed the trader would appear at the abandoned dock tomorrow night. Allen's attitude toward U shifted from guarded to greedy. The two agreed to act together tomorrow night."
+★ No fabrication of feelings: do NOT write emotions the source text does not explicitly state (forbid reading-comprehension phrasing such as "this evokes ... cherished feeling" or "reflects ... mindset").
+★ No atmospheric editorializing: do NOT add subjective summaries such as "feels ... full of life", "the mood becomes ...", etc.

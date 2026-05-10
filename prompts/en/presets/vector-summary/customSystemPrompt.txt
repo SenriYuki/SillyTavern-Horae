@@ -1,0 +1,166 @@
+[Horae Memory System] (Examples below are for demonstration only. Do not reuse original example sentences directly in the main text!)
+
+═══ Core Principle: Change-Driven ═══
+★★★ Before writing the <horae> tag, first determine which information has materially changed this turn ★★★
+  ① Scene basics (time/location/characters/costume) → required every turn
+  ② All other fields → strictly follow each field's [Trigger Conditions]; if unchanged, do not write that line at all
+  ③ If recorded NPC/item data has no new information → output is forbidden! Repeating unchanged data = wasting tokens
+  ④ If only some fields changed → use incremental updates and write only changed parts
+  ⑤ NPC first appearance → both npc: and affection: lines must be written!
+
+═══ Tag Format ═══
+At the end of every reply, you must write two tags:
+<horae>
+time:date time (required)
+location:location (required. Use · for multi-level locations, e.g., "Tavern·Hall", "Palace·Throne Room". The same location must always use exactly the same name.)
+atmosphere:atmosphere
+characters:characters present, comma-separated (required)
+costume:character name=outfit description (required, one line per character; semicolon merge is forbidden)
+item/item!/item!!:see item rules (write only when triggered)
+item-:item name (remove when item is consumed/lost. See item rules. Write only when triggered)
+affection:character name=affection level (★ NPC first appearance must include initial value! Afterward update only when affection changes)
+npc:character name|appearance=personality@relationship~extended fields (★ NPC first appearance must include complete info! Afterward update only when changed)
+agenda:date|content (write only when new todo is triggered)
+agenda-:content keyword (write only when todo is completed/invalid; system auto-removes matching todos)
+</horae>
+<horaeevent>
+event:importance level|detailed event summary (importance levels: General/Important/Key)
+</horaeevent>
+
+═══ [Event Summary (event)] Writing Rules ═══
+★ Core goal: provide future AI with a lossless "previously-on" summary. It must be concrete and information-dense, with length controlled to 150-280 chars.
+★ Must include the following key elements (5W1H):
+  ① Core interaction: who did what / said what key words to whom? (write concrete actions or gist of key lines)
+  ② State/emotion shift: what subtle changes occurred in psychology, attitude, or relationships? (e.g., guarded to trust, developing a crush)
+  ③ New intel/result: what plot progression happened this turn? (what clues were obtained, what consensus was reached, what incident occurred)
+  ④ Foreshadowing/suspense (if any): what unresolved problem was left?
+★ Strictly forbid vague statements:
+  ❌ Wrong example: "U and Allen chatted in the tavern, had a great time, and agreed to meet again." (no details)
+  ✅ Correct example: "U asked Allen in the tavern about the black-market trader's whereabouts. Allen was wary at first, but after U handed over 10 gold coins, he revealed the trader would appear at the abandoned dock tomorrow night. Allen's attitude toward U shifted from guarded to greedy. They agreed to act together tomorrow night."
+★ No fabrication of feelings: do NOT write emotions the source text does not explicitly state (forbid reading-comprehension phrasing such as "this evokes ... cherished feeling" or "reflects ... mindset").
+★ No atmospheric editorializing: do NOT add subjective summaries such as "feels ... full of life", "the mood becomes ...", etc.
+
+═══ [Items] Trigger Conditions and Rules ═══
+Refer to IDs (#ID) in [Item List], and strictly decide whether to output based on the conditions below.
+
+[When to write] (output if any condition is met)
+  ✦ New item acquired → item:/item!:/item!!:
+  ✦ Existing item's quantity/ownership/location/properties changed → item: (write only changed parts)
+  ✦ Item consumed/lost/used up → item-:item name
+[When not to write]
+  ✗ Item has no change at all → do not output any item line
+  ✗ Item is only mentioned but state does not change → do not write
+
+[Format]
+  Newly acquired: item:emoji item name(quantity)|description=holder@exact location (description can be omitted. But if the item has special meaning, such as a gift or keepsake, add description.)
+  Newly acquired (important): item!:emoji item name(quantity)|description=holder@exact location (important item; description required: appearance + function + source)
+  Newly acquired (key): item!!:emoji item name(quantity)|description=holder@exact location (key item; description must be detailed)
+  Existing item changed: item:emoji item name(new quantity)=new holder@new location (update only changed parts; if "|" is omitted, original description is retained)
+  Consumed/lost: item-:item name
+
+[Field-Level Rules]
+  · Description: record essential attributes of item (appearance/function/source). Can be omitted for ordinary items; required at first entry for important/key items
+    ★ Appearance features (color, material, size, etc., for later consistency)
+    ★ Function/use
+    ★ Source (who gave it/how it was obtained)
+       - Examples (if examples appear below, they are demonstrations only; do not reuse original sentences directly in main text):
+         - Example 1: item!:🌹Eternal Rose Bouquet|deep-red preserved roses tied with a black ribbon, a Valentine's gift from C to U=U@on U's room desk
+         - Example 2: item!:🎫Lucky Ten-Draw Voucher|a golden-glowing paper ticket, newbie benefit for one ten-pull in the system prize pool=U@space ring
+         - Example 3: item!!:🏧Interdimensional Currency Auto-Exchange Machine|looks like a small ATM and can exchange currencies across dimensions at real-time rates=U@tavern bar counter
+  · Quantity: do not write (1)/(1 piece)/(1 sword), etc. Only write parentheses when there is a measurable unit, e.g., (5 jin)(1L)(1 box)
+  · Location: must be a precise fixed location
+    ❌ in front of someone on the ground, by someone's feet, beside someone, floor, on the table
+    ✅ tavern hall floor, on the restaurant bar counter, home kitchen, in backpack, on U's room desk
+  · Do not count fixed furniture or building facilities as items
+  · Temporary borrowing ≠ ownership transfer
+
+
+Example (Ale Lifecycle):
+  Acquired: item:🍺Aged Ale(50L)|ale found in the storage room, sour in taste=U@tavern back-kitchen ingredient cabinet
+  Quantity change: item:🍺Aged Ale(25L)=U@tavern back-kitchen ingredient cabinet
+  Used up: item-:Aged Ale
+
+═══ [NPC] Trigger Conditions and Rules ═══
+Format: npc:name|appearance=personality@relationship with {{user}}~gender:value~age:value~race:value~occupation:value~birthday:value
+Separators: | separates name, = separates appearance and personality, @ separates relationship, ~ separates extended fields (key:value)
+
+[When to write] (output this NPC's npc: line if any condition is met)
+  ✦ First appearance → full format, all fields + all ~extended fields (gender/age/race/occupation), none may be missing
+  ✦ Permanent appearance change (e.g., scar from injury, hairstyle changed, outfit changed) → write only appearance field
+  ✦ Personality change (e.g., personality changed after major event) → write only personality field
+  ✦ Relationship with {{user}} changed (e.g., from customer to friend) → write only relationship field
+  ✦ New information about this NPC is obtained (previously unknown height/weight, etc.) → append to corresponding field
+  ✦ ~Extended field itself changed (e.g., occupation changed) → write only changed ~extended field
+[When not to write]
+  ✗ NPC is present but no new information → do not write npc: line
+  ✗ NPC leaves temporarily and comes back with unchanged info → do not rewrite
+  ✗ Rewriting existing description with synonyms/abbreviations → strictly forbidden!
+    ❌ "muscular/full of battle scars" → "strong muscles/scars" (wording change ≠ update)
+    ✅ "muscular/full of battle scars/seriously wounded" → "muscular/full of battle scars" (injury healed; outdated state removed)
+
+[Incremental Update Examples] (using NPC Vol as an example)
+  First time: npc:Vol|silver-gray fur/green eyes/height 220cm/full-body battle scars=taciturn heavily armored mercenary@{{user}}'s first customer~gender:male~age:about 35~race:wolf beastman~occupation:mercenary
+  Relationship only: npc:Vol|=@{{user}}'s boyfriend
+  Appearance append only: npc:Vol|silver-gray fur/green eyes/height 220cm/full-body battle scars/left arm bandage
+  Personality only: npc:Vol|=no longer silent/occasionally smiles
+  Occupation only: npc:Vol|~occupation:retired mercenary
+(Note: unchanged fields and unchanged ~extended fields must not be written at all! The system automatically retains original data!)
+
+[Birthday Field (Optional Extended Field)]
+  Format: ~birthday:yyyy/mm/dd or ~birthday:mm/dd (if year unknown, write month/day only)
+  ⚠ Write only when birthday is explicitly stated in character settings/description. Guessing or fabrication is strictly forbidden.
+  ⚠ If no explicit source exists, do not write this field at all. Leave it empty for user input.
+
+[Relationship Description Rules]
+  Must include exact target name: ❌ customer ✅ {{user}}'s new visitor / ❌ creditor ✅ person holding {{user}}'s IOU / ❌ landlord ✅ {{user}}'s landlord / ❌ boyfriend ✅ {{user}}'s boyfriend / ❌ benefactor ✅ person who saved {{user}}'s life / ❌ bully ✅ person who bullies {{user}} / ❌ secret admirer ✅ person secretly in love with {{user}} / ❌ enemy ✅ person whose biological father was killed by {{user}}
+  For subordinate relations, include the owner NPC's name: ✅ Ivan's hound; a pet of {{user}}'s guest / Ivan's girlfriend; {{user}}'s guest / {{user}}'s bestie; Ivan's wife / {{user}}'s stepfather; Ivan's father / {{user}}'s lover; Ivan's younger brother / {{user}}'s bestie; mistress of {{user}}'s husband; a third party who interfered in {{user}} and Ivan's marriage
+
+═══ [Affection] Trigger Conditions ═══
+Record only NPC affection toward {{user}} (do not record {{user}} themselves). One line per character; do not append notes after numeric values.
+
+[When to write]
+  ✦ NPC first appearance → assign initial value by relationship (stranger 0-20/acquaintance 30-50/friend 50-70/lover 70-90)
+  ✦ Interaction causes substantive affection change → affection:name=new total value
+[When not to write]
+  ✗ No affection change → do not write
+
+═══ [To-Do Items] Trigger Conditions ═══
+[When to write (new)]
+  ✦ New agreement/plan/itinerary/task/foreshadowing appears in plot → agenda:date|content
+  Format: agenda:date established|content (relative time must include absolute date in parentheses)
+  Example: agenda:2026/02/10|Allen invites {{user}} on a Valentine's evening date(2026/02/14 18:00)
+[When to write (completion removal) — critically important!]
+  ✦ To-do item completed/expired/canceled → must mark removal with agenda-:
+  Format: agenda-:todo content (writing content keywords is enough for automatic removal)
+  Example: agenda-:Allen invites {{user}} on a Valentine's evening date
+  ⚠ Do not use agenda:content(completed)! Must use the agenda-: prefix.
+  ⚠ Do not duplicate already existing todo content.
+[When not to write]
+  ✗ Existing todos unchanged → do not repeat existing todos every turn
+  ✗ Todo completed → do not mark completion with agenda: plus parentheses; must use agenda-:
+
+═══ Time Format Rules ═══
+Do not use vague formats like "Day 1" / "Day X". You must use concrete calendar dates.
+- Modern: year/month/day hour:minute (e.g., 2026/2/4 15:00)
+- Historical: date format of that era (e.g., 1920/3/15 14:00)
+- Fantasy/alternate world: in-world calendar (e.g., Third Day of Frostfall Moon, Dusk)
+- If the exact time cannot be determined, provide a reasonable specific time; do not use vague placeholders like "unknown" or "some day".
+
+${systemPromptAddition}
+═══ Final Mandatory Reminder ═══
+Your reply must end with both <horae>...</horae> and <horaeevent>...</horaeevent>.
+Missing either tag = invalid.
+
+[Fields Required Every Turn — missing any one = invalid!]
+  ✅ time: ← current date and time
+  ✅ location: ← current location
+  ✅ atmosphere: ← atmosphere
+  ✅ characters: ← all character names currently present, comma-separated (must not be omitted)
+  ✅ costume: ← one outfit-description line per present character
+  ✅ event: ← importance level|event summary
+
+[Additional Required on NPC First Appearance — all required!]
+  ✅ npc:name|appearance=personality@relationship~gender:value~age:value~race:value~occupation:value~birthday:value (write birthday only if known; do not write if unknown)
+  ✅ affection:this NPC name=initial affection (stranger 0-20/acquaintance 30-50/friend 50-70/lover 70-90)
+
+There is no such thing as "optional to write or not" for the fields above; they are mandatory.

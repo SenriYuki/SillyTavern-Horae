@@ -22,75 +22,19 @@ item!!:emoji item name(quantity)|description=holder@exact location (key items, d
 item-:item name (consumed/lost items)
 affection:character name=affection value (only NPC affection toward {{user}}, do not record {{user}} themselves, do not append notes after the number)
 npc:character name|appearance=personality@relationship with {{user}}~gender:male or female~age:number~race:race name~occupation:occupation name
-agenda:date established|todo content ([MUST CHECK REFERENCE STATE] Write only when a truly new plan/agreement appears that absolutely did not exist before. If a similar todo already exists in the reference state, duplicate creation is forbidden)
-agenda-:existing todo entry from the reference state ([FORCED WRITE-OFF] When the text causes a referenced todo to be executed, completed, abandoned, canceled, or invalidated, you must remove it with this command)
+agenda:date established|todo content (write only when new agreements/plans/foreshadowing appear; relative time must include absolute date in parentheses)
+agenda-:content keyword (write when todo is completed/invalid/canceled; system auto-removes matching todo)
 </horae>
 <horaeevent>
-event:importance level|event description
+event:importance level|brief summary (50-80 chars, General/Important/Key)
 </horaeevent>
 
 [Trigger Conditions] Only output a field when its condition is met:
-· Items (strict filtering):
-  [What counts as an item — all conditions below must be met]
-    ✓ Actively acquired and intentionally kept by a character (buy/pick up/receive/steal/craft)
-    ✓ Meaningful to the plot (tradable/usable/has emotional value/is a clue/is a weapon or equipment)
-    ✓ Something the character will carry away or deliberately store
-
-  [Never record the following]
-    ✗ Temporarily used daily necessities (blankets, slippers, towels, tableware, chairs)
-    ✗ Environment objects that come with the scene (tavern cups, inn bed sheets, other people's furniture)
-    ✗ Clothing currently being worn (already recorded in costume)
-    ✗ Fixed furniture and building facilities
-    ✗ Food and drinks (unless they are key props/poison/special dishes)
-    ✗ Items already in the reference state with no change this turn
-
-  [Consumable handling — mandatory]
-    ✦ Used up/drunk/eaten completely → must use item-: to remove the whole item; do not rewrite as "empty bottle" or "empty box"
-    ✦ Partially consumed → use item: to update quantity, e.g. item:💊Painkiller(2)=U@Pocket
-    ✦ Normal containers are deleted together with their contents; do not keep them separately
-    ✦ Only special containers (magic bottle, precious box) are recorded separately
-
-  [State consistency]
-    ✦ Item state can change only due to events explicitly described in this turn
-    ✦ Items not mentioned this turn → write no item lines; keep reference state unchanged
-    ✦ Do not hallucinate item "restored"/"replenished"/"automatically appeared"
-
-  [Format] New acquisitions should be written in full; existing items should write only the changed part. Do not write (1) for single items. Emoji prefix is mandatory.
+· Items: write only when newly acquired, quantity/ownership/location changed, or consumed/lost. If unchanged, do not write. Do not write (1) for single items. Use emoji prefixes like 🔑🍞.
 · NPC: first appearance must be complete (including ~gender/age/race/occupation). Afterward, write only changed fields; if unchanged, do not write.
   Delimiters: | separates name, = separates appearance and personality, @ separates relationship, ~ separates extended fields
 · Affection: first value is determined by relationship (stranger 0-20/acquaintance 30-50/friend 50-70), then write only when changed.
-· Todo state transitions (critical; strictly follow this code-level logic):
-  [Forced cleanup of stale history]: Check the [To-Do Items] list in [Reference State]. If any todo is executed, canceled, or the current time has already passed its scheduled time node in [Text to Analyze] (even if not explicitly mentioned, treat it as expired), you must remove it with `agenda-:`.
-  🔴 Strict write-off syntax: after `agenda-:`, you must copy the full original todo entry text exactly, character-for-character (do not copy the bullet marker). Abbreviation, paraphrase, or summarization is forbidden.
-  Write-off example: agenda-:1988/09/29 Have a formal dinner in town(After 1988/09/29 18:00)
-  [Merge overwrite and anti-duplication]: Before creating a new `agenda:`, compare against existing [To-Do Items].
-  1. Repeated mention only: if the plan itself did not change, do not output it again.
-  2. Detail update: if new details are added to the same existing plan, you must first delete all related old entries with `agenda-:`, then output one rebuilt `agenda:` entry that merges all old and new details. Old and new versions must never coexist.
-  3. Batch merge: if multiple plans are produced in the same turn or single dialogue, merge them into one line. Splitting into multiple `agenda:` lines is forbidden.
-  New example: agenda:1988/09/29|Wake up at 9:00 tomorrow morning, then go shopping, and strictly forbid wearing school uniform(1988/09/30 09:00)
+· Todo: write only when new agreements/plans/foreshadowing appear. For completed/invalid todos, use agenda-: to remove.
+  Add: agenda:2026/02/10|Allen invites {{user}} on a Valentine's evening date(2026/02/14 18:00)
+  Complete: agenda-:Allen invites {{user}} on a Valentine's evening date
 · event: place it inside <horaeevent>, not inside <horae>.
-
-═══ [Event Summary (event)] Writing Rules ═══
-★ Core goal: provide future AI with a lossless "previously-on" summary. It must be concrete and information-dense, within 80-150 words.
-★ Must include the following key elements (5W1H):
-  ① Core interaction: who did what / said what key words to whom? (write concrete actions or gist of key lines)
-  ② State/emotion shift: what subtle change occurred in characters' psychology, attitude, or relationship? (e.g., from guarded to trusting, developing a crush)
-  ③ New intel/result: what plot progressed this turn? (what clues were obtained, what consensus was reached, what incident occurred)
-  ④ Foreshadowing/suspense (if any): what unresolved issue was left?
-★ Strictly forbid vague statements:
-  ❌ Wrong example: "U and Allen chatted in the tavern, had a great time, and agreed to meet again." (no details)
-  ✅ Correct example: "U asked Allen in the tavern about the black-market trader's whereabouts. Allen was wary at first, but after U offered 10 gold coins, he revealed the trader would appear at the abandoned dock tomorrow night. Allen's attitude toward U shifted from guarded to greedy. The two agreed to act together tomorrow night."
-★ Strictly forbid narrative continuation: the event description must stop exactly at the final explicit action/dialogue in [Text to Analyze].
-  Do not add any follow-up action, response, exit, or ending that is not written in the source, even if it would "obviously happen."
-  ❌ Wrong example (source ends at "the heroine says she wants milk tea"):
-     "…The male lead asks what she wants to drink, she answers milk tea, and he nods and gets up to buy it."
-     ("nods and gets up to buy it" is continuation not present in the source text)
-  ✅ Correct example:
-     "…The male lead asks what she wants to drink, and she answers milk tea."
-     (Stop at the source's last sentence; no continuation)
-
-[Event Field Uniqueness and Placement]
-- Each reply must contain exactly one event entry, no more.
-- If this message contains multiple event segments (for example: dialogue, then a fight, then parting), merge them into one 80-150 word summary in chronological order; do not split into multiple event lines.
-- event may appear only inside <horaeevent>; event: lines are forbidden inside <horae>.
-- If this message truly has no recordable progression (extremely rare), still output one event, set importance to "General", and describe the main objective action of this message.

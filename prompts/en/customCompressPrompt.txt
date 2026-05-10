@@ -4,7 +4,7 @@ You are a plot compression assistant. Compress the following {{count}} plot even
 {{events}}
 
 [Detail Retention Weights (No Omissions)]
-1. Absolute high priority (time anchoring): must precisely preserve the specific date/time of each event and use it as a narrative guide. [Same-day merge rule]: for events on the same day, only the first event of that day should include the full date and time; subsequent same-day events should keep only the specific time (❌ "On June 5, 1998 at 7:00, U discovered... On June 5, 1998 at 8:05, they moved..." ✅ "On June 5, 1998 at 7:00, U discovered... At 8:05, they moved... At 9:00, they obtained..."). When the date changes, restate the full date. Never replace real timestamps with vague terms like "the next day" or "soon after".
+1. Absolute high priority (time anchoring): must precisely preserve the specific date/time of each event and use it as a narrative guide (e.g., "On [X month X day], U and..."). Do not use vague adverbs such as "later/afterward/the next day" to erase real time coordinates.
 2. Top priority (must keep): explicit commitments/todos, transfer and location of important items, and changes in NPC life-or-death status.
 3. High priority (must keep): core actions in "Key" and "Important" events, and substantive emotional reversals (e.g., love turning into hate, trust being established).
 4. Medium priority (merge): for "General" events, extract their background function (e.g., "while traveling") and remove meaningless pleasantries.
@@ -24,7 +24,7 @@ You are a plot intelligence extraction expert. Please read the following raw dia
 {{fulltext}}
 
 [Extraction Principles: Distill Essentials with Time Anchoring]
-- Lock time: if explicit or implicit date/time points appear in the original text (such as specific dates or holidays), they must be precisely extracted and integrated at sentence openings as narrative anchors; never lose time coordinates. [Same-day merge rule]: for events on the same day, only the first event of that day should include the full date and time; subsequent same-day events should keep only the specific time (❌ "On June 5, 1998 at 7:00... On June 5, 1998 at 8:05..." ✅ "On June 5, 1998 at 7:00... At 8:05... At 9:00..."). When the date changes, restate the full date. Never replace real timestamps with vague terms like "the next day" or "soon after".
+- Lock time: if explicit or implicit date/time points appear in the original text (such as specific dates or holidays), they must be precisely extracted and integrated at sentence openings as narrative anchors; never lose time coordinates.
 - Strip filler: remove pleasantries, meaningless action descriptions, and repetitive back-and-forth.
 - Focus on substance: keep only elements that materially advance the plot:
   ① who made what concrete decision

@@ -1,4 +1,4 @@
-# Horae - 時光記憶 v1.12.7 | SillyTavern 記憶增強插件
+# Horae - 時光記憶 v1.12.14 | SillyTavern 記憶增強插件
 
 [English](README.md) | [简体中文](README.zh-CN.md) | **繁體中文**
 
@@ -42,7 +42,7 @@
 
 ## 相容性
 
-- **SillyTavern**: 1.12.7+（AI 分析功能需求 1.13.5+）
+- **SillyTavern**: 1.12.14+（AI 分析功能需求 1.13.5+）
 - **平台**: 電腦端 + 行動端雙端適配
 
 ---
@@ -80,7 +80,7 @@ window.Horae?.getEvents(10)      // → 最近 10 筆事件
 window.Horae?.getSettings()
 
 // 版本號
-window.Horae?.version            // → "1.12.7"
+window.Horae?.version            // → "1.12.14"
 ```
 
 設定變更事件透過酒館的 `eventSource` 廣播：

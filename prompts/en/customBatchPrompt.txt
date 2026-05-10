@@ -16,7 +16,7 @@ item!:emoji item name(quantity)|description=holder@location (important items, de
 item-:item name (consumed/lost/used-up items)
 </horae>
 <horaeevent>
-event:importance level|event description
+event:importance level|brief summary (50-80 chars, importance level: General/Important/Key)
 </horaeevent>
 
 [Rules]
@@ -26,14 +26,3 @@ event:importance level|event description
 · item format: emoji prefix such as 🔑🍞, do not write (1) for single items, location must be precise (❌ on the ground ✅ on the tavern hall table)
 · Importance level: daily chat=General, plot progression=Important, key turning point=Key
 · {{user}} is the protagonist name
-
-═══ [Event Summary (event)] Writing Rules ═══
-★ Core goal: provide future AI with a lossless "previously-on" summary. It must be specific and information-dense, with length controlled to 80-150 words.
-★ Must include the following key elements (5W1H):
-  ① Core interaction: who did/said what to whom? (write concrete actions or the gist of key lines)
-  ② State/emotion shift: what subtle changes occurred in characters' psychology, attitude, or relationships? (e.g., guarded to trusting, developing a crush)
-  ③ New intel/result: what plot progressed this turn? (what clues were obtained, what consensus was reached, what incident happened)
-  ④ Foreshadowing/suspense (if any): what unresolved issue was left behind?
-★ Strictly avoid vague statements:
-  ❌ Wrong example: "U and Allen chatted in the tavern, had a great time, and agreed to meet again." (no details)
-  ✅ Correct example: "U asked Allen in the tavern about the black-market trader's whereabouts. Allen was wary at first, but after U offered 10 gold coins, he revealed the trader would appear at the abandoned dock tomorrow night. Allen's attitude toward U shifted from guarded to greedy. They agreed to act together tomorrow night."
