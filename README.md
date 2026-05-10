@@ -2,7 +2,7 @@
 
 **English** | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md)
 
-![Image](https://github.com/SenriYuki/SillyTavern-Horae/blob/main/HoraeLogo.jpg)
+![Image](https://github.com/SenriYuki，柏柏/SillyTavern-Horae/blob/main/HoraeLogo.jpg)
 
 > *Horae — Greek goddesses who governed the orderly progression of time*
 
@@ -110,7 +110,7 @@ eventSource.on('horae:settingsChanged', (data) => {
 | 日本語 (Japanese) | ✅ Full |
 | Русский (Russian) | ✅ Full |
 
-**Want Horae in your language?** Open an [Issue](https://github.com/SenriYuki/SillyTavern-Horae/issues) or submit a PR with a translation file! See `locales/en.json` for the translation template.
+**Want Horae in your language?** Open an [Issue](https://github.com/SenriYuki，柏柏/SillyTavern-Horae/issues) or submit a PR with a translation file! See `locales/en.json` for the translation template.
 
 ---
 
@@ -130,7 +130,7 @@ Bug reports and suggestions are welcome!
 
 > ⚠️ This is a side project — replies may be delayed. Thank you for your patience.
 
-**Author: SenriYuki**
+**Author: SenriYuki，柏柏**
 
 ### Translation Credits
 

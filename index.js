@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Horae - 时光记忆插件 
  * 基于时间锚点的AI记忆增强系统
  * 
- * 作者: SenriYuki
- * 版本: 1.12.13B
+ * 作者: SenriYuki，柏柏
+ * 版本: 1.12.14B
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -22,7 +22,7 @@ import { initPromptDefaults, ensurePromptDefaults, getPromptDefaultSync } from '
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.12.13B';
+const VERSION = '1.12.14B';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -277,6 +277,7 @@ const _hideUnhideDebugStats = {
     unhideMsgs: 0,
     batches: 0,
 }; // debug stats
+let _slashCommandExecutorPromise = null;
 
 // ============================================
 // 工具函数
@@ -284,6 +285,24 @@ const _hideUnhideDebugStats = {
 
 
 /** 自动注入配套正则到ST原生正则系统（始终置于末尾，避免与其他正则冲突） */
+async function getSlashCommandExecutor() {
+    if (!_slashCommandExecutorPromise) {
+        _slashCommandExecutorPromise = import('/scripts/slash-commands.js')
+            .then((mod) => {
+                const exec = mod?.executeSlashCommandsWithOptions;
+                if (typeof exec !== 'function') {
+                    throw new Error('executeSlashCommandsWithOptions is unavailable');
+                }
+                return exec;
+            })
+            .catch((err) => {
+                _slashCommandExecutorPromise = null;
+                throw err;
+            });
+    }
+    return await _slashCommandExecutorPromise;
+}
+
 function ensureRegexRules() {
     if (!extension_settings.regex) extension_settings.regex = [];
 
@@ -307,6 +326,16 @@ function ensureRegexRules() {
         console.log(`[Horae] 配套正则已同步至列表末尾（共 ${HORAE_REGEX_RULES.length} 条）`);
     }
 }
+
+/* 使用酒馆方法进行token计算,但不会自动处理引号,暂时弃用 */
+async function countTokensByText(text) {
+    const exec = await getSlashCommandExecutor();
+    const input = String(text ?? '');
+    const result = await exec(`/tokens ${JSON.stringify(input)}`);
+    const tokens = Number.parseInt(result?.pipe ?? '', 10);
+    return Number.isFinite(tokens) ? tokens : 0;
+}
+
 
 /** 获取HTML模板 */
 async function getTemplate(name) {
@@ -594,10 +623,10 @@ const BUILTIN_VECTOR_RECALL_PRESETS = [
         values: {
             vectorPureMode: true,
             vectorRerankEnabled: true,
-            vectorRerankFullText: false,
+            vectorRerankFullText: true,
             vectorRerankCandidates: 20,
             vectorRerankRecallThreshold: 0.3,
-            vectorRerankMinScore: 0.85,
+            vectorRerankMinScore: 0.95,
             vectorTopK: 5,
             vectorThreshold: 0.85,
             vectorFullTextCount: 2,
@@ -1712,8 +1741,7 @@ async function setMessagesHidden(chat, indices, hidden) {
     }
 
     try {
-        const slashModule = await import('/scripts/slash-commands.js');
-        const exec = slashModule.executeSlashCommandsWithOptions;
+        const exec = await getSlashCommandExecutor();
         const cmd = hidden ? '/hide' : '/unhide';
         const action = hidden ? 'hide' : 'unhide';
         const msgCounterKey = hidden ? 'hideMsgs' : 'unhideMsgs';
@@ -9258,8 +9286,7 @@ async function scrollToMessage(messageId) {
     // 消息不在 DOM 中（被酒馆折叠/懒加载），提示用户展开
     if (!confirm(t('confirm.jumpToFarMessage', { id: messageId }))) return;
     try {
-        const slashModule = await import('/scripts/slash-commands.js');
-        const exec = slashModule.executeSlashCommandsWithOptions;
+        const exec = await getSlashCommandExecutor();
         await exec(`/go ${messageId}`);
         await new Promise(r => setTimeout(r, 300));
         messageEl = document.querySelector(`.mes[mesid="${messageId}"]`);
@@ -12348,6 +12375,7 @@ function initSettingsEvents() {
         'rpgBarsUserOnly', 'rpgSkillsUserOnly', 'rpgAttrsUserOnly', 'rpgReputationUserOnly',
         'rpgEquipmentUserOnly', 'rpgLevelUserOnly', 'rpgCurrencyUserOnly', 'rpgUserOnly',
         'rpgBarConfig', 'rpgAttributeConfig', 'rpgAttrViewMode', 'equipmentTemplates',
+        'autoSummaryEnabled',
         ..._PRESET_PROMPT_KEYS,
     ];
     // 仅用于“恢复默认”：不影响导入/导出的键范围
@@ -19258,5 +19286,5 @@ jQuery(async () => {
 
     isInitialized = true;
     _chatFullyLoaded = true;
-    console.log(`[Horae] v${VERSION} 加载完成！作者: SenriYuki`);
+    console.log(`[Horae] v${VERSION} 加载完成！作者: SenriYuki，柏柏`);
 });

@@ -2,7 +2,7 @@
 
 [English](README.md) | **简体中文** | [繁體中文](README.zh-TW.md)
 
-![Image](https://github.com/SenriYuki/SillyTavern-Horae/blob/main/HoraeLogo.jpg)
+![Image](https://github.com/SenriYuki，柏柏/SillyTavern-Horae/blob/main/HoraeLogo.jpg)
 
 > *Horae（荷赖）— 希腊神话中掌管时序的女神*
 
@@ -125,7 +125,7 @@ Horae 目前支持以下语言的界面显示：
 | 日本語 | ✅ 完整 |
 | Русский | ✅ 完整 |
 
-希望 Horae 支持你的语言？欢迎提交 [Issue](https://github.com/SenriYuki/SillyTavern-Horae/issues) 或直接 PR 翻译文件！
+希望 Horae 支持你的语言？欢迎提交 [Issue](https://github.com/SenriYuki，柏柏/SillyTavern-Horae/issues) 或直接 PR 翻译文件！
 
 ---
 
@@ -133,7 +133,7 @@ Horae 目前支持以下语言的界面显示：
 
 > ⚠️ 本项目为业余开发，回复可能有延迟，敬请谅解。
 
-**作者：SenriYuki**
+**作者：SenriYuki，柏柏**
 
 ### 翻译致谢
 

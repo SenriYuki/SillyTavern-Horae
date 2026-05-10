@@ -1680,11 +1680,15 @@ export class VectorManager {
     }
 
     _extractCleanText(mes, stripTags) {
+
         if (!mes) return '';
         let text = mes
             .replace(/<think>[\s\S]*?<\/think>/gi, '')
             .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
-            .replace(/<!--[\s\S]*?-->/g, '');
+            .replace(/<!--[\s\S]*?-->/g, '')
+            .replace(/<horae>[\s\S]+?<\/horae>/gi, '')
+            .replace(/<horaeevent>[\s\S]+?<\/horaeevent>/gi, '')
+            .replace(/[\r\n]+/g, "");
         if (stripTags) {
             const tags = stripTags.split(/[,，\s]+/).map(t => t.trim()).filter(Boolean);
             for (const tag of tags) {
@@ -1692,7 +1696,8 @@ export class VectorManager {
                 text = text.replace(new RegExp(`<${escaped}(?:\\s[^>]*)?>[\\s\\S]*?</${escaped}>`, 'gi'), '');
             }
         }
-        return text.replace(/<[^>]*>/g, '').trim();
+        // return text.replace(/<[^>]*>/g, '').trim();
+        return text;
     }
 
     /**
@@ -2072,7 +2077,7 @@ export class VectorManager {
                 return;
             } catch (_) {
                 console.warn('[Horae Vector] DB connection stale, reconnecting...');
-                try { this.db.close(); } catch (__) {}
+                try { this.db.close(); } catch (__) { }
                 this.db = null;
             }
         }
