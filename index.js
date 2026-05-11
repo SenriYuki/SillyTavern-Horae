@@ -10665,8 +10665,7 @@ async function handlePanelAiAnalyzeAction(messageId, runAnalysis, options = {}) 
     } = options;
 
     const existingMeta = horaeManager.getMessageMeta(messageId);
-    const existingEvents = existingMeta?.events || (existingMeta?.event ? [existingMeta.event] : []);
-    const hasTimeline = existingEvents.some(evt => evt?.summary && String(evt.summary).trim());
+    const hasTimeline = _hasTimelineSummary(existingMeta);
 
     if (hasTimeline && !confirm(reanalyzeConfirmText)) {
         return false;
@@ -10684,6 +10683,26 @@ async function handlePanelAiAnalyzeAction(messageId, runAnalysis, options = {}) 
     } finally {
         _panelAiAnalysisInProgress.delete(messageId);
     }
+}
+
+function _hasTimelineSummary(meta) {
+    const events = meta?.events || (meta?.event ? [meta.event] : []);
+    return events.some(evt => evt?.summary && String(evt.summary).trim());
+}
+
+function _preserveRebuildControlFlags(targetMeta, sourceMeta) {
+    if (!targetMeta || !sourceMeta) return;
+    if (sourceMeta._skipHorae) targetMeta._skipHorae = true;
+    if (sourceMeta._aiScanned) targetMeta._aiScanned = true;
+    const savedFlags = _saveCompressedFlags(sourceMeta);
+    if (savedFlags) _restoreCompressedFlags(targetMeta, savedFlags);
+}
+
+function _rebuildDerivedMetaCaches() {
+    horaeManager.rebuildTableData();
+    horaeManager.rebuildRelationships();
+    horaeManager.rebuildLocationMemory();
+    horaeManager.rebuildRpgData();
 }
 
 /**
@@ -10925,8 +10944,16 @@ function bindPanelEvents(panelEl) {
 
             if (result) {
                 const existingMeta = horaeManager.getMessageMeta(messageId) || createEmptyMeta();
-                const newMeta = horaeManager.mergeParsedToMeta(existingMeta, result);
-                if (newMeta._tableUpdates) {
+                const shouldRebuild = _hasTimelineSummary(existingMeta);
+                const baseMeta = shouldRebuild ? createEmptyMeta() : existingMeta;
+                const newMeta = horaeManager.mergeParsedToMeta(baseMeta, result);
+                if (shouldRebuild) {
+                    _preserveRebuildControlFlags(newMeta, existingMeta);
+                    if (newMeta._tableUpdates) {
+                        newMeta.tableContributions = newMeta._tableUpdates;
+                        delete newMeta._tableUpdates;
+                    }
+                } else if (newMeta._tableUpdates) {
                     horaeManager.applyTableUpdates(newMeta._tableUpdates);
                     delete newMeta._tableUpdates;
                 }
@@ -10934,14 +10961,18 @@ function bindPanelEvents(panelEl) {
                 if (result.deletedAgenda && result.deletedAgenda.length > 0) {
                     horaeManager.removeCompletedAgenda(result.deletedAgenda);
                 }
-                // 全局同步
-                if (result.relationships?.length > 0) {
-                    horaeManager._mergeRelationships(result.relationships);
-                }
-                if (result.scene?.scene_desc && result.scene?.location) {
-                    horaeManager._updateLocationMemory(result.scene.location, result.scene.scene_desc);
-                }
                 horaeManager.setMessageMeta(messageId, newMeta);
+                if (shouldRebuild) {
+                    _rebuildDerivedMetaCaches();
+                } else {
+                    // 全局同步（增量模式）
+                    if (result.relationships?.length > 0) {
+                        horaeManager._mergeRelationships(result.relationships);
+                    }
+                    if (result.scene?.scene_desc && result.scene?.location) {
+                        horaeManager._updateLocationMemory(result.scene.location, result.scene.scene_desc);
+                    }
+                }
                 injectHoraeTagToMessage(messageId, newMeta);
 
                 const contentEl = panelEl.querySelector('.horae-panel-content');
@@ -11111,28 +11142,40 @@ function rescanMessageMeta(messageId, panelEl) {
         return;
     }
 
+    const existingMeta = horaeManager.getMessageMeta(messageId) || createEmptyMeta();
+    const shouldRebuild = _hasTimelineSummary(existingMeta);
+    if (shouldRebuild && !confirm('该楼层已有时间线数据，是否重新分析？')) {
+        return;
+    }
+
     const parsed = horaeManager.parseHoraeTag(messageContent);
 
     if (parsed) {
-        const existingMeta = horaeManager.getMessageMeta(messageId);
         // 用 mergeParsedToMeta 以空 meta 为基础，确保所有字段一致处理
         const newMeta = horaeManager.mergeParsedToMeta(createEmptyMeta(), parsed);
 
-        // 只保留原有的NPC数据（如果新解析中没有）
-        if ((!parsed.npcs || Object.keys(parsed.npcs).length === 0) && existingMeta?.npcs) {
-            newMeta.npcs = existingMeta.npcs;
-        }
+        if (shouldRebuild) {
+            _preserveRebuildControlFlags(newMeta, existingMeta);
+        } else {
+            // 只保留原有的NPC数据（如果新解析中没有）
+            if ((!parsed.npcs || Object.keys(parsed.npcs).length === 0) && existingMeta?.npcs) {
+                newMeta.npcs = existingMeta.npcs;
+            }
 
-        // 无新agenda则保留旧数据
-        if ((!newMeta.agenda || newMeta.agenda.length === 0) && existingMeta?.agenda?.length > 0) {
-            newMeta.agenda = existingMeta.agenda;
-        }
-        if ((!newMeta.deletedAgenda || newMeta.deletedAgenda.length === 0) && existingMeta?.deletedAgenda?.length > 0) {
-            newMeta.deletedAgenda = existingMeta.deletedAgenda;
+            // 无新agenda则保留旧数据
+            if ((!newMeta.agenda || newMeta.agenda.length === 0) && existingMeta?.agenda?.length > 0) {
+                newMeta.agenda = existingMeta.agenda;
+            }
+            if ((!newMeta.deletedAgenda || newMeta.deletedAgenda.length === 0) && existingMeta?.deletedAgenda?.length > 0) {
+                newMeta.deletedAgenda = existingMeta.deletedAgenda;
+            }
         }
 
         // 处理表格更新
-        if (newMeta._tableUpdates) {
+        if (shouldRebuild && newMeta._tableUpdates) {
+            newMeta.tableContributions = newMeta._tableUpdates;
+            delete newMeta._tableUpdates;
+        } else if (newMeta._tableUpdates) {
             horaeManager.applyTableUpdates(newMeta._tableUpdates);
             delete newMeta._tableUpdates;
         }
@@ -11142,16 +11185,19 @@ function rescanMessageMeta(messageId, panelEl) {
             horaeManager.removeCompletedAgenda(parsed.deletedAgenda);
         }
 
-        // 全局同步：关系网络合并到 chat[0]
-        if (parsed.relationships?.length > 0) {
-            horaeManager._mergeRelationships(parsed.relationships);
-        }
-        // 全局同步：场景记忆更新
-        if (parsed.scene?.scene_desc && parsed.scene?.location) {
-            horaeManager._updateLocationMemory(parsed.scene.location, parsed.scene.scene_desc);
-        }
-
         horaeManager.setMessageMeta(messageId, newMeta);
+        if (shouldRebuild) {
+            _rebuildDerivedMetaCaches();
+        } else {
+            // 全局同步：关系网络合并到 chat[0]
+            if (parsed.relationships?.length > 0) {
+                horaeManager._mergeRelationships(parsed.relationships);
+            }
+            // 全局同步：场景记忆更新
+            if (parsed.scene?.scene_desc && parsed.scene?.location) {
+                horaeManager._updateLocationMemory(parsed.scene.location, parsed.scene.scene_desc);
+            }
+        }
         getContext().saveChat();
 
         panelEl.remove();
@@ -11163,12 +11209,16 @@ function rescanMessageMeta(messageId, panelEl) {
         showToast(t('toast.saveSuccess'), 'success');
     } else {
         // 无标签，清空数据（保留NPC）
-        const existingMeta = horaeManager.getMessageMeta(messageId);
         const newMeta = createEmptyMeta();
-        if (existingMeta?.npcs) {
+        if (shouldRebuild) {
+            _preserveRebuildControlFlags(newMeta, existingMeta);
+        } else if (existingMeta?.npcs) {
             newMeta.npcs = existingMeta.npcs;
         }
         horaeManager.setMessageMeta(messageId, newMeta);
+        if (shouldRebuild) {
+            _rebuildDerivedMetaCaches();
+        }
 
         panelEl.remove();
         addMessagePanel(messageEl, messageId);
@@ -17816,18 +17866,29 @@ async function analyzeMessageWithAI(messageContent, opts = {}) {
     messageContent = messageContent
         .replace(/<horae>[\s\S]*?<\/horae>/gi, '')
         .replace(/<horaeevent>[\s\S]*?<\/horaeevent>/gi, '')
+        .replace(/<safe>/g, '')
+        .replace(/[\r\n]+/g, '');
 
     const template = settings.customAnalysisPrompt || getDefaultAnalysisPrompt();
+    const analysisLocationRules = settings.sendLocationMemory ? (horaeManager.generateLocationMemoryPrompt() || '') : '';
+    const analysisRelationshipRules = settings.sendRelationships ? (horaeManager.generateRelationshipPrompt() || '') : '';
+    const analysisEmotionRules = settings.sendMood ? (horaeManager.generateMoodPrompt() || '') : '';
     let analysisPrompt = template
         .replace(/\{\{user\}\}/gi, userName)
         .replace(/\{\{context\}\}/gi, contextText)
         .replace(/\{\{previousUserMessage\}\}/gi, previousUserMessage)
-        .replace(/\{\{content\}\}/gi, messageContent);
+        .replace(/\{\{content\}\}/gi, messageContent)
+        .replace(/\{\{analysis_location_rules\}\}/gi, analysisLocationRules)
+        .replace(/\{\{analysis_relationship_rules\}\}/gi, analysisRelationshipRules)
+        .replace(/\{\{analysis_emotion_rules\}\}/gi, analysisEmotionRules);
 
     // 去除无用内容
     analysisPrompt = analysisPrompt
         .replace(/<think(?:ing)?[\s>][\s\S]*?<\/think(?:ing)?>/gi, '')
-        .replace(/<!--horae[\s\S]*?-->/gi, '');
+        .replace(/<!--horae[\s\S]*?-->/gi, '')
+        .replace(/<!--[\s\S]+?-->/g, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
 
     try {
         const shouldMarkNoRecall = typeof noVectorRecallMarker === 'boolean'
