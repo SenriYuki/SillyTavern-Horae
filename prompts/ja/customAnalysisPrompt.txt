@@ -71,6 +71,10 @@ event:critical|出来事の要約
   新規例：agenda:1988/09/29|明朝9時に起床して買い物に行き、制服着用を厳禁にする(1988/09/30 09:00)
 · event は <horaeevent> 内に置く。<horae> 内に入れない。
 
+{{analysis_location_rules}}
+{{analysis_relationship_rules}}
+{{analysis_emotion_rules}}
+
 【event 要約】
 · 90〜180字程度を目安に、誰が誰に何をしたか、何を伝えたか、感情や関係がどう変わったか、何の手掛かりや結果が生まれたかを書く。
 · 抽象的な言い方は禁止。

@@ -70,6 +70,10 @@ event:importance level|event description
   New example: agenda:1988/09/29|Wake up at 9:00 tomorrow morning, then go shopping, and strictly forbid wearing school uniform(1988/09/30 09:00)
 · event: place it inside <horaeevent>, not inside <horae>.
 
+{{analysis_location_rules}}
+{{analysis_relationship_rules}}
+{{analysis_emotion_rules}}
+
 ═══ [Event Summary (event)] Writing Rules ═══
 ★ Core goal: provide future AI with a lossless "previously-on" summary. It must be concrete and information-dense, within 80-150 words.
 ★ Must include the following key elements (5W1H):

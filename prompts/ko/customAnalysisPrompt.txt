@@ -71,6 +71,10 @@ event:critical|사건 요약
   신규 예시: agenda:1988/09/29|내일 아침 9시에 기상 후 쇼핑을 가고 교복 착용을 엄금한다(1988/09/30 09:00)
 · event 는 <horaeevent> 안에만 둠. <horae> 안에 넣지 않음.
 
+{{analysis_location_rules}}
+{{analysis_relationship_rules}}
+{{analysis_emotion_rules}}
+
 【event 요약】
 · 120~240자 정도를 기준으로, 누가 누구에게 무엇을 했는지, 무엇을 말했는지, 감정이나 관계가 어떻게 변했는지, 어떤 단서나 결과가 생겼는지 작성.
 · 추상적인 말은 금지.
