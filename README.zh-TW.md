@@ -1,8 +1,8 @@
-# Horae - 時光記憶 v1.13.2 | SillyTavern 記憶增強插件
+# Horae - 時光記憶 v1.14.0 | SillyTavern 記憶增強插件
 
 [English](README.md) | [简体中文](README.zh-CN.md) | **繁體中文**
 
-![Image](https://github.com/SenriYuki/SillyTavern-Horae/blob/main/HoraeLogo.jpg)
+Image
 
 > *Horae（荷賴）— 希臘神話中掌管時序的女神*
 
@@ -26,6 +26,9 @@
 **自助美化工具 —— 不會寫 CSS 也能自訂**
 視覺化美化面板。色相條、飽和度/亮度滑桿快速調色，日夜模式一鍵切換，還能匯入圖片 URL 裝飾介面。（⚠️ 做 Horae 插件的美化不用跟我要授權，請隨意。）
 
+**輔助 API —— 後台任務不搶主 API**
+可為 AI 分析、底部欄/樓層魔術棒、發送前補全、自動總結、AI 智慧補全、手動多選壓縮單獨配置 OpenAI 相容端點。輔助 API 請求會串行排隊，降低副端點並發限流風險；API 地址、密鑰、模型不會隨 Horae 配置檔匯出。
+
 **場景記憶** · **情緒 & 關係網路** · **自動摘要** · **告別「永遠的昨天」** · **衣服不再亂穿** · **NPC 不會越寫越糊** · **物品欄終於靠譜了** · **待辦事項防遺忘** · **自訂表格** · **變化驅動省 Token**
 
 ---
@@ -40,6 +43,22 @@
 
 ---
 
+## v1.14.0 更新內容
+
+### 輔助 API
+
+- **獨立設定區塊**：新增「輔助 API」，不依賴自動總結開關，單獨填寫 API 地址、密鑰與模型。
+- **三組用途開關**：可分別用於 AI 分析/魔術棒/發送前補全、自動總結/AI 智慧補全、手動多選壓縮。
+- **串行隊列**：輔助 API 請求會排隊執行，降低多個後台任務同時觸發 429 的概率。
+- **預設不回退主 API**：輔助 API 失敗時預設不偷跑主 API，避免繼續撞主 API 速率限制。
+- **安全匯出**：API 地址、密鑰、模型不會進入 Horae 配置檔匯出內容。
+
+
+
+> 更早版本的更新日志请查看 [CHANGELOG.md](CHANGELOG.md)
+
+---
+
 ## 相容性
 
 - **SillyTavern**: 1.13.0+（AI 分析功能需求 1.13.5+）
@@ -49,14 +68,16 @@
 
 ## 多語言支援
 
-| 語言 | 狀態 |
-|------|------|
-| 简体中文 | ✅ 完整 |
-| 繁體中文 | ✅ 完整 |
+
+| 語言      | 狀態   |
+| ------- | ---- |
+| 简体中文    | ✅ 完整 |
+| 繁體中文    | ✅ 完整 |
 | English | ✅ 完整 |
-| 한국어 | ✅ 完整 |
-| 日本語 | ✅ 完整 |
+| 한국어     | ✅ 完整 |
+| 日本語     | ✅ 完整 |
 | Русский | ✅ 完整 |
+
 
 希望 Horae 支援你的語言？歡迎提交 [Issue](https://github.com/SenriYuki/SillyTavern-Horae/issues) 或直接 PR 翻譯檔案！
 
@@ -80,7 +101,7 @@ window.Horae?.getEvents(10)      // → 最近 10 筆事件
 window.Horae?.getSettings()
 
 // 版本號
-window.Horae?.version            // → "1.13.2"
+window.Horae?.version            // → "1.14.0"
 ```
 
 設定變更事件透過酒館的 `eventSource` 廣播：
@@ -110,3 +131,4 @@ eventSource.on('horae:settingsChanged', (data) => {
 ### 致謝
 
 - [@baibai-git](https://github.com/baibai-git) — PR #5 整合貢獻
+

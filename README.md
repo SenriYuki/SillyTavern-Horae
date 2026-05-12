@@ -1,8 +1,8 @@
-# Horae v1.13.2 - Memory Engine for SillyTavern
+# Horae v1.14.0 - Memory Engine for SillyTavern
 
 **English** | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md)
 
-![Image](https://github.com/SenriYuki/SillyTavern-Horae/blob/main/HoraeLogo.jpg)
+Image
 
 > *Horae — Greek goddesses who governed the orderly progression of time*
 
@@ -15,6 +15,7 @@ Long-form RP players know the pain: AI memory is basically a goldfish. Yesterday
 ## Features
 
 ### Core Memory System
+
 - **Timeline Tracking** — Events are timestamped with relative time calculations ("yesterday", "last Wednesday", "2 months ago"). AI finally knows the difference.
 - **Costume Lock** — Each character's current outfit is recorded and only sent for present characters. No more phantom wardrobe changes.
 - **NPC Tracking** — Appearance, personality, relationships tracked independently. Ages advance with story time. Relationship prompts are strictly enforced.
@@ -24,6 +25,7 @@ Long-form RP players know the pain: AI memory is basically a goldfish. Yesterday
 - **Scene Memory** — Records fixed physical features of locations for consistent descriptions across visits.
 
 ### RPG System (Modular)
+
 - **Status Bars** — HP/MP/SP with custom names, colors. Dozens of status effect icons.
 - **Attribute Panel** — Multi-dimensional stats (STR/DEX/CON/INT/WIS/CHA) with radar chart.
 - **Skills** — Track skill ownership, levels, and descriptions.
@@ -35,12 +37,15 @@ Long-form RP players know the pain: AI memory is basically a goldfish. Yesterday
 - All modules are **independently toggleable**. Disabled = zero token cost.
 
 ### Smart Token Management
+
 - **Auto Summary & Hide** — Automatically compresses old messages into AI-generated summaries. Original messages are `/hide`d to save tokens. Summaries can be toggled back to original events anytime.
 - **Vector Memory** — Semantic search engine that recalls hidden details when conversation touches historical events. Runs locally via Web Worker — zero API cost.
 - **AI Batch Scan** — One-click retroactive analysis of entire chat history.
+- **Auxiliary API** — Route AI analysis, auto-summary, smart enrich, and manual compression through a separate OpenAI-compatible endpoint. Requests are queued to avoid auxiliary endpoint rate spikes, and API credentials are never exported with Horae config profiles.
 - **Change-Driven Output** — AI only outputs what changed this turn. No redundant state dumps.
 
 ### User Experience
+
 - **Custom Tables** — Excel-style tables with AI auto-fill, row/column locking, undo/redo.
 - **Theme Designer** — Visual theme editor with hue/saturation sliders, image decorations, day/night modes. Export & share themes as JSON.
 - **Interactive Tutorial** — First-time users get a guided walkthrough of all features.
@@ -84,7 +89,7 @@ window.Horae?.getEvents(10)      // → last 10 events
 window.Horae?.getSettings()
 
 // Version string
-window.Horae?.version            // → "1.13.2"
+window.Horae?.version            // → "1.14.0"
 ```
 
 Settings change events are broadcast via SillyTavern's `eventSource`:
@@ -101,26 +106,30 @@ eventSource.on('horae:settingsChanged', (data) => {
 
 ## Language Support
 
-| Language | Status |
-|----------|--------|
-| 简体中文 (Simplified Chinese) | ✅ Full |
+
+| Language                   | Status |
+| -------------------------- | ------ |
+| 简体中文 (Simplified Chinese)  | ✅ Full |
 | 繁體中文 (Traditional Chinese) | ✅ Full |
-| English | ✅ Full |
-| 한국어 (Korean) | ✅ Full |
-| 日本語 (Japanese) | ✅ Full |
-| Русский (Russian) | ✅ Full |
+| English                    | ✅ Full |
+| 한국어 (Korean)               | ✅ Full |
+| 日本語 (Japanese)             | ✅ Full |
+| Русский (Russian)          | ✅ Full |
+
 
 **Want Horae in your language?** Open an [Issue](https://github.com/SenriYuki/SillyTavern-Horae/issues) or submit a PR with a translation file! See `locales/en.json` for the translation template.
 
 ---
 
-## What's New in v1.11.0
+## What's New in v1.14.0
 
-### Internationalization (i18n)
-- **UI Language Selector** — Switch between Simplified Chinese, Traditional Chinese, English, Korean, Japanese, and Russian. Auto-detect option available.
-- **AI Output Language** — Separate setting for AI response language, independent of UI language.
-- **900+ translated keys** — All UI text, prompts, tooltips, and tutorials are fully translated.
-- **Simplified/Traditional Chinese bidirectional parsing** — No more search/parse failures due to character variant differences.
+### Auxiliary API
+
+- New standalone **Auxiliary API** settings section for OpenAI-compatible endpoints.
+- Choose where to use it: AI analysis / magic wand / pre-send timeline fill, auto-summary + AI smart enrich, or manual multi-select compression.
+- Auxiliary API requests run through a serial queue to reduce endpoint 429s.
+- Fallback to the main API is available but off by default.
+- API URL, key, and model are excluded from Horae config profile exports.
 
 See [CHANGELOG](CHANGELOG.md) for full version history.
 
@@ -139,3 +148,4 @@ Bug reports and suggestions are welcome!
 ### Credits
 
 - [@baibai-git](https://github.com/baibai-git) — PR #5 integration contribution
+

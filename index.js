@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.13.2
+ * 版本: 1.14.0
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -22,7 +22,7 @@ import { initPromptDefaults, ensurePromptDefaults, ensurePresetPrompts, getPromp
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.13.2';
+const VERSION = '1.14.0';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -172,6 +172,14 @@ const DEFAULT_SETTINGS = {
     autoSummaryApiUrl: '',          // 独立API端点地址（OpenAI兼容）
     autoSummaryApiKey: '',          // 独立API密钥
     autoSummaryModel: '',           // 独立API模型名称
+    auxApiEnabled: false,            // 辅助API总开关
+    auxApiUrl: '',                   // 辅助API端点地址
+    auxApiKey: '',                   // 辅助API密钥
+    auxApiModel: '',                 // 辅助API模型名称
+    auxApiUseForAnalysis: true,      // AI分析/魔术棒/发送前补全
+    auxApiUseForSummary: true,       // 自动总结/AI智能补全
+    auxApiUseForManualCompress: false, // 手动多选压缩
+    auxApiFallbackToMain: false,     // 辅助API失败后回退主API
     antiParaphraseMode: false,      // 反转述模式：AI回复时结算上一条USER的内容
     sideplayMode: false,            // 番外/小剧场模式：启用后可标记消息跳过Horae
     // RPG 模式
@@ -847,9 +855,33 @@ function loadSettings() {
         settings._autoFillPrevTimelineDefaultOffMigrated = true;
         changed = true;
     }
+    if (_migrateAuxApiSettings(saved || {})) changed = true;
     if (_normalizeAutoSummarySettingsInPlace(saved || {}) || _normalizePromptSettingsInPlace() || _normalizeVectorRecallPresetsInPlace() || _normalizeRpgSettingsInPlace()) changed = true;
     if (_migrateLegacyVectorSettings(settings)) changed = true;
     if (changed) saveSettings();
+}
+
+function _migrateAuxApiSettings(saved = {}) {
+    if (settings._auxApiSettingsMigrated) return false;
+    let changed = true;
+    const hasAux = !!(settings.auxApiUrl || settings.auxApiKey || settings.auxApiModel);
+    const hasLegacy = !!(saved.autoSummaryApiUrl || saved.autoSummaryApiKey || saved.autoSummaryModel);
+    if (!hasAux && hasLegacy) {
+        settings.auxApiEnabled = !!saved.autoSummaryUseCustomApi;
+        settings.auxApiUrl = saved.autoSummaryApiUrl || '';
+        settings.auxApiKey = saved.autoSummaryApiKey || '';
+        settings.auxApiModel = saved.autoSummaryModel || '';
+        settings.auxApiUseForSummary = !!saved.autoSummaryUseCustomApi;
+        settings.auxApiUseForAnalysis = true;
+        settings.auxApiUseForManualCompress = false;
+        changed = true;
+    }
+    settings.autoSummaryUseCustomApi = false;
+    settings.autoSummaryApiUrl = '';
+    settings.autoSummaryApiKey = '';
+    settings.autoSummaryModel = '';
+    settings._auxApiSettingsMigrated = true;
+    return changed;
 }
 
 /** 迁移旧版属性配置到 DND 六维 */
@@ -3202,7 +3234,7 @@ async function compressSelectedTimelineEvents() {
         _isSummaryGeneration = true;
         let response;
         try {
-            const genPromise = _generateForAiTasks(prompt);
+            const genPromise = _generateForAuxTask(prompt, { kind: 'manualCompress' });
             response = await Promise.race([genPromise, cancelPromise]);
         } finally {
             _isSummaryGeneration = false;
@@ -13245,21 +13277,37 @@ function initSettingsEvents() {
         this.value = settings.autoSummaryBatchMaxTokens;
         saveSettings();
     });
-    $('#horae-setting-auto-summary-custom-api').on('change', function () {
-        settings.autoSummaryUseCustomApi = this.checked;
+    $('#horae-setting-aux-api-enabled').on('change', function () {
+        settings.auxApiEnabled = this.checked;
         saveSettings();
-        $('#horae-auto-summary-api-options').toggle(this.checked);
+        $('#horae-aux-api-options').toggle(this.checked);
     });
-    $('#horae-setting-auto-summary-api-url').on('input change', function () {
-        settings.autoSummaryApiUrl = this.value;
-        saveSettings();
-    });
-    $('#horae-setting-auto-summary-api-key').on('input change', function () {
-        settings.autoSummaryApiKey = this.value;
+    $('#horae-setting-aux-api-url').on('input change', function () {
+        settings.auxApiUrl = this.value;
         saveSettings();
     });
-    $('#horae-setting-auto-summary-model').on('change', function () {
-        settings.autoSummaryModel = this.value;
+    $('#horae-setting-aux-api-key').on('input change', function () {
+        settings.auxApiKey = this.value;
+        saveSettings();
+    });
+    $('#horae-setting-aux-api-model').on('change', function () {
+        settings.auxApiModel = this.value;
+        saveSettings();
+    });
+    $('#horae-setting-aux-api-analysis').on('change', function () {
+        settings.auxApiUseForAnalysis = this.checked;
+        saveSettings();
+    });
+    $('#horae-setting-aux-api-summary').on('change', function () {
+        settings.auxApiUseForSummary = this.checked;
+        saveSettings();
+    });
+    $('#horae-setting-aux-api-manual-compress').on('change', function () {
+        settings.auxApiUseForManualCompress = this.checked;
+        saveSettings();
+    });
+    $('#horae-setting-aux-api-fallback').on('change', function () {
+        settings.auxApiFallbackToMain = this.checked;
         saveSettings();
     });
 
@@ -14094,13 +14142,16 @@ function syncSettingsToUI() {
     }
     $('#horae-setting-auto-summary-batch-msgs').val(settings.autoSummaryBatchMaxMsgs || 50);
     $('#horae-setting-auto-summary-batch-tokens').val(settings.autoSummaryBatchMaxTokens || 80000);
-    $('#horae-setting-auto-summary-custom-api').prop('checked', !!settings.autoSummaryUseCustomApi);
-    $('#horae-auto-summary-api-options').toggle(!!settings.autoSummaryUseCustomApi);
-    $('#horae-setting-auto-summary-api-url').val(settings.autoSummaryApiUrl || '');
-    $('#horae-setting-auto-summary-api-key').val(settings.autoSummaryApiKey || '');
-    // 如果已有保存的模型名，初始化 select 选项
-    const _savedModel = settings.autoSummaryModel || '';
-    const _modelSel = document.getElementById('horae-setting-auto-summary-model');
+    $('#horae-setting-aux-api-enabled').prop('checked', !!settings.auxApiEnabled);
+    $('#horae-aux-api-options').toggle(!!settings.auxApiEnabled);
+    $('#horae-setting-aux-api-url').val(settings.auxApiUrl || '');
+    $('#horae-setting-aux-api-key').val(settings.auxApiKey || '');
+    $('#horae-setting-aux-api-analysis').prop('checked', settings.auxApiUseForAnalysis !== false);
+    $('#horae-setting-aux-api-summary').prop('checked', settings.auxApiUseForSummary !== false);
+    $('#horae-setting-aux-api-manual-compress').prop('checked', !!settings.auxApiUseForManualCompress);
+    $('#horae-setting-aux-api-fallback').prop('checked', !!settings.auxApiFallbackToMain);
+    const _savedModel = settings.auxApiModel || '';
+    const _modelSel = document.getElementById('horae-setting-aux-api-model');
     if (_savedModel && _modelSel) {
         _modelSel.innerHTML = '';
         const opt = document.createElement('option');
@@ -14566,23 +14617,6 @@ function getDefaultAnalysisPrompt() {
  * useProfile=false 时直接调用 generateRaw（并行安全）
  */
 async function generateForSummary(prompt) {
-    // 从 DOM 补读一次副API设置，防止浏览器自动填充未触发 input 事件导致设置为空
-    _syncSubApiSettingsFromDom();
-    const useCustom = settings.autoSummaryUseCustomApi;
-    const hasUrl = !!(settings.autoSummaryApiUrl && settings.autoSummaryApiUrl.trim());
-    const hasKey = !!(settings.autoSummaryApiKey && settings.autoSummaryApiKey.trim());
-    const hasModel = !!(settings.autoSummaryModel && settings.autoSummaryModel.trim());
-    console.log(`[Horae] generateForSummary: useCustom=${useCustom}, hasUrl=${hasUrl}, hasKey=${hasKey}, hasModel=${hasModel}`);
-    if (useCustom && hasUrl && hasKey && hasModel) {
-        return await generateWithDirectApi(prompt);
-    }
-    if (useCustom && (!hasUrl || !hasKey || !hasModel)) {
-        const missing = [!hasUrl && 'API地址', !hasKey && 'API密钥', !hasModel && '模型名称'].filter(Boolean).join('、');
-        console.warn(`[Horae] 副API已勾选但缺少: ${missing}，回退主API`);
-        showToast(t('toast.subApiMissing', { missing }), 'warning');
-    } else if (!useCustom) {
-        console.log('[Horae] 副API未启用，使用主API');
-    }
     const context = getContext();
     const shouldMarkNoRecall = !!(
         context?.mainApi === 'openai' &&
@@ -14593,7 +14627,8 @@ async function generateForSummary(prompt) {
         context?.mainApi === 'openai' &&
         settings.injectContext
     );
-    return await _generateForAiTasks(prompt, {
+    return await _generateForAuxTask(prompt, {
+        kind: 'summary',
         noVectorRecallMarker: shouldMarkNoRecall,
         noContextInjectionMarker: shouldSkipContextInject,
     });
@@ -14644,6 +14679,59 @@ function _cleanSummaryText(raw) {
         .replace(/<horaeevent>[\s\S]*?<\/horaeevent>/gi, '')
         .replace(/<!--horae[\s\S]*?-->/gi, '')
         .trim();
+}
+
+let _auxApiQueue = Promise.resolve();
+
+function _enqueueAuxApi(fn) {
+    const run = _auxApiQueue.then(fn, fn);
+    _auxApiQueue = run.catch(() => {});
+    return run;
+}
+
+function _shouldUseAuxApi(kind) {
+    if (!settings.auxApiEnabled) return false;
+    if (kind === 'analysis') return settings.auxApiUseForAnalysis !== false;
+    if (kind === 'summary' || kind === 'aiEnrich') return settings.auxApiUseForSummary !== false;
+    if (kind === 'manualCompress') return !!settings.auxApiUseForManualCompress;
+    return false;
+}
+
+function _getAuxApiProfile() {
+    return {
+        apiUrl: String(settings.auxApiUrl || '').trim(),
+        apiKey: String(settings.auxApiKey || '').trim(),
+        model: String(settings.auxApiModel || '').trim(),
+    };
+}
+
+async function _generateForAuxTask(prompt, opts = {}) {
+    const { kind = 'summary', ...rawOpts } = opts;
+    _syncSubApiSettingsFromDom();
+    if (_shouldUseAuxApi(kind)) {
+        const profile = _getAuxApiProfile();
+        const missing = [
+            !profile.apiUrl && t('settings.auxApiUrl'),
+            !profile.apiKey && t('settings.auxApiKey'),
+            !profile.model && t('settings.auxApiModel'),
+        ].filter(Boolean).join('、');
+        if (!missing) {
+            try {
+                return await _enqueueAuxApi(() => generateWithDirectApi(prompt, profile, { kind }));
+            } catch (err) {
+                if (!settings.auxApiFallbackToMain) throw err;
+                console.warn('[Horae] 辅助API失败，回退主API:', err);
+                showToast(t('toast.auxApiFallback', { error: err?.message || err }), 'warning');
+            }
+        } else {
+            console.warn(`[Horae] 辅助API缺少: ${missing}`);
+            if (!settings.auxApiFallbackToMain) {
+                throw new Error(t('toast.auxApiMissing', { missing }));
+            }
+            showToast(t('toast.subApiMissing', { missing }), 'warning');
+        }
+    }
+    return await _generateForAiTasks(prompt, rawOpts);
 }
 
 function _extractHoraeSummaryText(raw) {
@@ -15152,25 +15240,25 @@ async function _runAutoResummaryIfNeeded(chat, cutoff) {
 
 function _syncSubApiSettingsFromDom() {
     try {
-        const urlEl = document.getElementById('horae-setting-auto-summary-api-url');
-        const keyEl = document.getElementById('horae-setting-auto-summary-api-key');
-        const modelEl = document.getElementById('horae-setting-auto-summary-model');
-        const checkEl = document.getElementById('horae-setting-auto-summary-custom-api');
+        const urlEl = document.getElementById('horae-setting-aux-api-url');
+        const keyEl = document.getElementById('horae-setting-aux-api-key');
+        const modelEl = document.getElementById('horae-setting-aux-api-model');
+        const checkEl = document.getElementById('horae-setting-aux-api-enabled');
         let changed = false;
-        if (checkEl && checkEl.checked !== settings.autoSummaryUseCustomApi) {
-            settings.autoSummaryUseCustomApi = checkEl.checked;
+        if (checkEl && checkEl.checked !== settings.auxApiEnabled) {
+            settings.auxApiEnabled = checkEl.checked;
             changed = true;
         }
-        if (urlEl && urlEl.value !== settings.autoSummaryApiUrl) {
-            settings.autoSummaryApiUrl = urlEl.value;
+        if (urlEl && urlEl.value !== settings.auxApiUrl) {
+            settings.auxApiUrl = urlEl.value;
             changed = true;
         }
-        if (keyEl && keyEl.value !== settings.autoSummaryApiKey) {
-            settings.autoSummaryApiKey = keyEl.value;
+        if (keyEl && keyEl.value !== settings.auxApiKey) {
+            settings.auxApiKey = keyEl.value;
             changed = true;
         }
-        if (modelEl && modelEl.value !== settings.autoSummaryModel) {
-            settings.autoSummaryModel = modelEl.value;
+        if (modelEl && modelEl.value !== settings.auxApiModel) {
+            settings.auxApiModel = modelEl.value;
             changed = true;
         }
         if (changed) saveSettings();
@@ -15402,8 +15490,8 @@ async function fetchRerankModels() {
 /** 从副API拉取模型列表并填充下拉选单 */
 async function _fetchSubApiModels() {
     _syncSubApiSettingsFromDom();
-    const rawUrl = (settings.autoSummaryApiUrl || '').trim();
-    const apiKey = (settings.autoSummaryApiKey || '').trim();
+    const rawUrl = (settings.auxApiUrl || '').trim();
+    const apiKey = (settings.auxApiKey || '').trim();
     if (!rawUrl || !apiKey) {
         showToast(t('toast.vectorApiRequired'), 'warning');
         return [];
@@ -15436,12 +15524,12 @@ async function _fetchSubApiModels() {
 /** 拉取模型列表并填充 <select> */
 async function fetchAndPopulateModels() {
     const btn = document.getElementById('horae-btn-fetch-models');
-    const sel = document.getElementById('horae-setting-auto-summary-model');
+    const sel = document.getElementById('horae-setting-aux-api-model');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; }
     try {
         const models = await _fetchSubApiModels();
         if (!models.length) { showToast(t('toast.noModelsFetchedCheck'), 'warning'); return; }
-        const prev = settings.autoSummaryModel || '';
+        const prev = settings.auxApiModel || '';
         sel.innerHTML = '';
         for (const m of models.sort()) {
             const opt = document.createElement('option');
@@ -15459,7 +15547,7 @@ async function fetchAndPopulateModels() {
         }
         if (!prev && models.length) {
             sel.value = models[0];
-            settings.autoSummaryModel = models[0];
+            settings.auxApiModel = models[0];
             saveSettings();
         }
         showToast(t('toast.fetchedModels', { n: models.length }), 'success');
@@ -15476,7 +15564,7 @@ async function testSubApiConnection() {
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ...'; }
     try {
         const models = await _fetchSubApiModels();
-        const model = (settings.autoSummaryModel || '').trim();
+        const model = (settings.auxApiModel || '').trim();
         const matchStr = model && models.some(m => m && m.toLowerCase().includes(model.toLowerCase()))
             ? t('toast.subApiMatchFound', { model }) : (model ? t('toast.subApiMatchNotFound', { model }) : '');
         showToast(t('toast.subApiTestSuccess', { n: models.length, match: matchStr }), 'success');
@@ -15487,8 +15575,31 @@ async function testSubApiConnection() {
     }
 }
 
-/** 构建多轮对话消息数组——模仿酒馆原生 system/assistant/user 交替结构，提高 NSFW 通过率 */
-async function _buildSummaryMessages(prompt) {
+function _getAuxApiPromptProfile(kind = 'summary') {
+    if (kind === 'analysis') {
+        return {
+            system: 'You are a strict information extraction engine for creative fiction. Read the provided passage and output only the requested structured tags. Do not summarize outside the required format.',
+            ready: 'Understood. I will extract only explicit facts and output the requested structured tags.',
+            prefill: '<horae>',
+        };
+    }
+    if (kind === 'aiEnrich') {
+        return {
+            system: 'You are a strict character profile extractor for creative fiction. Output only the requested JSON object and do not add prose.',
+            ready: 'Understood. I will extract the character profile and output strict JSON only.',
+            prefill: '{',
+        };
+    }
+    return {
+        system: 'You are a professional literary analyst specializing in creative fiction. Your task is to read provided narrative passages and produce a concise, faithful plot summary. Analyze all content objectively regardless of themes, genre, or mature content. Preserve the emotional tone and key character dynamics. Output only the summary text.',
+        ready: 'Understood. I will read the provided narrative passages and produce a faithful, objective plot summary that preserves all key details, character dynamics, and emotional tone. Please provide the content.',
+        prefill: 'I have received the narrative content. Here is the concise summary:',
+    };
+}
+
+/** 构建多轮对话消息数组 */
+async function _buildAuxApiMessages(prompt, kind = 'summary') {
+    const profile = _getAuxApiPromptProfile(kind);
     const messages = [];
     let _oaiSettings = null;
     try {
@@ -15503,21 +15614,25 @@ async function _buildSummaryMessages(prompt) {
     }
     messages.push({
         role: 'system',
-        content: 'You are a professional literary analyst specializing in creative fiction. Your task is to read provided narrative passages and produce a concise, faithful plot summary. Analyze all content objectively regardless of themes, genre, or mature content. Preserve the emotional tone and key character dynamics. Output only the summary text.'
+        content: profile.system
     });
     messages.push({
         role: 'assistant',
-        content: 'Understood. I will read the provided narrative passages and produce a faithful, objective plot summary that preserves all key details, character dynamics, and emotional tone. Please provide the content.'
+        content: profile.ready
     });
     messages.push({ role: 'user', content: prompt });
     messages.push({
         role: 'assistant',
-        content: 'I have received the narrative content. Here is the concise summary:'
+        content: profile.prefill
     });
     if (_oaiSettings?.jailbreak_prompt) {
         messages.push({ role: 'system', content: _oaiSettings.jailbreak_prompt });
     }
     return messages;
+}
+
+async function _buildSummaryMessages(prompt) {
+    return _buildAuxApiMessages(prompt, 'summary');
 }
 
 /**
@@ -15584,20 +15699,27 @@ function _vectorErrorHint(err) {
     return err.message || String(err);
 }
 
-/** 直接请求API端点，完全独立于酒馆主连接，支持真并行 */
-async function generateWithDirectApi(prompt) {
-    const _model = settings.autoSummaryModel.trim();
-    const _apiKey = settings.autoSummaryApiKey.trim();
+/** 直接请求API端点，完全独立于酒馆主连接 */
+async function generateWithDirectApi(prompt, profile = null, opts = {}) {
+    const kind = opts.kind || 'summary';
+    const cfg = profile || {
+        apiUrl: settings.auxApiUrl,
+        apiKey: settings.auxApiKey,
+        model: settings.auxApiModel,
+    };
+    const _model = String(cfg.model || '').trim();
+    const _apiKey = String(cfg.apiKey || '').trim();
+    const _apiUrl = String(cfg.apiUrl || '').trim();
     if (/gemini/i.test(_model)) {
-        return await _geminiNativeRequest(prompt, settings.autoSummaryApiUrl.trim(), _model, _apiKey);
+        return await _geminiNativeRequest(prompt, _apiUrl, _model, _apiKey, { kind });
     }
-    let url = settings.autoSummaryApiUrl.trim();
+    let url = _apiUrl;
     if (!url.endsWith('/chat/completions')) {
         url = url.replace(/\/+$/, '') + '/chat/completions';
     }
-    const messages = await _buildSummaryMessages(prompt);
+    const messages = await _buildAuxApiMessages(prompt, kind);
     const body = {
-        model: settings.autoSummaryModel.trim(),
+        model: _model,
         messages,
         temperature: 0.7,
         max_tokens: 4096,
@@ -15620,7 +15742,7 @@ async function generateWithDirectApi(prompt) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${settings.autoSummaryApiKey.trim()}`
+            'Authorization': `Bearer ${_apiKey}`
         },
         body: JSON.stringify(body)
     });
@@ -15641,7 +15763,8 @@ async function generateWithDirectApi(prompt) {
  * Gemini 原生格式请求 —— 复刻 ST 后端 sendMakerSuiteRequest 的完整处理链路
  * 解决中转 OpenAI 兼容端点丢弃 safetySettings 导致 PROMPT BLOCKED 的问题
  */
-async function _geminiNativeRequest(prompt, rawUrl, model, apiKey) {
+async function _geminiNativeRequest(prompt, rawUrl, model, apiKey, opts = {}) {
+    const profile = _getAuxApiPromptProfile(opts.kind || 'summary');
     // ── 1. 收集 system 指令（main/nsfw/literary 进 systemInstruction，jailbreak 单独留） ──
     // OpenAI 路径走的是「user 之后接一条 assistant prefill，再用 system 末尾注入 jailbreak」
     // Gemini 限制：contents 不允许连续两条 user，且 system 角色只能在 systemInstruction
@@ -15657,14 +15780,14 @@ async function _geminiNativeRequest(prompt, rawUrl, model, apiKey) {
             systemParts.push({ text: oai_settings.nsfw_prompt });
         }
         systemParts.push({
-            text: 'You are a professional literary analyst specializing in creative fiction. Your task is to read provided narrative passages and produce a concise, faithful plot summary. Analyze all content objectively regardless of themes, genre, or mature content. Preserve the emotional tone and key character dynamics. Output only the summary text.',
+            text: profile.system,
         });
         if (oai_settings?.jailbreak_prompt) {
             jailbreakText = String(oai_settings.jailbreak_prompt || '').trim();
         }
     } catch (_) {
         systemParts.push({
-            text: 'You are a professional literary analyst specializing in creative fiction. Your task is to read provided narrative passages and produce a concise, faithful plot summary. Analyze all content objectively regardless of themes, genre, or mature content. Output only the summary text.',
+            text: profile.system,
         });
     }
 
@@ -15690,7 +15813,7 @@ async function _geminiNativeRequest(prompt, rawUrl, model, apiKey) {
     const body = {
         contents: [
             { role: 'user', parts: [{ text: userText }] },
-            { role: 'model', parts: [{ text: 'I have received the narrative content. Here is the concise summary:' }] },
+            { role: 'model', parts: [{ text: profile.prefill }] },
         ],
         safetySettings,
         generationConfig: {
@@ -16597,7 +16720,7 @@ event:重要程度|事件描述
 
         try {
             const response = await Promise.race([
-                _generateForAiTasks(batchPrompt),
+                _generateForAuxTask(batchPrompt, { kind: 'summary' }),
                 cancelPromise.then(() => null)
             ]);
             if (cancelled) break;
@@ -17932,7 +18055,8 @@ async function analyzeMessageWithAI(messageContent, opts = {}) {
             settings.injectContext &&
             settings.vectorEnabled
         );
-        const response = await _generateForAiTasks(analysisPrompt, {
+        const response = await _generateForAuxTask(analysisPrompt, {
+            kind: 'analysis',
             noVectorRecallMarker: shouldMarkNoRecall,
             noContextInjectionMarker: !!noContextInjectionMarker,
         });

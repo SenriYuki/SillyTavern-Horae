@@ -1271,10 +1271,44 @@ body > .horae-port-bottom-bar {
     margin-top: 6px;
 }
 
-.horae-setting-item input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    accent-color: var(--horae-primary);
+#horae_drawer .horae-setting-item input[type="checkbox"] {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    width: 16px !important;
+    height: 16px !important;
+    min-width: 16px !important;
+    min-height: 16px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 2px solid #888 !important;
+    border-radius: 3px !important;
+    background: #fff !important;
+    background-image: none !important;
+    box-sizing: border-box !important;
+    cursor: pointer !important;
+    display: inline-block !important;
+    flex-shrink: 0 !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    position: static !important;
+    vertical-align: middle !important;
+}
+
+#horae_drawer .horae-setting-item input[type="checkbox"]:checked {
+    background: #fff !important;
+    border-color: #555 !important;
+}
+
+#horae_drawer .horae-setting-item input[type="checkbox"]:checked::after {
+    content: '✓' !important;
+    display: block !important;
+    text-align: center !important;
+    color: #222 !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    line-height: 12px !important;
+    background: none !important;
+    background-image: none !important;
 }
 
 .horae-setting-item input[type="number"] {
@@ -3775,14 +3809,16 @@ body > .horae-port-bottom-bar {
 /* Checkbox */
 #horae_drawer.horae-light input[type="checkbox"],
 .horae-message-panel.horae-light input[type="checkbox"],
-.horae-modal.horae-light input[type="checkbox"] {
+.horae-modal.horae-light input[type="checkbox"],
+#horae_drawer.horae-light .horae-setting-item input[type="checkbox"] {
     background: #fff !important;
     border-color: #bbb !important;
 }
 
 #horae_drawer.horae-light input[type="checkbox"]:checked,
 .horae-message-panel.horae-light input[type="checkbox"]:checked,
-.horae-modal.horae-light input[type="checkbox"]:checked {
+.horae-modal.horae-light input[type="checkbox"]:checked,
+#horae_drawer.horae-light .horae-setting-item input[type="checkbox"]:checked {
     border-color: var(--horae-primary) !important;
 }
 
