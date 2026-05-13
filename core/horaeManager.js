@@ -1215,6 +1215,8 @@ class HoraeManager {
         const resolvedCharacter = this._getResolvedCharacterTables();
         const resolvedGlobal = this._getResolvedGlobalTables();
         const allTables = [...resolvedGlobal, ...resolvedCharacter, ...localTables];
+        const tableDebug = [];
+        let tableEmittedCount = 0;
         for (const table of allTables) {
             const rows = table.rows || 2;
             const cols = table.cols || 2;
@@ -1223,7 +1225,16 @@ class HoraeManager {
             // 有内容或有填表说明才输出
             const hasContent = Object.values(data).some(v => v && v.trim());
             const hasPrompt = table.prompt && table.prompt.trim();
+            tableDebug.push({
+                name: (table.name || '').trim(),
+                rows,
+                cols,
+                hasContent,
+                hasPrompt: !!hasPrompt,
+                promptLen: (table.prompt || '').trim().length,
+            });
             if (!hasContent && !hasPrompt) continue;
+            tableEmittedCount++;
 
             const tableName = table.name || L('自定义表格', 'Custom Table', 'カスタムテーブル', '커스텀 테이블', 'Пользовательская таблица');
             lines.push(`\n[${tableName}](${rows - 1}${L('行', 'rows', '行', '행', 'строк')}×${cols - 1}${L('列', 'cols', '列', '열', 'столбцов')})`);
@@ -1298,6 +1309,12 @@ class HoraeManager {
                 const emptyColNames = emptyCols.map(c => data[`0-${c}`] || `${L('列', 'Col', '列', '열', 'Столбец')}${c}`);
                 lines.push(`(${emptyColNames.join(L('、', ', ', '、', ', ', ', '))}${L('：暂无数据，如剧情中已有相关信息请填写', ': no data yet, please fill in if relevant info exists in the story', '：データなし、ストーリーに関連情報があれば記入してください', ': 데이터 없음, 스토리에 관련 정보가 있으면 작성해 주세요', ': нет данных, заполните, если в сюжете есть соответствующая информация')})`);
             }
+        }
+        if (allTables.length > 0) {
+            console.log(
+                `[Horae][TableDebug] generateCompactPrompt table section: total=${allTables.length}, emitted=${tableEmittedCount}, skipLast=${skipLast}`
+            );
+            console.log(`[Horae][TableDebug] generateCompactPrompt table details: ${JSON.stringify(tableDebug)}`);
         }
 
         return lines.join('\n');
@@ -3460,9 +3477,16 @@ class HoraeManager {
 
     generateSystemPromptAddition() {
         const [userName, charName] = this._getDefaultNames();
-        const subs = this.generateLocationMemoryPrompt() + this.generateCustomTablesPrompt() +
-            this.generateRelationshipPrompt() + this.generateMoodPrompt() +
-            this.generateRpgPrompt() + this._generateAntiParaphrasePrompt();
+        const locationPrompt = this.generateLocationMemoryPrompt();
+        const tablesPrompt = this.generateCustomTablesPrompt();
+        const relationshipPrompt = this.generateRelationshipPrompt();
+        const moodPrompt = this.generateMoodPrompt();
+        const rpgPrompt = this.generateRpgPrompt();
+        const antiParaphrasePrompt = this._generateAntiParaphrasePrompt();
+        const subs = locationPrompt + tablesPrompt + relationshipPrompt + moodPrompt + rpgPrompt + antiParaphrasePrompt;
+        console.log(
+            `[Horae][TableDebug] generateSystemPromptAddition: subsLen=${subs.length}, tableRulesLen=${tablesPrompt.length}, locationLen=${locationPrompt.length}, relationshipLen=${relationshipPrompt.length}, moodLen=${moodPrompt.length}, rpgLen=${rpgPrompt.length}, antiParaLen=${antiParaphrasePrompt.length}, customSystemPrompt=${!!this.settings?.customSystemPrompt}`
+        );
 
         if (this.settings?.customSystemPrompt) {
             const custom = this.settings.customSystemPrompt
@@ -3508,7 +3532,43 @@ class HoraeManager {
         const resolvedCharacter = this._getResolvedCharacterTables();
         const resolvedGlobal = this._getResolvedGlobalTables();
         const allTables = [...resolvedGlobal, ...resolvedCharacter, ...localTables];
-        if (allTables.length === 0) return '';
+        const normalizeValue = (value) => {
+            if (value == null) return '';
+            return typeof value === 'string' ? value.trim() : String(value).trim();
+        };
+        const describeTable = (table, scope, index) => {
+            const data = table?.data || {};
+            let nonEmptyCells = 0;
+            for (const value of Object.values(data)) {
+                if (normalizeValue(value)) nonEmptyCells++;
+            }
+            const promptText = normalizeValue(table?.prompt);
+            return {
+                scope,
+                index,
+                name: normalizeValue(table?.name),
+                rows: table?.rows || 0,
+                cols: table?.cols || 0,
+                promptLen: promptText.length,
+                hasPrompt: !!promptText,
+                nonEmptyCells,
+            };
+        };
+        const debugTables = [
+            ...resolvedGlobal.map((table, index) => describeTable(table, 'global', index)),
+            ...resolvedCharacter.map((table, index) => describeTable(table, 'character', index)),
+            ...localTables.map((table, index) => describeTable(table, 'local', index)),
+        ];
+        console.log(
+            `[Horae][TableDebug] generateCustomTablesPrompt input: global=${resolvedGlobal.length}, character=${resolvedCharacter.length}, local=${localTables.length}, total=${allTables.length}`
+        );
+        if (debugTables.length > 0) {
+            console.log(`[Horae][TableDebug] generateCustomTablesPrompt tables: ${JSON.stringify(debugTables)}`);
+        }
+        if (allTables.length === 0) {
+            console.log('[Horae][TableDebug] generateCustomTablesPrompt skipped: no tables found');
+            return '';
+        }
 
         let prompt = '\n' + (this.settings?.customTablesPrompt || this.getDefaultTablesPrompt());
         const lang = this._getAiOutputLang();
@@ -3550,6 +3610,10 @@ class HoraeManager {
             break;
         }
 
+        const ruleSource = this.settings?.customTablesPrompt ? 'custom' : 'default';
+        console.log(
+            `[Horae][TableDebug] generateCustomTablesPrompt output: len=${prompt.length}, ruleSource=${ruleSource}, hasHoraetableTemplate=${prompt.includes('<horaetable:')}`
+        );
         return prompt;
     }
 

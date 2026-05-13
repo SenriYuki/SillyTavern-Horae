@@ -104,3 +104,5 @@ event:重要程度|事件描述
 - event 只出现在 <horaeevent> 标签内，<horae> 标签内严禁出现 event: 开头的行。
 - 若本楼实在没有可记录的推进（极罕见），仍需输出一条 event，重要程度写"一般"，
   内容为本楼最主要的客观动作。
+
+{{analysis_table_rules}}

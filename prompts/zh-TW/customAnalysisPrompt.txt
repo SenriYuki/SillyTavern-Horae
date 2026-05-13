@@ -104,3 +104,5 @@ event:重要程度|事件描述
 - event 隻出現在 <horaeevent> 標籤內，<horae> 標籤內嚴禁出現 event: 開頭的行。
 - 若本樓實在沒有可記錄的推進（極罕見），仍需輸出一條 event，重要程度冩"一般"，
   內容爲本樓最主要的客觀動作。的內容
+
+{{analysis_table_rules}}

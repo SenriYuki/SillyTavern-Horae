@@ -98,3 +98,5 @@ event:importance level|event description
 - If this message contains multiple event segments (for example: dialogue, then a fight, then parting), merge them into one 80-150 word summary in chronological order; do not split into multiple event lines.
 - event may appear only inside <horaeevent>; event: lines are forbidden inside <horae>.
 - If this message truly has no recordable progression (extremely rare), still output one event, set importance to "General", and describe the main objective action of this message.
+
+{{analysis_table_rules}}

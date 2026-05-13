@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki，柏柏
- * 版本: 1.12.17B
+ * 版本: 1.12.18B
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -22,7 +22,7 @@ import { initPromptDefaults, ensurePromptDefaults, getPromptDefaultSync } from '
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.12.17B';
+const VERSION = '1.12.18B';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -17891,6 +17891,7 @@ async function analyzeMessageWithAI(messageContent, opts = {}) {
     const analysisLocationRules = settings.sendLocationMemory ? (horaeManager.generateLocationMemoryPrompt() || '') : '';
     const analysisRelationshipRules = settings.sendRelationships ? (horaeManager.generateRelationshipPrompt() || '') : '';
     const analysisEmotionRules = settings.sendMood ? (horaeManager.generateMoodPrompt() || '') : '';
+    const analysisTableRules = horaeManager.generateCustomTablesPrompt() || '';
     let analysisPrompt = template
         .replace(/\{\{user\}\}/gi, userName)
         .replace(/\{\{context\}\}/gi, contextText)
@@ -17898,7 +17899,8 @@ async function analyzeMessageWithAI(messageContent, opts = {}) {
         .replace(/\{\{content\}\}/gi, messageContent)
         .replace(/\{\{analysis_location_rules\}\}/gi, analysisLocationRules)
         .replace(/\{\{analysis_relationship_rules\}\}/gi, analysisRelationshipRules)
-        .replace(/\{\{analysis_emotion_rules\}\}/gi, analysisEmotionRules);
+        .replace(/\{\{analysis_emotion_rules\}\}/gi, analysisEmotionRules)
+        .replace(/\{\{analysis_table_rules\}\}/gi, analysisTableRules);
 
     // 去除无用内容
     analysisPrompt = analysisPrompt
@@ -18730,6 +18732,9 @@ async function onPromptReady(eventData) {
     const skipContextInjectionOnce = _stripNoContextInjectionMarkers(eventData?.chat);
     const skipTimelineInjectionOnce = _stripNoTimelineInjectionMarkers(eventData?.chat);
     const skipSystemPromptInjectionOnce = _stripNoSystemPromptInjectionMarkers(eventData?.chat);
+    console.log(
+        `[Horae][TableDebug] onPromptReady markers: skipContext=${skipContextInjectionOnce}, skipTimeline=${skipTimelineInjectionOnce}, skipVector=${skipVectorRecallOnce}, skipSystem=${skipSystemPromptInjectionOnce}`
+    );
     if (_isSummaryGeneration) return;
     if (skipContextInjectionOnce) {
         console.log('[Horae] Internal no-context marker detected, skip Horae context injection for this request');
@@ -18819,8 +18824,18 @@ async function onPromptReady(eventData) {
             }
         }
 
-        const skipSystemPromptOnSend = _shouldSkipSystemPromptInjectionOnSend() || skipSystemPromptInjectionOnce;
+        const skipByBriefScope = _shouldSkipSystemPromptInjectionOnSend();
+        const skipSystemPromptOnSend = skipByBriefScope || skipSystemPromptInjectionOnce;
         const rulesPrompt = skipSystemPromptOnSend ? '' : horaeManager.generateSystemPromptAddition();
+        const rulesHasHoraetableTag = rulesPrompt.includes('<horaetable:');
+        const rulesHasTableKeyword = /(表格|custom table|horaetable|填写要求|instructions)/i.test(rulesPrompt);
+        console.log(
+            `[Horae][TableDebug] onPromptReady rules: skip=${skipSystemPromptOnSend}, skipByBriefScope=${skipByBriefScope}, skipByMarker=${skipSystemPromptInjectionOnce}, subApiScopeBrief=${!!settings.subApiScopeBrief}, rulesLen=${rulesPrompt.length}, hasHoraetableTag=${rulesHasHoraetableTag}, hasTableKeyword=${rulesHasTableKeyword}`
+        );
+        if (!skipSystemPromptOnSend && rulesPrompt) {
+            const rulesPreview = rulesPrompt.length > 600 ? `${rulesPrompt.slice(0, 600)}...` : rulesPrompt;
+            console.log(`[Horae][TableDebug] rulesPrompt preview:\n${rulesPreview}`);
+        }
         if (skipSystemPromptOnSend) {
             if (skipSystemPromptInjectionOnce) {
                 console.log('[Horae] Internal no-system marker detected, skip system injection prompt for this request');
@@ -18846,6 +18861,11 @@ async function onPromptReady(eventData) {
         const combinedPrompt = recallPrompt
             ? `${dataPrompt}\n${recallPrompt}${antiParaRef}${rulesPrompt ? `\n${rulesPrompt}` : ''}`
             : `${dataPrompt}${antiParaRef}${rulesPrompt ? `\n${rulesPrompt}` : ''}`;
+        const combinedHasHoraetableTag = combinedPrompt.includes('<horaetable:');
+        const combinedHasTableKeyword = /(表格|custom table|horaetable|填写要求|instructions)/i.test(combinedPrompt);
+        console.log(
+            `[Horae][TableDebug] combinedPrompt: len=${combinedPrompt.length}, dataLen=${dataPrompt.length}, recallLen=${recallPrompt.length}, antiParaLen=${antiParaRef.length}, rulesLen=${rulesPrompt.length}, hasHoraetableTag=${combinedHasHoraetableTag}, hasTableKeyword=${combinedHasTableKeyword}`
+        );
         const positionRaw = parseInt(settings.injectionPosition, 10);
         const position = Number.isNaN(positionRaw) ? 1 : Math.max(0, positionRaw);
         const depthSource = settings.injectionDepthSource === 'preset' ? 'preset' : 'system';
