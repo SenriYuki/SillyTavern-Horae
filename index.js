@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki，柏柏
- * 版本: 1.12.16B
+ * 版本: 1.12.17B
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -22,7 +22,7 @@ import { initPromptDefaults, ensurePromptDefaults, getPromptDefaultSync } from '
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.12.16B';
+const VERSION = '1.12.17B';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -131,6 +131,7 @@ const DEFAULT_SETTINGS = {
     sendTimeline: true,    // 发送剧情轨迹（关闭则无法计算相对时间）
     contextDepth: 9999,      // 一般级别剧情轨迹数量,默认无限
     sendCharacters: true,  // 发送角色信息（服装、好感度）
+    sendMainCharacterPersonality: false, // 发送主要角色性格（子选项，默认关闭）
     sendItems: true,       // 发送物品栏
     customTables: [],      // 自定义表格 [{id, name, rows, cols, data, prompt}]
     customSystemPrompt: '',      // 自定义系统注入提示词（空=使用默认）
@@ -890,6 +891,9 @@ function loadSettings() {
     }
     if (_normalizeAutoSummarySettingsInPlace(saved || {}) || _normalizePromptSettingsInPlace() || _normalizeVectorRecallPresetsInPlace() || _normalizeRpgSettingsInPlace()) changed = true;
     if (_migrateLegacyVectorSettings(settings)) changed = true;
+    console.log(
+        `[Horae][MainPersonality] loadSettings: saved=${saved?.sendMainCharacterPersonality} merged=${!!settings.sendMainCharacterPersonality} sendCharacters=${settings.sendCharacters !== false} pinnedNpcs=${JSON.stringify(settings.pinnedNpcs || [])}`
+    );
     if (changed) saveSettings();
 }
 
@@ -12417,7 +12421,7 @@ function initSettingsEvents() {
     const _SETTINGS_EXPORT_KEYS = [
         'enabled', 'autoParse', 'autoFillPrevTimelineOnSend', 'injectContext', 'useMainPresetForAiTasks', 'showMessagePanel', 'showTopIcon',
         'injectionDepthSource', 'injectionPosition', 'timelineInjectionMode',
-        'sendTimeline', 'contextDepth', 'sendCharacters', 'sendItems',
+        'sendTimeline', 'contextDepth', 'sendCharacters', 'sendMainCharacterPersonality', 'sendItems',
         'sendLocationMemory', 'sendRelationships', 'sendMood',
         'antiParaphraseMode', 'sideplayMode',
         'aiScanIncludeNpc', 'aiScanIncludeAffection', 'aiScanIncludeScene', 'aiScanIncludeRelationship',
@@ -12592,6 +12596,16 @@ function initSettingsEvents() {
     $('#horae-setting-send-characters').on('change', function () {
         settings.sendCharacters = this.checked;
         saveSettings();
+        horaeManager.init(getContext(), settings);
+        updateTokenCounter();
+    });
+
+    $('#horae-setting-send-main-character-personality').on('change', function () {
+        settings.sendMainCharacterPersonality = this.checked;
+        saveSettings();
+        console.log(
+            `[Horae][MainPersonality] setting changed: sendMainCharacterPersonality=${this.checked} sendCharacters=${settings.sendCharacters !== false} pinnedNpcs=${JSON.stringify(settings.pinnedNpcs || [])}`
+        );
         horaeManager.init(getContext(), settings);
         updateTokenCounter();
     });
@@ -13588,7 +13602,11 @@ function syncSettingsToUI() {
     $('#horae-setting-send-timeline').prop('checked', settings.sendTimeline);
     $('#horae-setting-context-depth').val(Number.isFinite(parseInt(settings.contextDepth, 10)) ? Math.max(0, parseInt(settings.contextDepth, 10)) : 15);
     $('#horae-setting-send-characters').prop('checked', settings.sendCharacters);
+    $('#horae-setting-send-main-character-personality').prop('checked', !!settings.sendMainCharacterPersonality);
     $('#horae-setting-send-items').prop('checked', settings.sendItems);
+    console.log(
+        `[Horae][MainPersonality] syncSettingsToUI: sendMainCharacterPersonality=${!!settings.sendMainCharacterPersonality} sendCharacters=${settings.sendCharacters !== false}`
+    );
 
     applyTopIconVisibility();
 
@@ -18751,6 +18769,21 @@ async function onPromptReady(eventData) {
         const rawDataPrompt = horaeManager.generateCompactPrompt(skipLast, {
             includeTimeline: !skipTimelineInjectionOnce,
         });
+        try {
+            const npcLines = String(rawDataPrompt || '')
+                .split(/\r?\n/)
+                .filter(line => /^N[\d?]+\s+/.test(line.trim()))
+                .slice(0, 100)
+                .map(line => line.length > 220 ? `${line.slice(0, 220)}...` : line);
+            console.log(
+                `[Horae][MainPersonality] onPromptReady: sendMainCharacterPersonality=${!!settings.sendMainCharacterPersonality} sendCharacters=${settings.sendCharacters !== false} context.name2="${getContext()?.name2 || ''}" pinnedNpcs=${JSON.stringify(settings.pinnedNpcs || [])} npcLines=${npcLines.length}`
+            );
+            if (npcLines.length > 0) {
+                console.log(`[Horae][MainPersonality] onPromptReady npc preview:\n${npcLines.join('\n')}`);
+            }
+        } catch (e) {
+            console.warn('[Horae][MainPersonality] onPromptReady debug log failed:', e);
+        }
         const timelineMode = settings.timelineInjectionMode === 'separate' ? 'separate' : 'inline';
         let dataPrompt = rawDataPrompt;
         let timelinePrompt = '';

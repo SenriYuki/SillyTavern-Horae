@@ -202,6 +202,8 @@
         "sendTimelineHint": "历史事件总结、相对时间计算。关闭后AI无法知道\"几天前\"发生了什么。",
         "sendCharacters": "角色信息",
         "sendCharactersHint": "在场角色、服装描述、好感度、角色信息。关闭后AI可能描写错误的服装。",
+        "sendMainCharacterPersonality": "主要角色性格",
+        "sendMainCharacterPersonalityHint": "开启后会使用简短语句描述角色性格，可能导致刻板印象。主要角色包括星标和置顶角色。",
         "sendItems": "物品栏",
         "sendItemsHint": "当前持有的物品及位置。关闭后AI可能\"凭空\"取出不存在的物品。",
         "sendLocationMemory": "场景记忆",

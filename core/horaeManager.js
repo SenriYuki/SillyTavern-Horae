@@ -743,17 +743,41 @@ class HoraeManager {
             // NPC信息
             const npcs = Object.entries(state.npcs);
             if (npcs.length > 0) {
+                const mainCharName = this.context?.name2 || '';
+                const pinnedNpcs = Array.isArray(this.settings?.pinnedNpcs) ? this.settings.pinnedNpcs : [];
+                const favoriteNpcs = Array.isArray(this.settings?.favoriteNpcs) ? this.settings.favoriteNpcs : [];
+                const sendMainCharacterPersonality = this.settings?.sendMainCharacterPersonality === true;
+                const isMainCharacter = (name) => {
+                    if (pinnedNpcs.includes(name)) return true;
+                    if (favoriteNpcs.includes(name)) return true;
+                    if (mainCharName && name.includes(mainCharName)) return true;
+                    return false;
+                };
+                console.log(
+                    `[Horae][MainPersonality] generateCompactPrompt: sendMainCharacterPersonality=${sendMainCharacterPersonality} sendCharacters=${this.settings?.sendCharacters !== false} mainCharName="${mainCharName}" pinnedNpcs=${JSON.stringify(pinnedNpcs)} favoriteNpcs=${JSON.stringify(favoriteNpcs)} npcCount=${npcs.length}`
+                );
                 lines.push(`\n[${L('已知NPC', 'Known NPCs', '既知NPC', '알려진 NPC', 'Известные NPC')}]`);
                 for (const [name, info] of npcs) {
                     const id = info._id || '?';
                     const app = info.appearance || '';
-                    const per = info.personality || '';
+                    const mainByPinned = pinnedNpcs.includes(name);
+                    const mainByFavorite = favoriteNpcs.includes(name);
+                    const mainByName = !!(mainCharName && name.includes(mainCharName));
+                    const mainMatched = mainByPinned || mainByFavorite || mainByName;
+                    const originalPer = info.personality || '';
+                    const per = (!sendMainCharacterPersonality && isMainCharacter(name))
+                        ? ''
+                        : (info.personality || '');
                     const rel = info.relationship || '';
+                    console.log(
+                        `[Horae][MainPersonality] npc="${name}" id=${id} mainMatched=${mainMatched} byPinned=${mainByPinned} byFavorite=${mainByFavorite} byName=${mainByName} originalPerLen=${originalPer.length} sentPerLen=${per.length}`
+                    );
                     // 主体：N编号 名｜外貌=性格@关系
                     let npcStr = `N${id} ${name}`;
                     if (app || per || rel) {
                         npcStr += `｜${app}=${per}@${rel}`;
                     }
+                    console.log(`[Horae][MainPersonality] npcLine: ${npcStr}`);
                     // 扩展字段
                     const extras = [];
                     if (info._aliases?.length) extras.push(`${L('曾用名', 'aliases', '旧名', '이전 이름', 'псевдонимы')}:${info._aliases.join('/')}`);

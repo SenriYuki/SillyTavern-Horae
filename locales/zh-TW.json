@@ -202,6 +202,8 @@
         "sendTimelineHint": "歷史事件總結、相對時間計算。關閉後AI無法知道\"幾天前\"發生了什麼。",
         "sendCharacters": "角色資訊",
         "sendCharactersHint": "在場角色、服裝描述、好感度、角色資訊。關閉後AI可能描寫錯誤的服裝。",
+        "sendMainCharacterPersonality": "主要角色性格",
+        "sendMainCharacterPersonalityHint": "角色資訊子選項：關閉後不傳送主要角色性格。",
         "sendItems": "物品欄",
         "sendItemsHint": "當前持有的物品及位置。關閉後AI可能\"憑空\"取出不存在的物品。",
         "sendLocationMemory": "場景記憶",
