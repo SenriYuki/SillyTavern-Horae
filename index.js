@@ -12820,6 +12820,17 @@ function initSettingsEvents() {
         settings.autoSummaryApiKey = this.value;
         saveSettings();
     });
+    $('#horae-setting-auto-summary-api-key-toggle').on('click', function () {
+        const input = document.getElementById('horae-setting-auto-summary-api-key');
+        if (!input) return;
+        const icon = this.querySelector('i');
+        const isPassword = input.type === 'password';
+        input.type = isPassword ? 'text' : 'password';
+        if (icon) {
+            icon.classList.toggle('fa-eye', !isPassword);
+            icon.classList.toggle('fa-eye-slash', isPassword);
+        }
+    });
     $('#horae-setting-auto-summary-model').on('change', function () {
         settings.autoSummaryModel = this.value;
         saveSettings();

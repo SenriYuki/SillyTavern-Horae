@@ -700,8 +700,13 @@
                             </div>
                             <div class="horae-setting-item">
                                 <label data-i18n="settings.summaryApiKey">API 密钥</label>
-                                <input type="password" id="horae-setting-auto-summary-api-key" class="horae-edit-field"
-                                    placeholder="sk-...">
+                                <div style="display:flex; gap:4px; align-items:center;">
+                                    <input type="password" id="horae-setting-auto-summary-api-key" class="horae-edit-field"
+                                        placeholder="sk-..." style="flex:1; min-width:0;">
+                                    <button id="horae-setting-auto-summary-api-key-toggle" class="horae-btn" type="button" title="显示/隐藏密钥" style="white-space:nowrap; padding:4px 8px;">
+                                        <i class="fa-solid fa-eye"></i>
+                                    </button>
+                                </div>
                             </div>
                             <div class="horae-setting-item">
                                 <label data-i18n="settings.summaryModel">模型</label>
