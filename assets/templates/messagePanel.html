@@ -77,16 +77,18 @@
             </div>
 
             <!-- 事件标记 -->
-            <div class="horae-panel-row full-width">
-                <label><i class="fa-solid fa-bookmark"></i> 事件标记</label>
-                <div class="horae-event-editor">
+            <div class="horae-panel-row full-width horae-event-row">
+                <div class="horae-event-header">
+                    <label><i class="fa-solid fa-bookmark"></i> 事件标记</label>
                     <select class="horae-input-event-level">
                         <option value="">无</option>
                         <option value="一般" {{eventLevelNormal}}>一般</option>
                         <option value="重要" {{eventLevelImportant}}>重要</option>
                         <option value="关键" {{eventLevelCritical}}>关键</option>
                     </select>
-                    <input type="text" class="horae-input-event-summary" placeholder="事件摘要（20字以内）" value="{{eventSummaryText}}">
+                </div>
+                <div class="horae-event-editor">
+                    <textarea class="horae-input-event-summary" rows="3" placeholder="事件摘要（20字以内）">{{eventSummaryText}}</textarea>
                 </div>
             </div>
 

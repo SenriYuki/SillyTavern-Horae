@@ -10611,16 +10611,18 @@ function buildPanelContent(messageIndex, meta) {
                 <label><i class="fa-solid fa-trash-can"></i> ${t('items.deletedItems')}</label>
                 <div class="horae-deleted-items-display">${buildDeletedItemsDisplay(meta.deletedItems)}</div>
             </div>
-            <div class="horae-panel-row full-width">
-                <label><i class="fa-solid fa-bookmark"></i> ${t('timeline.events')} ${multipleEventsNote}</label>
-                <div class="horae-event-editor">
+            <div class="horae-panel-row full-width horae-event-row">
+                <div class="horae-event-header">
+                    <label><i class="fa-solid fa-bookmark"></i> ${t('timeline.events')} ${multipleEventsNote}</label>
                     <select class="horae-input-event-level">
                         <option value="">${t('levels.none')}</option>
                         <option value="一般" ${eventLevel === '一般' ? 'selected' : ''}>${t('levels.normal')}</option>
                         <option value="重要" ${eventLevel === '重要' ? 'selected' : ''}>${t('levels.important')}</option>
                         <option value="关键" ${eventLevel === '关键' || eventLevel === '關鍵' ? 'selected' : ''}>${t('levels.critical')}</option>
                     </select>
-                    <input type="text" class="horae-input-event-summary" value="${escapeHtml(eventSummary)}" placeholder="${t('placeholder.eventSummary')}">
+                </div>
+                <div class="horae-event-editor">
+                    <textarea class="horae-input-event-summary" rows="3" placeholder="${t('placeholder.eventSummary')}">${escapeHtml(eventSummary)}</textarea>
                 </div>
             </div>
             <div class="horae-panel-row full-width">
@@ -10709,6 +10711,25 @@ function _rebuildDerivedMetaCaches() {
     horaeManager.rebuildRpgData();
 }
 
+function autoResizePanelTextarea(textarea) {
+    if (!(textarea instanceof HTMLTextAreaElement)) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.max(textarea.scrollHeight, 72)}px`;
+}
+
+function initPanelAutoResize(panelEl) {
+    if (!panelEl) return;
+    panelEl.querySelectorAll('.horae-input-event-summary').forEach(textarea => {
+        if (!(textarea instanceof HTMLTextAreaElement)) return;
+        autoResizePanelTextarea(textarea);
+        if (textarea.dataset.horaeAutosizeBound === '1') return;
+        textarea.dataset.horaeAutosizeBound = '1';
+        const resize = () => autoResizePanelTextarea(textarea);
+        textarea.addEventListener('input', resize);
+        textarea.addEventListener('change', resize);
+    });
+}
+
 /**
  * 绑定面板事件
  */
@@ -10728,6 +10749,7 @@ function bindPanelEvents(panelEl) {
         const togglePanel = () => {
             const isHidden = contentEl.style.display === 'none';
             contentEl.style.display = isHidden ? 'block' : 'none';
+            if (isHidden) requestAnimationFrame(() => initPanelAutoResize(panelEl));
         };
 
         const sideplayBtn = panelEl.querySelector('.horae-btn-sideplay');
@@ -10751,6 +10773,8 @@ function bindPanelEvents(panelEl) {
             });
         });
     }
+
+    requestAnimationFrame(() => initPanelAutoResize(panelEl));
 
     // 标记面板已修改
     let panelDirty = false;

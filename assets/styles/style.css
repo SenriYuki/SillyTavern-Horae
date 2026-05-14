@@ -1425,6 +1425,10 @@
     flex-direction: column;
 }
 
+.horae-panel-row.full-width.horae-event-row {
+    gap: 8px;
+}
+
 .horae-panel-row label {
     min-width: 60px;
     font-size: 12px;
@@ -1630,28 +1634,51 @@
 
 /* 事件编辑器 */
 .horae-event-editor {
-    display: flex;
-    gap: 8px;
     width: 100%;
 }
 
-.horae-event-editor select {
-    padding: 6px 10px;
-    background: var(--horae-bg);
-    border: 1px solid var(--horae-border);
-    border-radius: var(--horae-radius-sm);
-    color: var(--horae-text);
-    font-size: 12px;
+.horae-event-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
 }
 
-.horae-event-editor input {
-    flex: 1;
+.horae-event-header label {
+    min-width: 0;
+    padding-top: 0;
+}
+
+.horae-event-header select {
     padding: 6px 10px;
     background: var(--horae-bg);
     border: 1px solid var(--horae-border);
     border-radius: var(--horae-radius-sm);
     color: var(--horae-text);
     font-size: 12px;
+    min-width: 96px;
+    flex: 0 0 auto;
+}
+
+.horae-event-editor textarea {
+    width: 100%;
+    min-height: 72px;
+    padding: 6px 10px;
+    background: var(--horae-bg);
+    border: 1px solid var(--horae-border);
+    border-radius: var(--horae-radius-sm);
+    color: var(--horae-text);
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-y: hidden;
+    resize: vertical;
+}
+
+.horae-event-editor textarea:focus,
+.horae-event-header select:focus {
+    border-color: var(--horae-primary);
+    outline: none;
 }
 
 /* 重新扫描区域 */
