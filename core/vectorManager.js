@@ -12,6 +12,7 @@ import { tNodeForLang, detectEffectiveAiLang } from './i18n.js';
 const DB_NAME = 'HoraeVectors';
 const DB_VERSION = 1;
 const STORE_NAME = 'vectors';
+const RECALL_CACHE_LIMIT = 16;
 
 const MODEL_CONFIG = {
     'Xenova/bge-small-zh-v1.5': { dimensions: 512, prefix: null },
@@ -57,6 +58,11 @@ export class VectorManager {
         this.totalDocuments = 0;
         this._pendingCallbacks = new Map();
         this._callId = 0;
+        this._lastDebugInfo = null;
+        this._recallCache = new Map();
+        this._recallCacheLimit = RECALL_CACHE_LIMIT;
+        this._keywordTable = EMPTY_KEYWORD_TABLE;
+        this._activeKeywordLang = 'en';
     }
 
     // ========================================
@@ -68,6 +74,7 @@ export class VectorManager {
         this.isLoading = true;
         this.isReady = false;
         this.modelName = model;
+        this.clearRecallCache('embedding-model-reinit');
 
         try {
             await this._disposeWorker();
@@ -132,6 +139,7 @@ export class VectorManager {
         if (this.isLoading) return;
         this.isLoading = true;
         this.isReady = false;
+        this.clearRecallCache('embedding-api-reinit');
 
         try {
             await this._disposeWorker();
@@ -160,6 +168,7 @@ export class VectorManager {
         this.vectors.clear();
         this.termCounts.clear();
         this.totalDocuments = 0;
+        this.clearRecallCache('dispose');
         this.chatId = null;
         this.isReady = false;
         this.isApiMode = false;
@@ -184,6 +193,7 @@ export class VectorManager {
      * 切换聊天：加载对应 chatId 的向量索引
      */
     async loadChat(chatId, chat) {
+        this.clearRecallCache('chat-reload');
         this.chatId = chatId;
         this.vectors.clear();
         this.termCounts.clear();
@@ -307,6 +317,7 @@ export class VectorManager {
         this.vectors.set(messageIndex, { vector, hash, document: doc });
         this._updateTermCounts(doc, 1);
         await this._saveVector(messageIndex, { vector, hash, document: doc });
+        this.clearRecallCache('vector-index-updated');
     }
 
     async removeMessage(messageIndex) {
@@ -317,6 +328,7 @@ export class VectorManager {
         this.totalDocuments--;
         this.vectors.delete(messageIndex);
         await this._deleteVector(messageIndex);
+        this.clearRecallCache('vector-index-updated');
     }
 
     /**
@@ -377,6 +389,7 @@ export class VectorManager {
             }
         }
 
+        if (indexed > 0) this.clearRecallCache('vector-batch-reindexed');
         return { indexed, skipped: chat.length - tasks.length };
     }
 
@@ -384,7 +397,221 @@ export class VectorManager {
         this.vectors.clear();
         this.termCounts.clear();
         this.totalDocuments = 0;
+        this.clearRecallCache('vector-index-cleared');
         if (this.chatId) await this._clearVectors();
+    }
+
+    clearRecallCache(reason = '') {
+        const hadEntries = this._recallCache.size > 0;
+        this._recallCache.clear();
+        if (hadEntries && reason) {
+            console.log(`[Horae Vector] 清空召回缓存: ${reason}`);
+        }
+    }
+
+    _getRecallCache(cacheKey) {
+        if (!cacheKey) return null;
+        const entry = this._recallCache.get(cacheKey);
+        if (!entry) return null;
+        this._recallCache.delete(cacheKey);
+        this._recallCache.set(cacheKey, entry);
+        return this._clonePlain(entry);
+    }
+
+    _setRecallCache(cacheKey, entry) {
+        if (!cacheKey || !entry) return;
+        if (this._recallCache.has(cacheKey)) this._recallCache.delete(cacheKey);
+        this._recallCache.set(cacheKey, this._clonePlain(entry));
+        while (this._recallCache.size > this._recallCacheLimit) {
+            const oldestKey = this._recallCache.keys().next().value;
+            if (oldestKey === undefined) break;
+            this._recallCache.delete(oldestKey);
+        }
+    }
+
+    _clonePlain(value) {
+        if (value === null || value === undefined) return value;
+        if (typeof globalThis?.structuredClone === 'function') {
+            try {
+                return globalThis.structuredClone(value);
+            } catch (_) { /* fall through */ }
+        }
+        return JSON.parse(JSON.stringify(value));
+    }
+
+    _applyCachedRecallDebugInfo(entry) {
+        const debugInfo = this._clonePlain(entry?.debugInfo) || {};
+        const now = Date.now();
+        const prevCache = debugInfo.cache || {};
+        const originalTimestamp = prevCache.originalTimestamp || debugInfo.computedAt || debugInfo.timestamp || null;
+        debugInfo.timestamp = now;
+        debugInfo.cache = {
+            ...prevCache,
+            key: entry?.keySig || prevCache.key || '',
+            hit: true,
+            size: this._recallCache.size,
+            limit: this._recallCacheLimit,
+            originalTimestamp,
+            reusedAt: now,
+        };
+        this._lastDebugInfo = debugInfo;
+    }
+
+    _buildRecallCacheKey(chat, state, skipLast, settings, excludeIndices, queryInfo = {}) {
+        const effectiveEnd = Math.max(0, (Array.isArray(chat) ? chat.length : 0) - Math.max(0, skipLast));
+        const payload = {
+            chatId: this.chatId || '',
+            effectiveEnd,
+            indexedCount: this.vectors.size,
+            totalDocuments: this.totalDocuments,
+            queries: {
+                user: queryInfo.userQuery || '',
+                state: queryInfo.stateQuery || '',
+                merged: queryInfo.mergedQuery || '',
+            },
+            exclude: [...(excludeIndices || [])].sort((a, b) => a - b),
+            stateSig: this._buildRecallStateSignature(state),
+            chatSig: this._buildRecallChatSignature(chat, effectiveEnd),
+            settingsSig: this._buildRecallSettingsSignature(settings),
+            modelSig: this._buildRecallModelSignature(settings),
+            keywordLang: this._activeKeywordLang || 'en',
+        };
+        return JSON.stringify(payload);
+    }
+
+    _buildRecallStateSignature(state) {
+        const present = [...new Set(state?.scene?.characters_present || [])]
+            .filter(Boolean)
+            .sort((a, b) => String(a).localeCompare(String(b)));
+        const costumePairs = present.map(name => [name, state?.costumes?.[name] || '']);
+        return this._hashString(JSON.stringify({
+            timestamp: {
+                story_date: state?.timestamp?.story_date || '',
+                story_time: state?.timestamp?.story_time || '',
+            },
+            scene: {
+                location: state?.scene?.location || '',
+                characters_present: present,
+            },
+            costumes: costumePairs,
+        }));
+    }
+
+    _buildRecallChatSignature(chat, endExclusive = null) {
+        if (!Array.isArray(chat) || chat.length === 0) return 'empty';
+        const end = Math.max(0, Math.min(
+            Number.isInteger(endExclusive) ? endExclusive : chat.length,
+            chat.length
+        ));
+        if (end === 0) return 'empty';
+        const parts = [];
+        for (let i = 0; i < end; i++) {
+            parts.push(this._buildRecallMessageSignature(chat[i], i));
+        }
+        const forward = parts.join('|');
+        const backward = [...parts].reverse().join('|');
+        return `${end}:${this._hashString(forward)}:${this._hashString(backward)}`;
+    }
+
+    _buildRecallMessageSignature(msg, index) {
+        if (!msg) return `missing:${index}`;
+        if (msg.is_user) {
+            return `u:${index}:${this._hashString(this.cleanUserMessage(msg.mes || ''))}`;
+        }
+        const metaSig = this._hashString(JSON.stringify(this._buildRecallMetaSnapshot(msg.horae_meta)));
+        const textSig = this._hashString(String(msg.mes || ''));
+        return `${msg.is_system ? 's' : 'a'}:${index}:${textSig}:${metaSig}`;
+    }
+
+    _buildRecallMetaSnapshot(meta) {
+        if (!meta) return null;
+        const sortEntries = (obj) => Object.entries(obj || {})
+            .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+        return {
+            skipHorae: !!meta._skipHorae,
+            timestamp: {
+                story_date: meta?.timestamp?.story_date || '',
+                story_time: meta?.timestamp?.story_time || '',
+            },
+            scene: {
+                location: meta?.scene?.location || '',
+                scene_desc: meta?.scene?.scene_desc || '',
+                characters_present: [...new Set(meta?.scene?.characters_present || [])]
+                    .filter(Boolean)
+                    .sort((a, b) => String(a).localeCompare(String(b))),
+            },
+            costumes: sortEntries(meta?.costumes).map(([name, value]) => [name, value || '']),
+            mood: sortEntries(meta?.mood).map(([name, value]) => [name, value || '']),
+            npcs: sortEntries(meta?.npcs).map(([name, info]) => [name, {
+                description: info?.description || '',
+                relationship: info?.relationship || '',
+                gender: info?.gender || '',
+                age: info?.age || '',
+                race: info?.race || '',
+                occupation: info?.occupation || '',
+            }]),
+            items: sortEntries(meta?.items).map(([name, info]) => [name, {
+                icon: info?.icon || '',
+                holder: info?.holder || '',
+                location: info?.location || '',
+                importance: info?.importance || '',
+                quantity: info?.quantity ?? '',
+                description: info?.description || '',
+            }]),
+            events: (meta?.events || []).map(evt => ({
+                level: evt?.level || '',
+                summary: evt?.summary || '',
+                isSummary: !!evt?.isSummary,
+                summaryId: evt?._summaryId || '',
+                isImportant: !!evt?.is_important,
+            })),
+            rpg: this._buildRecallRpgSnapshot(meta?._rpgChanges),
+        };
+    }
+
+    _buildRecallRpgSnapshot(rpg) {
+        if (!rpg) return null;
+        const sortEntries = (obj) => Object.entries(obj || {})
+            .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+        return {
+            levels: sortEntries(rpg.levels).map(([name, value]) => [name, value ?? '']),
+            equipment: (rpg.equipment || []).map(eq => [eq?.owner || '', eq?.name || '', eq?.slot || '']),
+            unequip: (rpg.unequip || []).map(eq => [eq?.owner || '', eq?.name || '', eq?.slot || '']),
+            baseChanges: (rpg.baseChanges || []).map(change => [
+                change?.path || '',
+                change?.field || '',
+                change?.value ?? '',
+            ]),
+        };
+    }
+
+    _buildRecallSettingsSignature(settings) {
+        return this._hashString(JSON.stringify({
+            topK: settings.vectorTopK || 5,
+            threshold: settings.vectorThreshold ?? 0.72,
+            pureMode: !!settings.vectorPureMode,
+            fullTextCount: settings.vectorFullTextCount ?? 3,
+            fullTextThreshold: settings.vectorFullTextThreshold ?? 0.9,
+            stripTags: settings.vectorStripTags || '',
+            rerankEnabled: !!settings.vectorRerankEnabled,
+            rerankModel: settings.vectorRerankModel || '',
+            rerankFullText: !!settings.vectorRerankFullText,
+            rerankCandidates: settings.vectorRerankCandidates || 25,
+            rerankRecallThreshold: settings.vectorRerankRecallThreshold ?? 0.3,
+            rerankMinScore: this._effectiveRerankMinScore(settings),
+        }));
+    }
+
+    _buildRecallModelSignature(settings) {
+        return this._hashString(JSON.stringify({
+            isApiMode: !!this.isApiMode,
+            modelName: this.modelName || '',
+            dimensions: this.dimensions || 0,
+            apiUrl: this.isApiMode ? (this._apiUrl || '') : '',
+            apiModel: this.isApiMode ? (this._apiModel || '') : '',
+            rerankUrl: settings.vectorRerankUrl || settings.vectorApiUrl || '',
+            rerankModel: settings.vectorRerankModel || '',
+        }));
     }
 
     // ========================================
@@ -612,6 +839,7 @@ export class VectorManager {
     async generateRecallPrompt(horaeManager, skipLast, settings, extraExcludeIndices = new Set()) {
         const chat = horaeManager.getChat();
         const state = horaeManager.getLatestState(skipLast);
+        const effectiveEnd = Math.max(0, chat.length - Math.max(0, skipLast));
         const topK = settings.vectorTopK || 5;
         const threshold = settings.vectorThreshold ?? 0.72;
 
@@ -652,20 +880,34 @@ export class VectorManager {
             if (!excludeReasonMap.has(idx)) excludeReasonMap.set(idx, new Set());
             excludeReasonMap.get(idx).add(reason);
         };
-        for (let i = Math.max(0, chat.length - EXCLUDE_RECENT); i < chat.length; i++) {
+        let visibleExcludedCount = 0;
+        for (let i = 0; i < effectiveEnd; i++) {
+            const msg = chat[i];
+            if (!msg || msg.is_user || msg.is_hidden) continue;
+            if (!msg.horae_meta || msg.horae_meta._skipHorae) continue;
+            excludeIndices.add(i);
+            addExcludeReason(i, 'visible-message');
+            visibleExcludedCount++;
+        }
+        for (let i = Math.max(0, effectiveEnd - EXCLUDE_RECENT); i < effectiveEnd; i++) {
             excludeIndices.add(i);
             addExcludeReason(i, 'recent-window');
         }
         if (extraExcludeIndices && typeof extraExcludeIndices[Symbol.iterator] === 'function') {
             for (const idx of extraExcludeIndices) {
-                if (Number.isInteger(idx) && idx >= 0 && idx < chat.length) {
+                if (Number.isInteger(idx) && idx >= 0 && idx < effectiveEnd) {
                     excludeIndices.add(idx);
                     addExcludeReason(idx, 'already-in-prompt');
                 }
             }
         }
-        if (excludeIndices.size > EXCLUDE_RECENT) {
-            console.log(`[Horae Vector] 额外排除已在Prompt中的楼层: +${excludeIndices.size - EXCLUDE_RECENT}`);
+        const promptExcludedCount = [...excludeReasonMap.values()]
+            .reduce((count, reasons) => count + (reasons.has('already-in-prompt') ? 1 : 0), 0);
+        if (visibleExcludedCount > 0) {
+            console.log(`[Horae Vector] 排除未隐藏楼层: ${visibleExcludedCount} 条`);
+        }
+        if (promptExcludedCount > 0) {
+            console.log(`[Horae Vector] 额外排除已在Prompt中的楼层: ${promptExcludedCount} 条`);
         }
         if (excludeIndices.size > 0) {
             const sortedExcluded = [...excludeIndices].sort((a, b) => a - b);
@@ -675,6 +917,30 @@ export class VectorManager {
                 console.log(`  #${idx} | reason=${reasons.join('+')}`);
             }
         }
+
+        const cacheKey = this._buildRecallCacheKey(
+            chat,
+            state,
+            skipLast,
+            settings,
+            excludeIndices,
+            {
+                userQuery,
+                stateQuery: stateQueryForRecall,
+                mergedQuery: mergedRecallQuery,
+            }
+        );
+        const cacheKeySig = this._hashString(cacheKey);
+        const cachedRecall = this._getRecallCache(cacheKey);
+        if (cachedRecall) {
+            console.log(`[Horae Vector] 召回缓存命中: key=${cacheKeySig} / size=${this._recallCache.size}`);
+            this._applyCachedRecallDebugInfo({
+                ...cachedRecall,
+                keySig: cachedRecall.keySig || cacheKeySig,
+            });
+            return cachedRecall.recallText || '';
+        }
+        console.log(`[Horae Vector] 召回缓存未命中: key=${cacheKeySig}`);
 
         const merged = new Map();
 
@@ -905,8 +1171,10 @@ export class VectorManager {
             : this._buildRecallText(results, currentDate, chat, fullTextCount, fullTextThreshold, settings.vectorStripTags || '');
         if (recallText) console.log(`[Horae Vector] 召回文本 (${recallText.length}字):\n${recallText}`);
 
+        const debugTimestamp = Date.now();
         this._lastDebugInfo = {
-            timestamp: Date.now(),
+            timestamp: debugTimestamp,
+            computedAt: debugTimestamp,
             chatId: this.chatId,
             indexedCount: this.vectors.size,
             query: {
@@ -944,7 +1212,22 @@ export class VectorManager {
                 source: r.source,
             })),
             recallText,
+            cache: {
+                key: cacheKeySig,
+                hit: false,
+                size: this._recallCache.size,
+                limit: this._recallCacheLimit,
+            },
         };
+
+        this._setRecallCache(cacheKey, {
+            keySig: cacheKeySig,
+            recallText,
+            debugInfo: this._lastDebugInfo,
+        });
+        if (this._lastDebugInfo?.cache) {
+            this._lastDebugInfo.cache.size = this._recallCache.size;
+        }
 
         return recallText;
     }

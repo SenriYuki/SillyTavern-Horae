@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki，柏柏
- * 版本: 1.12.18B
+ * 版本: 1.13B
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -22,7 +22,7 @@ import { initPromptDefaults, ensurePromptDefaults, getPromptDefaultSync } from '
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.12.18B';
+const VERSION = '1.13B';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -15603,13 +15603,18 @@ function _isTrackableAiMessage(msg) {
     return true;
 }
 
-function _resolveAutoSummaryKeepWindow(chat, keepRecent) {
-    if (!Array.isArray(chat) || chat.length <= 1) {
+function _resolveAutoSummaryKeepWindow(chat, keepRecent, options = {}) {
+    const chatLength = Array.isArray(chat) ? chat.length : 0;
+    const endExclusive = Math.max(0, Math.min(
+        Number.isInteger(options?.endExclusive) ? options.endExclusive : chatLength,
+        chatLength
+    ));
+    if (!Array.isArray(chat) || endExclusive <= 1) {
         return { keepStart: 0, totalAi: 0, keepAiIndices: [], allAiIndices: [] };
     }
 
     const allAiIndices = [];
-    for (let i = 0; i < chat.length; i++) {
+    for (let i = 0; i < endExclusive; i++) {
         if (_isTrackableAiMessage(chat[i])) allAiIndices.push(i);
     }
 
@@ -15619,7 +15624,7 @@ function _resolveAutoSummaryKeepWindow(chat, keepRecent) {
     }
     if (keepCount <= 0) {
         return {
-            keepStart: chat.length,
+            keepStart: endExclusive,
             totalAi: allAiIndices.length,
             keepAiIndices: [],
             allAiIndices
@@ -15662,8 +15667,13 @@ function _collectActiveSummaryCoveredIndices(chat) {
  * - toHide：当前应新增隐藏的楼层
  * - toShow：当前应取消隐藏的楼层
  */
-function _planAutoBufferVisibilityByKeepRecent(chat, keepRecent, activeSummaryCoveredIndices = null) {
-    if (!Array.isArray(chat) || chat.length <= 1) {
+function _planAutoBufferVisibilityByKeepRecent(chat, keepRecent, activeSummaryCoveredIndices = null, options = {}) {
+    const chatLength = Array.isArray(chat) ? chat.length : 0;
+    const endExclusive = Math.max(0, Math.min(
+        Number.isInteger(options?.endExclusive) ? options.endExclusive : chatLength,
+        chatLength
+    ));
+    if (!Array.isArray(chat) || endExclusive <= 1) {
         return {
             keepStart: 0,
             keepAiIndices: [],
@@ -15675,11 +15685,11 @@ function _planAutoBufferVisibilityByKeepRecent(chat, keepRecent, activeSummaryCo
         };
     }
 
-    const keepWindow = _resolveAutoSummaryKeepWindow(chat, keepRecent);
-    const keepStart = Math.max(0, Math.min(keepWindow.keepStart, chat.length));
+    const keepWindow = _resolveAutoSummaryKeepWindow(chat, keepRecent, { endExclusive });
+    const keepStart = Math.max(0, Math.min(keepWindow.keepStart, endExclusive));
     const coveredSet = activeSummaryCoveredIndices instanceof Set
-        ? new Set([...activeSummaryCoveredIndices].filter(i => Number.isInteger(i) && i >= 0 && i < chat.length))
-        : _collectActiveSummaryCoveredIndices(chat);
+        ? new Set([...activeSummaryCoveredIndices].filter(i => Number.isInteger(i) && i >= 0 && i < endExclusive))
+        : new Set([..._collectActiveSummaryCoveredIndices(chat)].filter(i => i < endExclusive));
 
     // 旧楼层自动隐藏策略：从第一条“应隐藏的AI楼层”开始，到 keepStart 前一层，连续作为隐藏候选。
     let firstHideAnchor = -1;
@@ -15702,7 +15712,7 @@ function _planAutoBufferVisibilityByKeepRecent(chat, keepRecent, activeSummaryCo
     }
 
     const markedSet = new Set();
-    for (let i = 0; i < chat.length; i++) {
+    for (let i = 0; i < endExclusive; i++) {
         if (chat[i]?.horae_meta?._autoBufferHidden) markedSet.add(i);
     }
 
@@ -15729,6 +15739,49 @@ function _planAutoBufferVisibilityByKeepRecent(chat, keepRecent, activeSummaryCo
         targetHideIndices: [...targetHideSet].sort((a, b) => a - b),
         toHide: toHide.sort((a, b) => a - b),
         toShow: toShow.sort((a, b) => a - b),
+    };
+}
+
+function _buildPromptVisibilityContext(chat, skipLast = 0) {
+    const effectiveHiddenSet = new Set();
+    const ignoredBoundaryAiIndices = new Set();
+    if (!Array.isArray(chat) || chat.length === 0) {
+        return { effectiveHiddenSet, ignoredBoundaryAiIndices };
+    }
+
+    const endExclusive = Math.max(0, chat.length - Math.max(0, skipLast));
+    for (let i = 0; i < endExclusive; i++) {
+        if (chat[i]?.is_hidden) effectiveHiddenSet.add(i);
+    }
+
+    if (!settings.enabled || !settings.autoSummaryEnabled || !settings.sendTimeline) {
+        return { effectiveHiddenSet, ignoredBoundaryAiIndices };
+    }
+
+    const keepRecent = Math.max(0, parseInt(settings.autoSummaryKeepRecent, 10) || 10);
+    const promptKeepRecent = Math.max(0, keepRecent - 1);
+    const activeCovered = _collectActiveSummaryCoveredIndices(chat);
+    const realKeepWindow = _resolveAutoSummaryKeepWindow(chat, keepRecent, { endExclusive });
+    const promptKeepWindow = _resolveAutoSummaryKeepWindow(chat, promptKeepRecent, { endExclusive });
+    const promptKeepSet = new Set(promptKeepWindow.keepAiIndices || []);
+    for (const idx of realKeepWindow.keepAiIndices || []) {
+        if (!promptKeepSet.has(idx)) ignoredBoundaryAiIndices.add(idx);
+    }
+
+    const plan = _planAutoBufferVisibilityByKeepRecent(chat, promptKeepRecent, activeCovered, { endExclusive });
+
+    for (const idx of plan.markedAutoHiddenIndices || []) {
+        effectiveHiddenSet.delete(idx);
+    }
+    for (const idx of plan.targetHideIndices || []) {
+        effectiveHiddenSet.add(idx);
+    }
+
+    return {
+        effectiveHiddenSet,
+        ignoredBoundaryAiIndices,
+        keepRecent,
+        promptKeepRecent,
     };
 }
 
@@ -18782,8 +18835,11 @@ async function onPromptReady(eventData) {
         const eqAutoApplied = _autoApplyEquipmentTemplatesByRace({ persist: false });
         if (eqAutoApplied && getContext()?.saveChat) await getContext().saveChat();
 
+        const promptVisibility = _buildPromptVisibilityContext(chat, skipLast);
+        const effectiveHiddenSet = promptVisibility.effectiveHiddenSet;
         const rawDataPrompt = horaeManager.generateCompactPrompt(skipLast, {
             includeTimeline: !skipTimelineInjectionOnce,
+            effectiveHiddenSet,
         });
         try {
             const npcLines = String(rawDataPrompt || '')
@@ -18820,6 +18876,15 @@ async function onPromptReady(eventData) {
             try {
                 await _ensureVectorIndexBeforeRecall();
                 const promptCoveredChatIndices = _collectPromptCoveredChatIndices(chat, eventData.chat);
+                if (promptVisibility.ignoredBoundaryAiIndices?.size > 0) {
+                    let removed = 0;
+                    for (const idx of promptVisibility.ignoredBoundaryAiIndices) {
+                        if (promptCoveredChatIndices.delete(idx)) removed++;
+                    }
+                    if (removed > 0) {
+                        console.log(`[Horae] Prompt边界缓冲已忽略 ${removed} 条楼层（keepRecent=${promptVisibility.keepRecent} -> prompt=${promptVisibility.promptKeepRecent}）`);
+                    }
+                }
                 if (promptCoveredChatIndices.size > 0) {
                     console.log(`[Horae] Prompt已覆盖楼层: ${promptCoveredChatIndices.size}，召回将排除这些楼层`);
                 }

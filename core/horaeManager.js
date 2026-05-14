@@ -582,10 +582,18 @@ class HoraeManager {
         return allAiIndices[allAiIndices.length - keepCount];
     }
 
+    _isMessageHiddenForPrompt(messageIndex, effectiveHiddenSet = null) {
+        if (effectiveHiddenSet instanceof Set) {
+            return effectiveHiddenSet.has(messageIndex);
+        }
+        return !!this.getChat()?.[messageIndex]?.is_hidden;
+    }
+
     /** 生成紧凑的上下文注入内容（skipLast: swipe时跳过末尾N条消息） */
     generateCompactPrompt(skipLast = 0, options = {}) {
         const state = this.getLatestState(skipLast);
         const lines = [];
+        const effectiveHiddenSet = options?.effectiveHiddenSet instanceof Set ? options.effectiveHiddenSet : null;
 
         const lang = this._getAiOutputLang();
         const L = (zh, en, ja, ko, ru) => {
@@ -1072,9 +1080,8 @@ class HoraeManager {
                 if (e.event?._compressedBy && activeSumIds.has(e.event._compressedBy)) return false;
                 if (e.event?._summaryId && !activeSumIds.has(e.event._summaryId)) return false;
                 if (Number.isInteger(keepStart) && e.messageIndex >= keepStart) {
-                    const msg = timelineChat?.[e.messageIndex];
                     // keepRecent 只跳过“尾部可见楼层”；隐藏楼层仍允许作为历史轨迹注入
-                    if (!msg?.is_hidden) return false;
+                    if (!this._isMessageHiddenForPrompt(e.messageIndex, effectiveHiddenSet)) return false;
                 }
                 return true;
             });
