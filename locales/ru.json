@@ -270,6 +270,7 @@
         "summaryApiUrlHint": "Базовый URL совместимой с OpenAI конечной точки, напр. https://api.openai.com/v1",
         "summaryApiKey": "Ключ API",
         "summaryModel": "Модель",
+        "summaryShouldStream": "Потоковая передача",
         "subApiScope": "Область применения",
         "subApiScopeAutoSummary": "Авто-сводка",
         "subApiScopeManualSummary": "Ручная сводка",

@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki，柏柏
- * 版本: 1.13B
+ * 版本: 1.13.1B
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -22,7 +22,7 @@ import { initPromptDefaults, ensurePromptDefaults, getPromptDefaultSync } from '
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.13B';
+const VERSION = '1.13.1B';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -173,6 +173,7 @@ const DEFAULT_SETTINGS = {
     autoSummaryApiUrl: '',          // 独立API端点地址（OpenAI兼容）
     autoSummaryApiKey: '',          // 独立API密钥
     autoSummaryModel: '',           // 独立API模型名称
+    summaryShouldStream: false,      // 总结/补全生成是否使用流式传输
     subApiScopeAutoSummary: false,   // 副API应用范围：自动总结
     subApiScopeManualSummary: false, // 副API应用范围：手动总结（时间线压缩）
     subApiScopeBrief: false,        // 副API应用范围：摘要（预留）
@@ -12859,6 +12860,10 @@ function initSettingsEvents() {
         settings.autoSummaryModel = this.value;
         saveSettings();
     });
+    $('#horae-setting-summary-should-stream').on('change', function () {
+        settings.summaryShouldStream = this.checked;
+        saveSettings();
+    });
     $('#horae-setting-sub-api-scope-auto-summary').on('change', function () {
         settings.subApiScopeAutoSummary = this.checked;
         saveSettings();
@@ -13712,6 +13717,7 @@ function syncSettingsToUI() {
     $('#horae-setting-auto-summary-batch-tokens').val(settings.autoSummaryBatchMaxTokens || 80000);
     $('#horae-setting-auto-summary-api-url').val(settings.autoSummaryApiUrl || '');
     $('#horae-setting-auto-summary-api-key').val(settings.autoSummaryApiKey || '');
+    $('#horae-setting-summary-should-stream').prop('checked', settings.summaryShouldStream !== false);
     $('#horae-setting-sub-api-scope-auto-summary').prop('checked', settings.subApiScopeAutoSummary !== false);
     $('#horae-setting-sub-api-scope-manual-summary').prop('checked', settings.subApiScopeManualSummary !== false);
     $('#horae-setting-sub-api-scope-brief').prop('checked', !!settings.subApiScopeBrief);
@@ -14816,15 +14822,24 @@ function _ensureAutoFillPrevTimelineForSubApiBriefScope() {
     return changed;
 }
 
+function _shouldStreamSummaryTasks() {
+    return settings.summaryShouldStream !== false;
+}
+
 function _syncSubApiSettingsFromDom() {
     try {
         const urlEl = document.getElementById('horae-setting-auto-summary-api-url');
         const keyEl = document.getElementById('horae-setting-auto-summary-api-key');
         const modelEl = document.getElementById('horae-setting-auto-summary-model');
+        const streamEl = document.getElementById('horae-setting-summary-should-stream');
         const autoSummaryScopeEl = document.getElementById('horae-setting-sub-api-scope-auto-summary');
         const manualSummaryScopeEl = document.getElementById('horae-setting-sub-api-scope-manual-summary');
         const briefScopeEl = document.getElementById('horae-setting-sub-api-scope-brief');
         let changed = false;
+        if (streamEl && streamEl.checked !== (settings.summaryShouldStream !== false)) {
+            settings.summaryShouldStream = streamEl.checked;
+            changed = true;
+        }
         if (autoSummaryScopeEl && autoSummaryScopeEl.checked !== (settings.subApiScopeAutoSummary !== false)) {
             settings.subApiScopeAutoSummary = autoSummaryScopeEl.checked;
             changed = true;
@@ -15267,6 +15282,7 @@ function _vectorErrorHint(err) {
 async function generateWithDirectApi(prompt, options = {}) {
     const taskType = options?.taskType || '';
     const messageIndex = Number.isInteger(options?.messageIndex) ? options.messageIndex : null;
+    const shouldStream = _shouldStreamSummaryTasks();
     console.log(taskType, "taskType");
     const skipSnapshotTimelineInjection = taskType === 'autoSummary';
     const _model = settings.autoSummaryModel.trim();
@@ -15285,7 +15301,7 @@ async function generateWithDirectApi(prompt, options = {}) {
         messages,
         temperature: 0.7,
         max_tokens: 8192,
-        stream: false
+        stream: shouldStream
     };
     // 仅当端点疑似 Gemini 系渠道时才注入 safetySettings（纯 OpenAI 端点会拒绝未知字段返回 400）
     if (/gemini|google|generativelanguage/i.test(url) || /gemini/i.test(body.model)) {
@@ -15410,7 +15426,8 @@ event 唯一且只放在 <horaeevent> 内。
                 model: _model,      // 模型名
                 source: "openai",   // 根据你的接口类型选择
             },
-            ordered_prompts: orderedPrompts
+            ordered_prompts: orderedPrompts,
+            should_stream: shouldStream
         })
 
         console.log(resp, '[Horae] 副API生成结果');
@@ -17817,6 +17834,7 @@ async function _generateForAiTasks(prompt, opts = {}) {
         noTimelineInjectionMarker = false,
         noSystemPromptInjectionMarker = false,
     } = opts;
+    const shouldStream = _shouldStreamSummaryTasks();
     const skipSnapshotTimelineInjection = taskType === 'autoSummary';
     const context = getContext();
     const markerLines = [];
@@ -17927,7 +17945,8 @@ event 唯一且只放在 <horaeevent> 内。
 
     const resp = await TavernHelper.generateRaw({
         user_input: prompt,
-        ordered_prompts: orderedPrompts
+        ordered_prompts: orderedPrompts,
+        should_stream: shouldStream
     })
 
     return resp;

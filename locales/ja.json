@@ -276,6 +276,7 @@
         "summaryApiUrlHint": "OpenAI互換エンドポイントのベースURL。例：https://api.openai.com/v1",
         "summaryApiKey": "API Key",
         "summaryModel": "モデル",
+        "summaryShouldStream": "ストリーミング",
         "subApiScope": "適用範囲",
         "subApiScopeAutoSummary": "自動要約",
         "subApiScopeManualSummary": "手動要約",

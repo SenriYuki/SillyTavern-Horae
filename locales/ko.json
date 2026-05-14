@@ -274,6 +274,7 @@
         "summaryApiUrlHint": "OpenAI 호환 엔드포인트 기본 URL, 예: https://api.openai.com/v1",
         "summaryApiKey": "API Key",
         "summaryModel": "모델",
+        "summaryShouldStream": "스트리밍",
         "subApiScope": "적용 범위",
         "subApiScopeAutoSummary": "자동 요약",
         "subApiScopeManualSummary": "수동 요약",

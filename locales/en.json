@@ -272,6 +272,7 @@
         "summaryApiUrlHint": "OpenAI-compatible endpoint base URL, e.g. https://api.openai.com/v1",
         "summaryApiKey": "API Key",
         "summaryModel": "Model",
+        "summaryShouldStream": "Streaming",
         "subApiScope": "Apply To",
         "subApiScopeAutoSummary": "Auto Summary",
         "subApiScopeManualSummary": "Manual Summary",

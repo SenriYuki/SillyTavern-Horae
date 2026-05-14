@@ -272,6 +272,7 @@
         "summaryApiUrlHint": "OpenAI 兼容格式的 API 地址",
         "summaryApiKey": "API 密钥",
         "summaryModel": "总结/补全模型",
+        "summaryShouldStream": "流式传输",
         "subApiScope": "应用范围",
         "subApiScopeAutoSummary": "自动总结",
         "subApiScopeManualSummary": "手动总结",

@@ -252,6 +252,7 @@
         "batchMaxMessagesHint": "每次自動總結最多處理多少條訊息。舊檔案首次啟用時會分多輪逐步消化。",
         "batchMaxTokens": "每批最大Token",
         "batchMaxTokensHint": "每次總結送入的文本 Token 上限，超出則截斷至此值。\n參考各模型上下文窗口（建議設為 30%~50%）：\nClaude ≈ 80K~200K · GPT-4o ≈ 80K~128K · Gemini ≈ 100K~1000K · DeepSeek ≈ 64K",
+        "summaryShouldStream": "串流傳輸",
         "subApiScope": "套用範圍",
         "subApiScopeAutoSummary": "自動總結",
         "subApiScopeManualSummary": "手動總結",
