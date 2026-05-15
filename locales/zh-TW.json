@@ -22,11 +22,11 @@
         "noItems": "暫無物品追蹤"
     },
     "timeline": {
-        "agenda": "???",
-        "plan": "??",
-        "mystery": "??",
+        "agenda": "懸念簿",
+        "plan": "計劃",
+        "mystery": "懸念",
         "events": "事件時間線",
-        "noAgenda": "???????",
+        "noAgenda": "暫無懸念簿條目",
         "noEvents": "暫無記錄的事件",
         "searchPlaceholder": "搜尋事件關鍵字...",
         "filterAll": "全部",
@@ -395,8 +395,8 @@
         "tokenModeHint3": "建議設為模型上下文窗口的 30%~50%，留出足夠空間給其他內容。",
         "messageModeHint": "填入AI條數觸發閾值。",
         "messageModeHint2": "僅統計AI訊息；中間夾著的使用者訊息會隨全文一起保留/壓縮，但不參與計數。遇到總結邊界會停止計數。",
-        "editAgenda": "???????",
-        "addAgenda": "???????"
+        "editAgenda": "編輯懸念簿條目",
+        "addAgenda": "新增懸念簿條目"
     },
     "toast": {
         "saveSuccess": "儲存成功！",
@@ -469,7 +469,7 @@
     },
     "confirm": {
         "deleteSummary": "刪除此總結？原始事件將恢復顯示。",
-        "deleteAgenda": "?????? {{n}} ???????????????",
+        "deleteAgenda": "確定刪除選中 {{n}} 條懸念簿條目？此操作不可撤銷。",
         "deleteTimeline": "確定刪除選中 {{n}} 條劇情軌跡？",
         "deleteNpc": "確定刪除角色「{{name}}」？將從所有訊息中移除相關資料。",
         "npcAlreadyExists": "已存在角色「{{existing}}」與「{{name}}」名稱或別名重複。\n\n點擊「確定」開啟該角色的編輯面板進行合併修改，點擊「取消」放棄新增。",
@@ -498,7 +498,7 @@
         "languageChanged": "語言已切換為 {{lang}}。\n\n如需將自訂提示詞切換到對應語言，請前往 設定 → 自訂提示詞，點擊「全部重設」。只有需要保留部分自訂內容時，才逐個點擊「恢復預設」。"
     },
     "tooltip": {
-        "addAgenda": "???????",
+        "addAgenda": "新增懸念簿條目",
         "refreshTimeline": "重新整理時間線",
         "filterLevel": "篩選事件級別",
         "filterHolder": "篩選持有人",
@@ -598,7 +598,8 @@
         "eventSummary": "描述此事件的摘要...",
         "npcNameRequired": "必填，請輸入角色名（劇情中實際使用的稱呼）",
         "npcAliases": "可選，多個用逗號、頓號或斜線分隔",
-        "agendaText": "???????????????????...",
+        "agendaText": "輸入懸念簿條目，相對時間請標註絕對時間...",
+        "agendaDate": "如 2026/02/10",
         "itemName": "物品名稱",
         "itemDesc": "如：愛麗絲在約會時贈送的",
         "holderName": "角色名",
@@ -631,7 +632,7 @@
         "relTo": "角色B（關係接收方）",
         "relType": "關係類型（如：朋友、戀人）",
         "relNote": "關係的補充說明（選填）",
-        "agendaContentHint": "??????????????????"
+        "agendaContentHint": "懸念簿內容（相對時間請標註絕對日期）"
     },
     "modal": {
         "compressTitle": "壓縮模式",
@@ -691,7 +692,7 @@
         "sceneDescription": "場景描述",
         "mergeSource": "來源地點",
         "mergeTarget": "目標地點",
-        "agendaType": "??",
+        "agendaType": "類型",
         "agendaDate": "訂立日期 (選填)",
         "content": "內容",
         "atmosphere": "氛圍"

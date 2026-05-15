@@ -20,7 +20,7 @@ item/item!/item!!:see item rules (write only when triggered)
 item-:item name (remove when item is consumed/lost. See item rules. Write only when triggered)
 affection:character name=affection level (★ NPC first appearance must include initial value! Afterward update only when affection changes)
 npc:character name|appearance=personality@relationship~extended fields (★ NPC first appearance must include complete info! Afterward update only when changed)
-hold:type|date established|content (type must be either "plan" or "suspense". [MUST CHECK REFERENCE STATE] Write only when a truly new ledger entry appears that absolutely did not exist before. If a similar entry already exists in the reference state, duplicate creation is forbidden)
+hold:type|date and time established|content (type must be either "plan" or "suspense". [MUST CHECK REFERENCE STATE] Write only when a truly new ledger entry appears that absolutely did not exist before. If a similar entry already exists in the reference state, duplicate creation is forbidden)
 hold-:full original text of an existing ledger entry from the reference state ([FORCED WRITE-OFF] If the text causes a referenced entry to meet its write-off condition, you must remove it with this command)
 </horae>
 <horaeevent>
@@ -207,8 +207,8 @@ Record only NPC affection toward {{user}} (do not record {{user}} themselves). O
   [Type 1: plan] Things the protagonist actively arranges, promises, or agrees to do
   ═══════════════════════════════════
 
-  Format: hold:plan|date established|content(deadline)
-  Example: hold:plan|1988/09/29|Wake up at 9:00 tomorrow morning, then go shopping, and strictly forbid wearing school uniform(1988/09/30 09:00)
+  Format: hold:plan|date and time established|content(deadline)
+  Example: hold:plan|1988/09/29 21:00|Wake up at 9:00 tomorrow morning, then go shopping, and strictly forbid wearing school uniform(1988/09/30 09:00)
 
   [Write-off conditions — trigger if any one is met]
     ✦ Executed: the analyzed text explicitly shows that the plan was carried out
@@ -232,12 +232,17 @@ Record only NPC affection toward {{user}} (do not record {{user}} themselves). O
     • Promises others made to the protagonist, or obligations the protagonist owes others
     • Foreshadowing, omens, or bad signs
 
-  Format: hold:suspense|date recorded|content
+  Format: hold:suspense|date and time recorded|content
   Examples:
-    hold:suspense|1988/09/29|A black-robed figure warned "See you again in three days"; identity unknown
-    hold:suspense|1988/09/29|A note with unfamiliar handwriting appeared on the room's desk, and the handwriting was deliberately disguised
-    hold:suspense|1988/09/27|Anna saw {{user}} walking with Bella and said nothing, but became suspicious
-    hold:suspense|1988/09/29|The tavern owner promised to save a cask of good wine for {{user}} next time
+    hold:suspense|1988/09/29 23:30|A black-robed figure warned "See you again in three days"; identity unknown
+    hold:suspense|1988/09/29 23:25|A note with unfamiliar handwriting appeared on the room's desk, and the handwriting was deliberately disguised
+    hold:suspense|1988/09/27 14:20|Anna saw {{user}} walking with Bella and said nothing, but became suspicious
+    hold:suspense|1988/09/29 22:00|The tavern owner promised to save a cask of good wine for {{user}} next time
+
+  🔴 Never write only the time without the date, and never write only the date without the time.
+   Correct: hold:suspense|1988/09/29 14:21|A note with unfamiliar handwriting appeared on the room's desk
+   Wrong: hold:suspense|14:21|A note with unfamiliar handwriting appeared on the room's desk (missing date)
+   Wrong: hold:suspense|1988/09/29|A note with unfamiliar handwriting appeared on the room's desk (missing time)
 
   🔴 [Suspense must never be written off automatically because time passed!]
   Suspense entries do not have deadlines. Unresolved matters do not disappear just because "a long time has passed."
@@ -264,8 +269,8 @@ Record only NPC affection toward {{user}} (do not record {{user}} themselves). O
   ═══════════════════════════════════
 
   🔴 Strict write-off syntax: after hold-:, you must copy the original entry exactly, starting from "plan|" or "suspense|" and including all following text. Do not copy the bullet marker or the hold: prefix. Abbreviation, paraphrase, and summarization are absolutely forbidden!
-  Write-off example: hold-:plan|1988/09/29|Have a formal dinner in town(After 1988/09/29 18:00)
-  Write-off example: hold-:suspense|1988/09/29|A black-robed figure warned "See you again in three days"; identity unknown
+  Write-off example: hold-:plan|1988/09/29 21:00|Wake up at 9:00 tomorrow morning, then go shopping, and strictly forbid wearing school uniform(1988/09/30 09:00)
+  Write-off example: hold-:suspense|1988/09/29 23:30|A black-robed figure warned "See you again in three days"; identity unknown
 
   [Mandatory pre-check before adding]: before writing any hold:, you must first inspect the Suspense Ledger in the reference state and confirm that no similar entry already exists!
 
