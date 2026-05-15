@@ -606,12 +606,19 @@ class HoraeManager {
 
         // 状态快照头
         if (!options?.noStatusHead) {
+            // lines.push(L(
+            //     '[当前状态快照——对比本回合剧情，仅在<horae>中输出发生实质变化的字段]',
+            //     '[Current State Snapshot — compare with this round\'s plot, only output substantively changed fields in <horae>]',
+            //     '[現在の状態スナップショット——今回のストーリーと比較し、実質的に変化したフィールドのみ<horae>に出力]',
+            //     '[현재 상태 스냅샷——이번 라운드의 스토리와 비교하여 실질적으로 변경된 필드만 <horae>에 출력]',
+            //     '[Снимок текущего состояния — сравните с сюжетом этого раунда, выводите в <horae> только существенно изменившиеся поля]',
+            // ));
             lines.push(L(
-                '[当前状态快照——对比本回合剧情，仅在<horae>中输出发生实质变化的字段]',
-                '[Current State Snapshot — compare with this round\'s plot, only output substantively changed fields in <horae>]',
-                '[現在の状態スナップショット——今回のストーリーと比較し、実質的に変化したフィールドのみ<horae>に出力]',
-                '[현재 상태 스냅샷——이번 라운드의 스토리와 비교하여 실질적으로 변경된 필드만 <horae>에 출력]',
-                '[Снимок текущего состояния — сравните с сюжетом этого раунда, выводите в <horae> только существенно изменившиеся поля]',
+                '[当前状态快照]',
+                '[Current State Snapshot]',
+                '[現在の状態スナップショット]',
+                '[현재 상태 스냅샷]',
+                '[Снимок текущего состояния]',
             ));
         }
 
