@@ -804,7 +804,7 @@ class HoraeManager {
             }
         }
 
-        // 待办事项
+        // 悬念簿
         const chatForAgenda = this.getChat();
         const allAgendaItems = [];
         const seenTexts = new Set();
@@ -835,9 +835,9 @@ class HoraeManager {
         }
         const activeAgenda = allAgendaItems.filter(a => !a.done);
         if (activeAgenda.length > 0) {
-            lines.push(`\n[${L('待办事项', 'Agenda', '予定事項', '할 일 목록', 'Список дел')}]`);
+            lines.push(`\n[${L('悬念簿', 'Agenda', '予定事項', '할 일 목록', 'Список дел')}]`);
             for (const item of activeAgenda) {
-                const datePrefix = item.date ? `${item.date} ` : '';
+                const datePrefix = `${this.normalizeAgendaType(item.type)}|${item.date || ''}|`;
                 lines.push(`· ${datePrefix}${item.text}`);
             }
         }
@@ -1356,6 +1356,107 @@ class HoraeManager {
     }
 
     /** 解析AI回复中的horae标签 */
+    _isExplicitAgendaTypeToken(rawType) {
+        const token = String(rawType || '').trim();
+        if (!token) return false;
+        if (token === '计划' || token === '悬念' || token === '懸念') return true;
+        const lower = token.toLowerCase();
+        return ['plan', 'plans', 'hook', 'hooks', 'mystery', 'mysteries', 'suspense'].includes(lower);
+    }
+
+    normalizeAgendaType(rawType) {
+        const token = String(rawType || '').trim();
+        if (!token) return '计划';
+        if (token === '悬念' || token === '懸念') return '悬念';
+        const lower = token.toLowerCase();
+        if (['hook', 'hooks', 'mystery', 'mysteries', 'suspense'].includes(lower)) return '悬念';
+        return '计划';
+    }
+
+    _extractCompletedAgendaText(text) {
+        const normalized = String(text || '').trim();
+        if (!normalized) return '';
+        const doneMatch = normalized.match(/[\(（](完成|已完成|done|finished|completed|失效|取消|已取消)[\)）]\s*$/i);
+        if (!doneMatch) return '';
+        return normalized.substring(0, normalized.length - doneMatch[0].length).trim();
+    }
+
+    _parseLegacyAgendaEntry(rawValue, source = 'ai') {
+        const agendaStr = String(rawValue || '').trim();
+        if (!agendaStr) return null;
+
+        const pipeIdx = agendaStr.indexOf('|');
+        let date = '';
+        let text = '';
+        if (pipeIdx > 0) {
+            date = agendaStr.substring(0, pipeIdx).trim();
+            text = agendaStr.substring(pipeIdx + 1).trim();
+        } else {
+            text = agendaStr;
+        }
+
+        if (!text) return null;
+
+        const deletedText = this._extractCompletedAgendaText(text);
+        if (deletedText) {
+            return { deletedText };
+        }
+
+        return {
+            item: {
+                type: '计划',
+                date,
+                text,
+                source,
+                done: false,
+            },
+        };
+    }
+
+    _parseHoldEntry(rawValue, source = 'ai') {
+        const holdStr = String(rawValue || '').trim();
+        if (!holdStr) return null;
+
+        const parts = holdStr.split('|');
+        let type = '计划';
+        let date = '';
+        let text = '';
+
+        if (parts.length >= 3) {
+            type = this.normalizeAgendaType(parts[0]);
+            date = parts[1].trim();
+            text = parts.slice(2).join('|').trim();
+        } else if (parts.length === 2) {
+            const first = parts[0].trim();
+            if (this._isExplicitAgendaTypeToken(first)) {
+                type = this.normalizeAgendaType(first);
+                text = parts[1].trim();
+            } else {
+                date = first;
+                text = parts[1].trim();
+            }
+        } else {
+            text = holdStr;
+        }
+
+        if (!text) return null;
+
+        const deletedText = this._extractCompletedAgendaText(text);
+        if (deletedText) {
+            return { deletedText };
+        }
+
+        return {
+            item: {
+                type,
+                date,
+                text,
+                source,
+                done: false,
+            },
+        };
+    }
+
     parseHoraeTag(message) {
         if (!message) return null;
 
@@ -1365,7 +1466,7 @@ class HoraeManager {
         // 提取所有 <horae> 块；多块时优先选最靠后的有效块（正文末尾的才是真正输出）
         let match = null;
         const allHoraeMatches = [...message.matchAll(/<horae>([\s\S]*?)<\/horae>/gi)];
-        const horaeFieldPattern = /^(time|timestamp|location|atmosphere|scene_desc|characters|costume|item[!]*|item-|event|affection|npc|agenda|agenda-|rel|mood):/m;
+        const horaeFieldPattern = /^(time|timestamp|location|atmosphere|scene_desc|characters|costume|item[!]*|item-|event|affection|npc|agenda|agenda-|hold|hold-|rel|mood):/m;
         if (allHoraeMatches.length > 1) {
             match = [...allHoraeMatches].reverse().find(m => horaeFieldPattern.test(m[1]))
                 || allHoraeMatches[allHoraeMatches.length - 1];
@@ -1575,6 +1676,24 @@ class HoraeManager {
                 }
             }
             // agenda-:已完成待办内容 / agenda:订立日期|内容
+            else if (trimmedLine.startsWith('hold-:')) {
+                const delStr = trimmedLine.substring(6).trim();
+                if (delStr) {
+                    const pipeIdx = delStr.indexOf('|');
+                    const text = pipeIdx > 0 ? delStr.substring(pipeIdx + 1).trim() : delStr;
+                    if (text) {
+                        result.deletedAgenda.push(text);
+                    }
+                }
+            }
+            else if (trimmedLine.startsWith('hold:')) {
+                const parsedHold = this._parseHoldEntry(trimmedLine.substring(5).trim(), 'ai');
+                if (parsedHold?.deletedText) {
+                    result.deletedAgenda.push(parsedHold.deletedText);
+                } else if (parsedHold?.item) {
+                    result.agenda.push(parsedHold.item);
+                }
+            }
             else if (trimmedLine.startsWith('agenda-:')) {
                 const delStr = trimmedLine.substring(8).trim();
                 if (delStr) {
@@ -1728,9 +1847,13 @@ class HoraeManager {
             for (const item of parsed.agenda) {
                 if (deletedSet.has(item.text)) continue;
                 if (localDeletedSet.has(item.text)) continue;
-                const isDupe = meta.agenda.some(a => a.text === item.text);
+                const normalizedItem = {
+                    ...item,
+                    type: this.normalizeAgendaType(item.type),
+                };
+                const isDupe = meta.agenda.some(a => a.text === normalizedItem.text);
                 if (!isDupe) {
-                    meta.agenda.push(item);
+                    meta.agenda.push(normalizedItem);
                 }
             }
         }
@@ -2631,7 +2754,7 @@ class HoraeManager {
         snapshot.reputationConfig = repConfig;
         // 装备：按角色过滤已删除格位
         for (const [owner, slots] of Object.entries(snapshot.equipment)) {
-            const ownerCfg = _eqPerChar[owner];
+            cons悬念簿nerCfg = _eqPerChar[owner];
             if (!ownerCfg || !Array.isArray(ownerCfg.slots)) continue;
             const validEqSlots = new Set(ownerCfg.slots.map(s => s.name));
             const deletedEqSlots = new Set(ownerCfg._deletedSlots || []);
@@ -2754,7 +2877,7 @@ class HoraeManager {
         return rels.filter(r => nameSet.has(r.from) || nameSet.has(r.to));
     }
 
-    /** 全局删除已完成的待办事项 */
+    /** 全局删除已完成的悬念簿条目 */
     removeCompletedAgenda(deletedTexts) {
         const chat = this.getChat();
         if (!chat || deletedTexts.length === 0) return;
@@ -4207,8 +4330,8 @@ class HoraeManager {
                         `也可写绝对值: currency:币名=数量\n`,
                         `Absolute value also OK: currency:denomination=amount\n`,
                         `絶対値も可: currency:通貨名=数量\n`,
-                        `절대값도 가능: currency:화폐명=수량\n`,
-                        `Абсолютное значение тоже допустимо: currency:валюта=количество\n`
+                        `절대값도悬念簿 currency:화폐명=수량\n`,
+                        `Абсолютное зн悬念簿ие тоже допустимо: currency:валюта=количество\n`
                     );
                 } else {
                     p += L(`格式: currency:归属|币名=±变化量\n`, `Format: currency:${own}|denomination=±amount\n`, `形式: currency:${own}|通貨名=±変化量\n`, `형식: currency:${own}|화폐명=±변화량\n`, `Формат: currency:${own}|валюта=±сумма\n`);
@@ -4330,12 +4453,11 @@ class HoraeManager {
             affection: {},
             npcs: {},
             scene: {},
-            agenda: [],   // 待办事项
-            deletedAgenda: []  // 已完成的待办事项
+            agenda: [],   // 悬念簿条目
+            deletedAgenda: []  // 已完成的悬念簿条目
         };
 
         let hasAnyData = false;
-
         const patterns = {
             time: /time[:：]\s*(.+?)(?:\n|$)/gi,
             location: /location[:：]\s*(.+?)(?:\n|$)/gi,
@@ -4350,6 +4472,9 @@ class HoraeManager {
             agendaDelete: /agenda-[:：]\s*(.+?)(?:\n|$)/gi,
             agenda: /agenda[:：]\s*(.+?)(?:\n|$)/gi
         };
+
+        patterns.holdDelete = /hold-[\u003A\uFF1A]\s*(.+?)(?:\n|$)/gi;
+        patterns.hold = /hold[\u003A\uFF1A]\s*(.+?)(?:\n|$)/gi;
 
         // time
         let match;
@@ -4504,6 +4629,29 @@ class HoraeManager {
             if (name) {
                 npcInfo.last_seen = new Date().toISOString();
                 result.npcs[name] = npcInfo;
+                hasAnyData = true;
+            }
+        }
+
+        while ((match = patterns.holdDelete.exec(message)) !== null) {
+            const delStr = match[1].trim();
+            if (delStr) {
+                const pipeIdx = delStr.indexOf('|');
+                const text = pipeIdx > 0 ? delStr.substring(pipeIdx + 1).trim() : delStr;
+                if (text) {
+                    result.deletedAgenda.push(text);
+                    hasAnyData = true;
+                }
+            }
+        }
+
+        while ((match = patterns.hold.exec(message)) !== null) {
+            const parsedHold = this._parseHoldEntry(match[1].trim(), 'ai');
+            if (parsedHold?.deletedText) {
+                result.deletedAgenda.push(parsedHold.deletedText);
+                hasAnyData = true;
+            } else if (parsedHold?.item) {
+                result.agenda.push(parsedHold.item);
                 hasAnyData = true;
             }
         }

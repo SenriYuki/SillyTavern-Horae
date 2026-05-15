@@ -22,9 +22,11 @@
         "noItems": "No items tracked"
     },
     "timeline": {
-        "agenda": "Agenda",
+        "agenda": "Mystery Log",
+        "plan": "Plan",
+        "mystery": "Mystery",
         "events": "Event Timeline",
-        "noAgenda": "No agenda items",
+        "noAgenda": "No mystery log entries",
         "noEvents": "No recorded events",
         "searchPlaceholder": "Search events...",
         "filterAll": "All",
@@ -517,7 +519,7 @@
     },
     "confirm": {
         "deleteSummary": "Delete this summary? Original events will be restored.",
-        "deleteAgenda": "Delete {{n}} selected agenda items? This cannot be undone.",
+        "deleteAgenda": "Delete {{n}} selected mystery log entries? This cannot be undone.",
         "deleteTimeline": "Delete {{n}} selected timeline events?",
         "deleteNpc": "Delete character '{{name}}'? Related data will be removed from all messages.",
         "npcAlreadyExists": "Character '{{existing}}' already exists with the same name or alias as '{{name}}'.\n\nClick OK to open the existing character for editing/merging, click Cancel to abort.",
@@ -554,7 +556,7 @@
         "languageChanged": "Language changed to {{lang}}.\n\nTo switch custom prompts to this language, go to Settings → Custom Prompts and click 'Reset All'. Use per-prompt 'Restore Default' only if you want to keep some custom prompts."
     },
     "tooltip": {
-        "addAgenda": "Add agenda item",
+        "addAgenda": "Add mystery log entry",
         "refreshTimeline": "Refresh timeline",
         "filterLevel": "Filter event level",
         "filterHolder": "Filter by holder",
@@ -641,7 +643,7 @@
     },
     "placeholder": {
         "eventSummary": "Describe this event...",
-        "agendaText": "Enter agenda item...",
+        "agendaText": "Enter mystery log entry...",
         "itemName": "Item name",
         "itemDesc": "e.g.: A gift from Alice on their date",
         "holderName": "Character name",
@@ -692,7 +694,7 @@
         "moodState": "Mood state",
         "affectionDelta": "±Change",
         "affectionTotal": "Total",
-        "agendaContentHint": "Agenda content (use absolute dates for relative times)",
+        "agendaContentHint": "Mystery log content (use absolute dates for relative times)",
         "skillName": "Skill name",
         "skillLevel": "Level (optional)",
         "skillDesc": "Effect description (optional)"
@@ -757,6 +759,7 @@
         "sceneDescription": "Scene Description",
         "mergeSource": "Source Location",
         "mergeTarget": "Target Location",
+        "agendaType": "Type",
         "agendaDate": "Date (optional)",
         "content": "Content",
         "atmosphere": "Atmosphere",
@@ -1056,8 +1059,8 @@
         "floorsSuffix": " and {{n}} more",
         "exitMultiSelect": "Exit multi-select",
         "multiSelectMode": "Multi-select mode",
-        "editAgenda": "Edit Agenda",
-        "addAgenda": "Add Agenda",
+        "editAgenda": "Edit Mystery Log Entry",
+        "addAgenda": "Add Mystery Log Entry",
         "mainCharacters": "Main Characters",
         "starredNpcs": "Starred NPCs",
         "otherNpcs": "Other NPCs",

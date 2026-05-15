@@ -503,7 +503,7 @@
     color: #f87171;
 }
 
-/* === 待办事项 === */
+/* === 悬念簿 === */
 .horae-agenda-section {
     margin-bottom: 16px;
     padding-bottom: 12px;
@@ -529,6 +529,58 @@
 .horae-agenda-list {
     display: flex;
     flex-direction: column;
+    gap: 10px;
+}
+
+.horae-agenda-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.horae-agenda-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 2px 2px 4px;
+}
+
+.horae-agenda-group-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--horae-text-muted);
+}
+
+.horae-agenda-group-plan .horae-agenda-group-title i {
+    color: var(--horae-primary-light);
+}
+
+.horae-agenda-group-mystery .horae-agenda-group-title i {
+    color: var(--horae-accent);
+}
+
+.horae-agenda-group-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--horae-text-muted);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--horae-border);
+}
+
+.horae-agenda-group-list {
+    display: flex;
+    flex-direction: column;
     gap: 4px;
 }
 
@@ -544,12 +596,25 @@
     cursor: pointer;
 }
 
+.horae-agenda-item-plan {
+    border-left-color: var(--horae-primary);
+}
+
+.horae-agenda-item-mystery {
+    border-left-color: var(--horae-accent);
+    background: linear-gradient(90deg, rgba(245, 158, 11, 0.10), rgba(245, 158, 11, 0.02) 30%, transparent 100%), var(--horae-bg);
+}
+
 .horae-agenda-item:hover {
     background: var(--horae-bg-hover);
 }
 
-.horae-agenda-item:hover .horae-agenda-text {
+.horae-agenda-item-plan:hover .horae-agenda-text {
     color: var(--horae-primary);
+}
+
+.horae-agenda-item-mystery:hover .horae-agenda-text {
+    color: var(--horae-accent);
 }
 
 .horae-agenda-body {
@@ -560,8 +625,36 @@
 .horae-agenda-meta {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 6px;
-    margin-bottom: 2px;
+    margin-bottom: 4px;
+}
+
+.horae-agenda-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+}
+
+.horae-agenda-type-badge.plan {
+    color: var(--horae-primary-light);
+    background: rgba(124, 58, 237, 0.16);
+    border: 1px solid rgba(124, 58, 237, 0.3);
+}
+
+.horae-agenda-type-badge.mystery {
+    color: #f8c468;
+    background: rgba(245, 158, 11, 0.14);
+    border: 1px solid rgba(245, 158, 11, 0.28);
+}
+
+.horae-agenda-type-badge i {
+    font-size: 10px;
 }
 
 .horae-agenda-date {
@@ -2193,13 +2286,29 @@
 }
 
 /* 待办编辑行 */
+.horae-editor-row.horae-agenda-edit-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.horae-editor-row.horae-agenda-edit-row .horae-agenda-type-select {
+    flex: 0 0 96px;
+    max-width: 96px;
+    padding: 6px 8px;
+    background: var(--horae-bg);
+    border: 1px solid var(--horae-border);
+    border-radius: var(--horae-radius-sm);
+    color: var(--horae-text);
+    font-size: 12px;
+}
+
 .horae-editor-row.horae-agenda-edit-row input.horae-agenda-date {
     flex: 0 0 90px !important;
     max-width: 90px;
 }
 
 .horae-editor-row.horae-agenda-edit-row input.horae-agenda-text {
-    flex: 1;
+    flex: 1 1 180px;
     min-width: 0;
 }
 
@@ -5947,6 +6056,14 @@ body .horae-context-menu {
     .horae-costume-editor .horae-editor-row input:not(.char-input) { flex: 1; min-width: calc(100% - 120px); }
 
     /* 面板内容可滚动 */
+    .horae-editor-row.horae-agenda-edit-row .horae-agenda-type-select,
+    .horae-editor-row.horae-agenda-edit-row input.horae-agenda-date {
+        flex: 1 1 calc(50% - 4px) !important;
+        max-width: calc(50% - 4px);
+    }
+    .horae-editor-row.horae-agenda-edit-row input.horae-agenda-text {
+        flex: 1 1 100%;
+    }
     .horae-panel-content { max-height: 60vh; overflow-y: auto; }
 
     /* 物品/NPC/关系/待办行操作按钮常显（触屏无 hover） */

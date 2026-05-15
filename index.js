@@ -11,6 +11,7 @@ import { getSlideToggleOptions, saveSettingsDebounced, eventSource, event_types,
 import { slideToggle } from '/lib.js';
 
 import { horaeManager, createEmptyMeta, getItemBaseName } from './core/horaeManager.js';
+import { createAgendaController } from './core/agendaController.js';
 import { vectorManager } from './core/vectorManager.js';
 import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTime, generateTimeReference, getCurrentSystemTime, formatStoryDate, formatFullDateTime, parseStoryDate } from './utils/timeUtils.js';
 import { t, tForLang, initI18n, getLanguage, isZhLocale, setLanguage, detectEffectiveAiLangIsZh, detectEffectiveAiLang } from './core/i18n.js';
@@ -263,9 +264,6 @@ let _vectorEnsureIndexPromise = null;
 let _vectorEnsureIndexChatId = null;
 let itemsMultiSelectMode = false;  // 物品多选模式
 let selectedItems = new Set();     // 选中的物品名称
-let agendaMultiSelectMode = false; // 待办多选模式
-let selectedAgendaIndices = new Set(); // 选中的待办索引
-let agendaLongPressTimer = null;   // 待办长按计时器
 let npcMultiSelectMode = false;     // NPC多选模式
 let selectedNpcs = new Set();       // 选中的NPC名称
 let timelineMultiSelectMode = false; // 时间线多选模式
@@ -280,6 +278,17 @@ const _hideUnhideDebugStats = {
     batches: 0,
 }; // debug stats
 let _slashCommandExecutorPromise = null;
+
+const agendaController = createAgendaController({
+    getContext,
+    createEmptyMeta,
+    normalizeAgendaType: horaeManager.normalizeAgendaType.bind(horaeManager),
+    t,
+    escapeHtml,
+    showToast,
+    closeEditModal,
+    preventModalBubble,
+});
 
 // ============================================
 // 工具函数
@@ -1216,149 +1225,27 @@ function getAllTables() {
 }
 
 // ============================================
-// 待办事项（Agenda）存储 — 跟随当前对话
+// 悬念簿（Agenda）存储 — 跟随当前对话
 // ============================================
 
-/**
- * 获取用户手动创建的待办事项（存储在 chat[0]）
- */
 function getUserAgenda() {
-    const context = getContext();
-    if (!context?.chat?.length) return [];
-
-    const firstMessage = context.chat[0];
-    if (firstMessage?.horae_meta?.agenda) {
-        return firstMessage.horae_meta.agenda;
-    }
-    return [];
+    return agendaController.getUserAgenda();
 }
 
-/**
- * 设置用户手动创建的待办事项（存储在 chat[0]）
- */
 function setUserAgenda(agenda) {
-    const context = getContext();
-    if (!context?.chat?.length) return;
-
-    if (!context.chat[0].horae_meta) {
-        context.chat[0].horae_meta = createEmptyMeta();
-    }
-
-    context.chat[0].horae_meta.agenda = agenda;
-    getContext().saveChat();
+    return agendaController.setUserAgenda(agenda);
 }
 
-/**
- * 获取所有待办事项（用户 + AI写入），统一格式返回
- * 每项: { text, date, source: 'user'|'ai', done, createdAt, _msgIndex? }
- */
 function getAllAgenda() {
-    const all = [];
-
-    // 1. 用户手动创建的
-    const userItems = getUserAgenda();
-    for (const item of userItems) {
-        if (item._deleted) continue;
-        const sourceMsgIndex = Number.isInteger(item._msgIndex) ? item._msgIndex : null;
-        all.push({
-            text: item.text,
-            date: item.date || '',
-            source: item.source || 'user',
-            done: !!item.done,
-            createdAt: item.createdAt || 0,
-            _store: 'user',
-            _msgIndex: sourceMsgIndex,
-            _index: all.length
-        });
-    }
-
-    // 2. AI写入的（存储在各条消息的 horae_meta.agenda）
-    const context = getContext();
-    if (context?.chat) {
-        for (let i = 1; i < context.chat.length; i++) {
-            const meta = context.chat[i].horae_meta;
-            if (meta?.agenda?.length > 0) {
-                for (const item of meta.agenda) {
-                    if (item._deleted) continue;
-                    // 去重：检查是否已存在相同内容
-                    const isDupe = all.some(a => a.text === item.text);
-                    if (!isDupe) {
-                        all.push({
-                            text: item.text,
-                            date: item.date || '',
-                            source: 'ai',
-                            done: !!item.done,
-                            createdAt: item.createdAt || 0,
-                            _store: 'msg',
-                            _msgIndex: i,
-                            _index: all.length
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    return all;
+    return agendaController.getAllAgenda();
 }
 
-/**
- * 根据全局索引切换待办完成状态
- */
 function toggleAgendaDone(agendaItem, done) {
-    const context = getContext();
-    if (!context?.chat) return;
-
-    if (agendaItem._store === 'user') {
-        const agenda = getUserAgenda();
-        // 按text查找（更可靠）
-        const found = agenda.find(a => a.text === agendaItem.text);
-        if (found) {
-            found.done = done;
-            setUserAgenda(agenda);
-        }
-    } else if (agendaItem._store === 'msg') {
-        const msg = context.chat[agendaItem._msgIndex];
-        if (msg?.horae_meta?.agenda) {
-            const found = msg.horae_meta.agenda.find(a => a.text === agendaItem.text);
-            if (found) {
-                found.done = done;
-                getContext().saveChat();
-            }
-        }
-    }
+    return agendaController.toggleAgendaDone(agendaItem, done);
 }
 
-/**
- * 删除指定的待办事项
- */
 function deleteAgendaItem(agendaItem) {
-    const context = getContext();
-    if (!context?.chat) return;
-    const targetText = agendaItem.text;
-
-    // 标记所有匹配项为 _deleted（防止其他消息中同名项复活）
-    if (context.chat[0]?.horae_meta?.agenda) {
-        for (const a of context.chat[0].horae_meta.agenda) {
-            if (a.text === targetText) a._deleted = true;
-        }
-    }
-    for (let i = 1; i < context.chat.length; i++) {
-        const meta = context.chat[i]?.horae_meta;
-        if (meta?.agenda?.length > 0) {
-            for (const a of meta.agenda) {
-                if (a.text === targetText) a._deleted = true;
-            }
-        }
-    }
-
-    // 同时记录已删除文本到 chat[0]，供 rebuild 时参考
-    if (!context.chat[0].horae_meta) context.chat[0].horae_meta = createEmptyMeta();
-    if (!context.chat[0].horae_meta._deletedAgendaTexts) context.chat[0].horae_meta._deletedAgendaTexts = [];
-    if (!context.chat[0].horae_meta._deletedAgendaTexts.includes(targetText)) {
-        context.chat[0].horae_meta._deletedAgendaTexts.push(targetText);
-    }
-    getContext().saveChat();
+    return agendaController.deleteAgendaItem(agendaItem);
 }
 
 /**
@@ -2009,185 +1896,20 @@ function openSummaryEditModal(summaryId, messageId, eventIndex) {
     document.getElementById('horae-summary-edit-cancel').addEventListener('click', () => closeEditModal());
 }
 
-/**
- * 更新待办事项显示
- */
 function updateAgendaDisplay() {
-    const listEl = document.getElementById('horae-agenda-list');
-    if (!listEl) return;
-
-    const agenda = getAllAgenda();
-
-    if (agenda.length === 0) {
-        listEl.innerHTML = `<div class="horae-empty-hint">${t('timeline.noAgenda')}</div>`;
-        // 退出多选模式（如果所有待办被删完了）
-        if (agendaMultiSelectMode) exitAgendaMultiSelect();
-        return;
-    }
-
-    listEl.innerHTML = agenda.map((item, index) => {
-        const sourceIcon = item.source === 'ai'
-            ? `<i class="fa-solid fa-robot horae-agenda-source-ai" title="${t('badge.aiRecord')}"></i>`
-            : `<i class="fa-solid fa-user horae-agenda-source-user" title="${t('badge.userAdded')}"></i>`;
-        const floorDisplay = Number.isInteger(item._msgIndex)
-            ? `<span class="horae-agenda-floor"><i class="fa-solid fa-layer-group"></i> ${t('ui.messageLabel', { id: item._msgIndex })}</span>`
-            : '';
-        const dateDisplay = item.date ? `<span class="horae-agenda-date"><i class="fa-regular fa-calendar"></i> ${escapeHtml(item.date)}</span>` : '';
-
-        // 多选模式：显示 checkbox
-        const checkboxHtml = agendaMultiSelectMode
-            ? `<label class="horae-agenda-select-check"><input type="checkbox" ${selectedAgendaIndices.has(index) ? 'checked' : ''} data-agenda-select="${index}"></label>`
-            : '';
-        const selectedClass = agendaMultiSelectMode && selectedAgendaIndices.has(index) ? ' selected' : '';
-
-        return `
-            <div class="horae-agenda-item${selectedClass}" data-agenda-idx="${index}">
-                ${checkboxHtml}
-                <div class="horae-agenda-body">
-                    <div class="horae-agenda-meta">${sourceIcon}${floorDisplay}${dateDisplay}</div>
-                    <div class="horae-agenda-text">${escapeHtml(item.text)}</div>
-                </div>
-            </div>
-        `;
-    }).join('');
-
-    const currentAgenda = agenda;
-
-    listEl.querySelectorAll('.horae-agenda-item').forEach(el => {
-        const idx = parseInt(el.dataset.agendaIdx);
-
-        if (agendaMultiSelectMode) {
-            // 多选模式：点击切换选中
-            el.addEventListener('click', (e) => {
-                e.stopPropagation();
-                toggleAgendaSelection(idx);
-            });
-        } else {
-            // 普通模式：点击编辑，长按进入多选
-            el.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const item = currentAgenda[idx];
-                if (item) openAgendaEditModal(item);
-            });
-
-            // 长按进入多选模式（仅绑定在 agenda item 上）
-            el.addEventListener('mousedown', (e) => startAgendaLongPress(e, idx));
-            el.addEventListener('touchstart', (e) => startAgendaLongPress(e, idx), { passive: true });
-            el.addEventListener('mouseup', cancelAgendaLongPress);
-            el.addEventListener('mouseleave', cancelAgendaLongPress);
-            el.addEventListener('touchmove', cancelAgendaLongPress, { passive: true });
-            el.addEventListener('touchend', cancelAgendaLongPress);
-            el.addEventListener('touchcancel', cancelAgendaLongPress);
-        }
-    });
-}
-
-// ---- 待办多选模式 ----
-
-function startAgendaLongPress(e, agendaIdx) {
-    if (agendaMultiSelectMode) return;
-    agendaLongPressTimer = setTimeout(() => {
-        enterAgendaMultiSelect(agendaIdx);
-    }, 800);
-}
-
-function cancelAgendaLongPress() {
-    if (agendaLongPressTimer) {
-        clearTimeout(agendaLongPressTimer);
-        agendaLongPressTimer = null;
-    }
-}
-
-function enterAgendaMultiSelect(initialIdx) {
-    agendaMultiSelectMode = true;
-    selectedAgendaIndices.clear();
-    if (initialIdx !== undefined && initialIdx !== null) {
-        selectedAgendaIndices.add(initialIdx);
-    }
-
-    const bar = document.getElementById('horae-agenda-multiselect-bar');
-    if (bar) bar.style.display = 'flex';
-
-    // 隐藏添加按钮
-    const addBtn = document.getElementById('horae-btn-add-agenda');
-    if (addBtn) addBtn.style.display = 'none';
-
-    updateAgendaDisplay();
-    updateAgendaSelectedCount();
-    showToast(t('toast.agendaMultiSelect'), 'info');
+    return agendaController.updateAgendaDisplay();
 }
 
 function exitAgendaMultiSelect() {
-    agendaMultiSelectMode = false;
-    selectedAgendaIndices.clear();
-
-    const bar = document.getElementById('horae-agenda-multiselect-bar');
-    if (bar) bar.style.display = 'none';
-
-    // 恢复添加按钮
-    const addBtn = document.getElementById('horae-btn-add-agenda');
-    if (addBtn) addBtn.style.display = '';
-
-    updateAgendaDisplay();
-}
-
-function toggleAgendaSelection(idx) {
-    if (selectedAgendaIndices.has(idx)) {
-        selectedAgendaIndices.delete(idx);
-    } else {
-        selectedAgendaIndices.add(idx);
-    }
-
-    // 更新该条目的UI
-    const item = document.querySelector(`#horae-agenda-list .horae-agenda-item[data-agenda-idx="${idx}"]`);
-    if (item) {
-        const cb = item.querySelector('input[type="checkbox"]');
-        if (cb) cb.checked = selectedAgendaIndices.has(idx);
-        item.classList.toggle('selected', selectedAgendaIndices.has(idx));
-    }
-
-    updateAgendaSelectedCount();
+    return agendaController.exitAgendaMultiSelect();
 }
 
 function selectAllAgenda() {
-    const items = document.querySelectorAll('#horae-agenda-list .horae-agenda-item');
-    items.forEach(item => {
-        const idx = parseInt(item.dataset.agendaIdx);
-        if (!isNaN(idx)) selectedAgendaIndices.add(idx);
-    });
-    updateAgendaDisplay();
-    updateAgendaSelectedCount();
-}
-
-function updateAgendaSelectedCount() {
-    const countEl = document.getElementById('horae-agenda-selected-count');
-    if (countEl) countEl.textContent = selectedAgendaIndices.size;
+    return agendaController.selectAllAgenda();
 }
 
 async function deleteSelectedAgenda() {
-    if (selectedAgendaIndices.size === 0) {
-        showToast(t('toast.insufficientEvents'), 'warning');
-        return;
-    }
-
-    const confirmed = confirm(t('confirm.deleteAgenda', { n: selectedAgendaIndices.size }));
-    if (!confirmed) return;
-
-    // 获取当前完整的 agenda 列表，按索引倒序删除
-    const agenda = getAllAgenda();
-    const sortedIndices = Array.from(selectedAgendaIndices).sort((a, b) => b - a);
-
-    for (const idx of sortedIndices) {
-        const item = agenda[idx];
-        if (item) {
-            deleteAgendaItem(item);
-        }
-    }
-
-    await getContext().saveChat();
-    showToast(t('toast.saveSuccess'), 'success');
-
-    exitAgendaMultiSelect();
+    return agendaController.deleteSelectedAgenda();
 }
 
 // ============================================
@@ -3000,139 +2722,8 @@ async function deleteSelectedTimelineEvents() {
     updateStatusDisplay();
 }
 
-/**
- * 打开待办事项添加/编辑弹窗
- * @param {Object|null} agendaItem - 编辑时传入完整 agenda 对象，新增时传 null
- */
 function openAgendaEditModal(agendaItem = null) {
-    const isEdit = agendaItem !== null;
-    const currentText = isEdit ? (agendaItem.text || '') : '';
-    const currentDate = isEdit ? (agendaItem.date || '') : '';
-    const title = isEdit ? t('ui.editAgenda') : t('ui.addAgenda');
-
-    closeEditModal();
-
-    const deleteBtn = isEdit ? `
-                    <button id="agenda-modal-delete" class="horae-btn danger">
-                        <i class="fa-solid fa-trash"></i> ${t('common.delete')}
-                    </button>` : '';
-
-    const modalHtml = `
-        <div id="horae-edit-modal" class="horae-modal">
-            <div class="horae-modal-content">
-                <div class="horae-modal-header">
-                    <i class="fa-solid fa-list-check"></i> ${title}
-                </div>
-                <div class="horae-modal-body horae-edit-modal-body">
-                    <div class="horae-edit-field">
-                        <label>${t('label.agendaDate')}</label>
-                        <input type="text" id="agenda-edit-date" value="${escapeHtml(currentDate)}" placeholder="${t('placeholder.agendaDate')}">
-                    </div>
-                    <div class="horae-edit-field">
-                        <label>${t('label.content')}</label>
-                        <textarea id="agenda-edit-text" rows="3" placeholder="${t('placeholder.agendaText')}">${escapeHtml(currentText)}</textarea>
-                    </div>
-                </div>
-                <div class="horae-modal-footer">
-                    <button id="agenda-modal-save" class="horae-btn primary">
-                        <i class="fa-solid fa-check"></i> ${t('common.save')}
-                    </button>
-                    <button id="agenda-modal-cancel" class="horae-btn">
-                        <i class="fa-solid fa-xmark"></i> ${t('common.cancel')}
-                    </button>
-                    ${deleteBtn}
-                </div>
-            </div>
-        </div>
-    `;
-
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    preventModalBubble();
-
-    setTimeout(() => {
-        const textarea = document.getElementById('agenda-edit-text');
-        if (textarea) textarea.focus();
-    }, 100);
-
-    document.getElementById('horae-edit-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'horae-edit-modal') closeEditModal();
-    });
-
-    document.getElementById('agenda-modal-save').addEventListener('click', (e) => {
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        const text = document.getElementById('agenda-edit-text').value.trim();
-        const date = document.getElementById('agenda-edit-date').value.trim();
-        if (!text) {
-            showToast(t('toast.contentEmpty'), 'warning');
-            return;
-        }
-
-        if (isEdit) {
-            // 编辑现有项
-            const context = getContext();
-            if (agendaItem._store === 'user') {
-                const agenda = getUserAgenda();
-                const found = agenda.find(a => a.text === agendaItem.text);
-                if (found) {
-                    found.text = text;
-                    found.date = date;
-                }
-                setUserAgenda(agenda);
-            } else if (agendaItem._store === 'msg' && context?.chat) {
-                const msg = context.chat[agendaItem._msgIndex];
-                if (msg?.horae_meta?.agenda) {
-                    const found = msg.horae_meta.agenda.find(a => a.text === agendaItem.text);
-                    if (found) {
-                        found.text = text;
-                        found.date = date;
-                    }
-                    getContext().saveChat();
-                }
-            }
-        } else {
-            // 新增
-            const agenda = getUserAgenda();
-            const context = getContext();
-            const lastMsgIndex = (context?.chat?.length || 0) - 1;
-            const sourceMsgIndex = lastMsgIndex >= 1 ? lastMsgIndex : null;
-            agenda.push({
-                text,
-                date,
-                source: 'user',
-                done: false,
-                createdAt: Date.now(),
-                ...(sourceMsgIndex !== null ? { _msgIndex: sourceMsgIndex } : {})
-            });
-            setUserAgenda(agenda);
-        }
-
-        closeEditModal();
-        updateAgendaDisplay();
-        showToast(t('toast.saveSuccess'), 'success');
-    });
-
-    document.getElementById('agenda-modal-cancel').addEventListener('click', (e) => {
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        closeEditModal();
-    });
-
-    // 删除按钮（仅编辑模式）
-    const deleteEl = document.getElementById('agenda-modal-delete');
-    if (deleteEl && isEdit) {
-        deleteEl.addEventListener('click', (e) => {
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-
-            if (!confirm(t('confirm.deleteAgenda', { n: 1 }))) return;
-
-            deleteAgendaItem(agendaItem);
-            closeEditModal();
-            updateAgendaDisplay();
-            showToast(t('toast.saveSuccess'), 'info');
-        });
-    }
+    return agendaController.openAgendaEditModal(agendaItem);
 }
 
 /**
@@ -10424,15 +10015,26 @@ function buildDeletedItemsDisplay(deletedItems) {
 }
 
 /**
- * 构建待办事项编辑行
+ * 构建悬念簿编辑行
  */
+function buildAgendaTypeOptions(selectedType = '计划') {
+    const normalizedType = horaeManager.normalizeAgendaType(selectedType);
+    return `
+        <option value="计划" ${normalizedType === '计划' ? 'selected' : ''}>${t('timeline.plan')}</option>
+        <option value="悬念" ${normalizedType === '悬念' ? 'selected' : ''}>${t('timeline.mystery')}</option>
+    `;
+}
+
 function buildAgendaEditorRows(agenda) {
     if (!agenda || agenda.length === 0) {
         return '';
     }
     return agenda.map(item => `
-        <div class="horae-editor-row horae-agenda-edit-row">
-            <input type="text" class="horae-agenda-date" style="flex:0 0 90px;max-width:90px;" value="${escapeHtml(item.date || '')}" placeholder="${t('label.date')}">
+        <div class="horae-editor-row horae-agenda-edit-row" data-agenda-type="${escapeHtml(horaeManager.normalizeAgendaType(item.type))}">
+            <select class="horae-agenda-type-select">
+                ${buildAgendaTypeOptions(item.type)}
+            </select>
+            <input type="text" class="horae-agenda-date" style="flex:0 0 90px;max-width:90px;" value="${escapeHtml(item.date || '')}" placeholder="${t('placeholder.agendaDate')}">
             <input type="text" class="horae-agenda-text" style="flex:1 1 0;min-width:0;" value="${escapeHtml(item.text || '')}" placeholder="${t('placeholder.agendaContentHint')}">
             <button class="horae-delete-btn"><i class="fa-solid fa-xmark"></i></button>
         </div>
@@ -10876,15 +10478,18 @@ function bindPanelEvents(panelEl) {
         bindAffectionInputs(editor);
     });
 
-    // 添加待办事项行
+    // 添加悬念簿行
     panelEl.querySelector('.horae-btn-add-agenda-row')?.addEventListener('click', () => {
         const editor = panelEl.querySelector('.horae-agenda-editor');
         const emptyHint = editor.querySelector('.horae-empty-hint');
         if (emptyHint) emptyHint.remove();
 
         editor.insertAdjacentHTML('beforeend', `
-            <div class="horae-editor-row horae-agenda-edit-row">
-                <input type="text" class="horae-agenda-date" style="flex:0 0 90px;max-width:90px;" value="" placeholder="${t('label.date')}">
+            <div class="horae-editor-row horae-agenda-edit-row" data-agenda-type="计划">
+                <select class="horae-agenda-type-select">
+                    ${buildAgendaTypeOptions('计划')}
+                </select>
+                <input type="text" class="horae-agenda-date" style="flex:0 0 90px;max-width:90px;" value="" placeholder="${t('placeholder.agendaDate')}">
                 <input type="text" class="horae-agenda-text" style="flex:1 1 0;min-width:0;" value="" placeholder="${t('placeholder.agendaContentHint')}">
                 <button class="horae-delete-btn"><i class="fa-solid fa-xmark"></i></button>
             </div>
@@ -11389,15 +10994,16 @@ function savePanelData(panelEl, messageId) {
 
     const agendaItems = [];
     panelEl.querySelectorAll('.horae-agenda-editor .horae-agenda-edit-row').forEach(row => {
+        const typeSelect = row.querySelector('.horae-agenda-type-select');
         const dateInput = row.querySelector('.horae-agenda-date');
         const textInput = row.querySelector('.horae-agenda-text');
         const date = dateInput?.value?.trim() || '';
         const text = textInput?.value?.trim() || '';
         if (text) {
-            // 保留原 source
             const existingAgendaItem = existingMeta?.agenda?.find(a => a.text === text);
+            const type = horaeManager.normalizeAgendaType(typeSelect?.value || row.dataset.agendaType || existingAgendaItem?.type || '计划');
             const source = existingAgendaItem?.source || 'user';
-            agendaItems.push({ date, text, source, done: false });
+            agendaItems.push({ type, date, text, source, done: false });
         }
     });
     if (agendaItems.length > 0) {
@@ -11543,8 +11149,9 @@ function buildHoraeTagFromMeta(meta) {
     if (meta.agenda?.length > 0) {
         for (const item of meta.agenda) {
             if (item.text) {
-                const datePart = item.date ? `${item.date}|` : '';
-                lines.push(`agenda:${datePart}${item.text}`);
+                const agendaType = horaeManager.normalizeAgendaType(item.type);
+                const datePart = item.date || '';
+                lines.push(`hold:${agendaType}|${datePart}|${item.text}`);
             }
         }
     }
@@ -11552,7 +11159,7 @@ function buildHoraeTagFromMeta(meta) {
     if (meta.deletedAgenda?.length > 0) {
         for (const text of meta.deletedAgenda) {
             const normalized = String(text || '').trim();
-            if (normalized) lines.push(`agenda-:${normalized}`);
+            if (normalized) lines.push(`hold-:${normalized}`);
         }
     }
 
@@ -15349,13 +14956,17 @@ async function generateWithDirectApi(prompt, options = {}) {
             role: 'system', content: `【格式字面性声明】
 <horae> 内每一行的结构是：字段名 + 英文冒号 + 值。
 - 字段名（time、location、characters、costume、item、item!、item!!、item-、
-  affection、npc、agenda、agenda-、event）必须原样英文输出，不得翻译为中文。
+  affection、npc、hold、hold-、event）必须原样英文输出，不得翻译为中文。
 - 字段名与值之间的分隔符固定为英文冒号 :，不得替换为中文冒号 ：、竖线 |、
   等号 =、方括号包裹或其他任何形式。
 - 值的内部分隔符（| = @ ~）按各字段原定义使用，不在本条限制内。
 
 正确：
   time:1988/1/1 10:11
+  hold:计划|1988/1/1|明早九点起床后去逛街(1988/1/2 09:00)
+  hold:悬念|1988/1/1|黑袍人警告"三日后再见"，来历不明
+  hold-:明早九点起床后去逛街(1988/1/2 09:00)
+  hold-:黑袍人警告"三日后再见"，来历不明
   event:关键|U在酒馆向艾伦打听黑市商人下落，递出10金币后得知商人明晚在废弃码头出现。
 
 错误：
@@ -15363,6 +14974,8 @@ async function generateWithDirectApi(prompt, options = {}) {
   time：1988/1/1 10:11
   [time] 1988/1/1 10:11
   event|关键|...（字段名后用了竖线而不是冒号）
+  hold:威胁|...（类型只有"计划"和"悬念"，不存在其他类型名）
+  hold-:计划|1988/1/1|黑袍人警告...（hold- 只能填写待核销正文，不带类型和订立日期）
 
 【输出前思考】
 在输出 <horae> 之前，先在 <thinking> 标签内完成分析，覆盖以下判断点（顺序和措辞自由）：
@@ -15377,11 +14990,30 @@ async function generateWithDirectApi(prompt, options = {}) {
    - 排除：临时日用品、环境道具、服装、普通食物。
    - 无变动则明确说"无物品变动"。
 
-3. 待办事项清算
-   - 列出参考状态里所有现存 agenda。
-   - 逐条判断：本楼时间是否已越过其时间节点？是否被执行/取消？
-   - 需核销的，先把原文逐字抄下来准备 agenda-。
-   - 新产生的约定，检查是否与现存条目重复或需要合并。
+3. 悬念簿清算（分两步，先计划后悬念）
+
+   【第一步：计划型清算】
+   - 列出参考状态悬念簿里所有"计划"条目。
+   - 逐条判断：当前时间是否已越过其截止时间？是否被执行/取消？
+   - 需核销的，只把待核销条目的正文部分逐字抄下来准备 hold-。
+   - 新产生的计划，检查是否与现存条目重复或需要合并。
+
+   【第二步：悬念型清算】
+   - 列出参考状态悬念簿里所有"悬念"条目。
+   - 逐条判断：本楼文本中，该悬念是否已被解决、揭露、推翻、或彻底不可能再发生？
+   - 🔴 只有"已经发生了"才能核销。"觉得该发生了""悬太久了"不是核销理由。
+   - 不确定 → 明确写"保留，不动"。
+   - 如果某条悬念有了新进展但未完全解决 → 准备 hold- 旧条目 + hold 更新后的条目。
+
+   【第三步：新增检查】
+   - 本楼是否出现了新的计划/承诺/约定？→ 考虑 hold:计划
+   - 本楼是否出现了以下任一情况？→ 考虑 hold:悬念
+     • 外部威胁/警告/倒计时
+     • 未解之谜/异常线索/可疑现象
+     • 某角色知道了什么但没说破（信息不对称）
+     • 他人对{{user}}的承诺/{{user}}对他人的亏欠
+     • 伏笔/预兆/不祥之兆
+   - 新条目是否与现存条目重复？重复则不写。
 
 4. NPC 与好感度
    - 有无新角色首次登场？
@@ -15398,7 +15030,7 @@ async function generateWithDirectApi(prompt, options = {}) {
 
 7. 格式自检
    - 所有必填字段（time/location/characters/costume）是否齐全？
-   - agenda- 的文本是否逐字复制而非改写？
+   - hold- 的文本是否逐字复制而非改写？
    - event 是否控制在 80-150 字、监控视角、无文学修饰？
 
 思考结束后直接输出 <horae> 和 <horaeevent>，不要在两者之间插入任何解释。
@@ -17772,14 +17404,14 @@ function _importAsInitialState(importObj, chat, options = {}) {
         }
     }
 
-    // 待办事项
+    // 悬念簿
     const seenAgenda = new Set();
     for (const meta of allMetas) {
         if (meta.agenda?.length) {
             if (!target.agenda) target.agenda = [];
             for (const item of meta.agenda) {
                 if (!seenAgenda.has(item.text)) {
-                    target.agenda.push({ ...item });
+                    target.agenda.push({ ...item, type: horaeManager.normalizeAgendaType(item.type) });
                     seenAgenda.add(item.text);
                 }
             }
@@ -17878,13 +17510,17 @@ async function _generateForAiTasks(prompt, opts = {}) {
             role: 'system', content: `【格式字面性声明】
 <horae> 内每一行的结构是：字段名 + 英文冒号 + 值。
 - 字段名（time、location、characters、costume、item、item!、item!!、item-、
-  affection、npc、agenda、agenda-、event）必须原样英文输出，不得翻译为中文。
+  affection、npc、hold、hold-、event）必须原样英文输出，不得翻译为中文。
 - 字段名与值之间的分隔符固定为英文冒号 :，不得替换为中文冒号 ：、竖线 |、
   等号 =、方括号包裹或其他任何形式。
 - 值的内部分隔符（| = @ ~）按各字段原定义使用，不在本条限制内。
 
 正确：
   time:1988/1/1 10:11
+  hold:计划|1988/1/1|明早九点起床后去逛街(1988/1/2 09:00)
+  hold:悬念|1988/1/1|黑袍人警告"三日后再见"，来历不明
+  hold-:明早九点起床后去逛街(1988/1/2 09:00)
+  hold-:黑袍人警告"三日后再见"，来历不明
   event:关键|U在酒馆向艾伦打听黑市商人下落，递出10金币后得知商人明晚在废弃码头出现。
 
 错误：
@@ -17892,6 +17528,8 @@ async function _generateForAiTasks(prompt, opts = {}) {
   time：1988/1/1 10:11
   [time] 1988/1/1 10:11
   event|关键|...（字段名后用了竖线而不是冒号）
+  hold:威胁|...（类型只有"计划"和"悬念"，不存在其他类型名）
+  hold-:计划|1988/1/1|黑袍人警告...（hold- 只能填写待核销正文，不带类型和订立日期）
 
 【输出前思考】
 在输出 <horae> 之前，先在 <thinking> 标签内完成分析，覆盖以下判断点（顺序和措辞自由）：
@@ -17906,11 +17544,14 @@ async function _generateForAiTasks(prompt, opts = {}) {
    - 排除：临时日用品、环境道具、服装、普通食物。
    - 无变动则明确说"无物品变动"。
 
-3. 待办事项清算
-   - 列出参考状态里所有现存 agenda。
-   - 逐条判断：本楼时间是否已越过其时间节点？是否被执行/取消？
-   - 需核销的，先把原文逐字抄下来准备 agenda-。
-   - 新产生的约定，检查是否与现存条目重复或需要合并。
+3. 悬念簿清算（分两步，先计划后悬念）
+   - 列出参考状态悬念簿里所有"计划"条目。
+   - 逐条判断：当前时间是否已越过其截止时间？是否被执行/取消？
+   - 需核销的，只把待核销条目的正文部分逐字抄下来准备 hold-。
+   - 新产生的计划，检查是否与现存条目重复或需要合并。
+   - 列出参考状态悬念簿里所有"悬念"条目。
+   - 逐条判断：该悬念是否已被解决、揭露、推翻、或彻底不可能再发生？
+   - 只有完全解决/失效才能核销；有新进展但未解决时，用 hold- 旧条目 + hold 新条目。
 
 4. NPC 与好感度
    - 有无新角色首次登场？
@@ -17927,7 +17568,7 @@ async function _generateForAiTasks(prompt, opts = {}) {
 
 7. 格式自检
    - 所有必填字段（time/location/characters/costume）是否齐全？
-   - agenda- 的文本是否逐字复制而非改写？
+   - hold- 的文本是否逐字复制而非改写？
    - event 是否控制在 80-150 字、监控视角、无文学修饰？
 
 思考结束后直接输出 <horae> 和 <horaeevent>，不要在两者之间插入任何解释。

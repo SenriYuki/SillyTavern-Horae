@@ -22,9 +22,11 @@
         "noItems": "暂无物品追踪"
     },
     "timeline": {
-        "agenda": "待办事项",
+        "agenda": "悬念簿",
+        "plan": "计划",
+        "mystery": "悬念",
         "events": "事件时间线",
-        "noAgenda": "暂无待办事项",
+        "noAgenda": "暂无悬念簿条目",
         "noEvents": "暂无记录的事件",
         "searchPlaceholder": "搜索事件关键字...",
         "filterAll": "全部",
@@ -517,7 +519,7 @@
     },
     "confirm": {
         "deleteSummary": "删除此总结？原始事件将恢复显示。",
-        "deleteAgenda": "确定删除选中 {{n}} 条待办？此操作不可撤销。",
+        "deleteAgenda": "确定删除选中 {{n}} 条悬念簿条目？此操作不可撤销。",
         "deleteTimeline": "确定删除选中 {{n}} 条剧情轨迹？",
         "deleteNpc": "确定删除角色「{{name}}」？将从所有消息中移除相关数据。",
         "npcAlreadyExists": "已存在角色「{{existing}}」与「{{name}}」名称或别名重复。\n\n点击「确定」打开该角色的编辑面板进行合并修改，点击「取消」放弃添加。",
@@ -554,7 +556,7 @@
         "languageChanged": "语言已切换为 {{lang}}。\n\n如需把自定义提示词切换到对应语言，请前往 设置 → 自定义提示词，点击「全部重置」。只有需要保留部分自定义内容时，才逐个点击「恢复默认」。"
     },
     "tooltip": {
-        "addAgenda": "添加待办",
+        "addAgenda": "添加悬念簿条目",
         "refreshTimeline": "刷新时间线",
         "filterLevel": "筛选事件级别",
         "filterHolder": "筛选持有人",
@@ -641,7 +643,7 @@
     },
     "placeholder": {
         "eventSummary": "描述此事件的摘要...",
-        "agendaText": "输入待办事项，相对时间请标注绝对时间...",
+        "agendaText": "输入悬念簿条目，相对时间请标注绝对时间...",
         "itemName": "物品名称",
         "itemDesc": "如：爱丽丝在约会时赠送的",
         "holderName": "角色名",
@@ -692,7 +694,7 @@
         "moodState": "情绪状态",
         "affectionDelta": "±变化",
         "affectionTotal": "总值",
-        "agendaContentHint": "待办内容（相对时间请标注绝对日期）"
+        "agendaContentHint": "悬念簿内容（相对时间请标注绝对日期）"
     },
     "modal": {
         "compressTitle": "压缩模式",
@@ -754,6 +756,7 @@
         "sceneDescription": "场景描述",
         "mergeSource": "来源地点",
         "mergeTarget": "目标地点",
+        "agendaType": "类型",
         "agendaDate": "订立日期 (选填)",
         "content": "内容",
         "atmosphere": "氛围",
@@ -1053,8 +1056,8 @@
         "floorsSuffix": " 等{{n}}楼",
         "exitMultiSelect": "退出多选",
         "multiSelectMode": "多选模式",
-        "editAgenda": "编辑待办",
-        "addAgenda": "添加待办",
+        "editAgenda": "编辑悬念簿条目",
+        "addAgenda": "添加悬念簿条目",
         "mainCharacters": "主要角色",
         "starredNpcs": "星标NPC",
         "otherNpcs": "其他NPC",

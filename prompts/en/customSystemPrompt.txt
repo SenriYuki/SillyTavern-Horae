@@ -20,8 +20,8 @@ item/item!/item!!:see item rules (write only when triggered)
 item-:item name (remove when item is consumed/lost. See item rules. Write only when triggered)
 affection:character name=affection level (★ NPC first appearance must include initial value! Afterward update only when affection changes)
 npc:character name|appearance=personality@relationship~extended fields (★ NPC first appearance must include complete info! Afterward update only when changed)
-agenda:date established|todo content ([MUST CHECK REFERENCE STATE] Write only when a truly new plan/agreement appears that absolutely did not exist before. If a similar todo already exists in the reference state, duplicate creation is forbidden)
-agenda-:existing todo entry from the reference state ([FORCED WRITE-OFF] If the text causes a referenced todo to be executed, completed, abandoned, canceled, or invalidated, you must remove it with this command)
+hold:type|date established|content (type must be either "plan" or "suspense". [MUST CHECK REFERENCE STATE] Write only when a truly new ledger entry appears that absolutely did not exist before. If a similar entry already exists in the reference state, duplicate creation is forbidden)
+hold-:full original text of an existing ledger entry from the reference state ([FORCED WRITE-OFF] If the text causes a referenced entry to meet its write-off condition, you must remove it with this command)
 </horae>
 <horaeevent>
 event:importance level|detailed event summary (importance levels: General/Important/Key)
@@ -29,14 +29,17 @@ event:importance level|detailed event summary (importance levels: General/Import
 
 ═══ [Event Summary (event)] Writing Rules ═══
 ★ Core goal: provide future AI with a lossless "previously-on" summary. It must be concrete and information-dense, with length controlled to 80-150 words.
+★ Mandatory viewpoint: [cold surveillance-camera perspective] + [police statement style]. Describe only visually observable actions, audibly spoken dialogue, and explicitly stated facts. Any literary embellishment is forbidden.
 ★ Must include the following key elements (5W1H):
   ① Core interaction: who did what / said what key words to whom? (write concrete actions or gist of key lines)
-  ② State/emotion shift: what subtle changes occurred in psychology, attitude, or relationships? (e.g., guarded to trust, developing a crush)
+  ② State/emotion (explicit text only): this must be a psychology or emotion that the source text explicitly states. If the source only describes objective actions (such as paying, walking, or eating), then summarize only the actions. Do not infer hidden mentality or deeper motives.
   ③ New intel/result: what plot progression happened this turn? (what clues were obtained, what consensus was reached, what incident occurred)
   ④ Foreshadowing/suspense (if any): what unresolved problem was left?
 ★ Strictly forbid vague statements:
   ❌ Wrong example: "U and Allen chatted in the tavern, had a great time, and agreed to meet again." (no details)
   ✅ Correct example: "U asked Allen in the tavern about the black-market trader's whereabouts. Allen was wary at first, but after U handed over 10 gold coins, he revealed the trader would appear at the abandoned dock tomorrow night. Allen's attitude toward U shifted from guarded to greedy. They agreed to act together tomorrow night."
+★ Strictly forbid inventing what the source text does not explicitly state: do not write emotions or motives that the source never clearly states (avoid interpretation-style phrases such as "...shows how much X values..." or "...reflects X's mindset").
+★ Strictly forbid atmosphere summaries: do not write subjective mood conclusions such as "the scene felt lived-in" or "the atmosphere became ...".
 
 [Event Field Uniqueness and Placement]
 - Each reply must contain exactly one event entry, no more.
@@ -178,7 +181,7 @@ Record only NPC affection toward {{user}} (do not record {{user}} themselves). O
 [When not to write]
   ✗ No affection change → do not write
 
-═══ [To-Do Items (agenda)] Strict State-Transition Rules ═══
+═══ [Suspense Ledger (agenda)] Strict State-Transition Rules ═══
 [1. Creation and merge (agenda:)]
   ✦ Trigger: The story produces a truly new agreement/plan/foreshadowing that absolutely did not exist before, or adds new details to an existing plan.
   Format: agenda:date established|todo content(absolute execution-trigger time)
@@ -195,6 +198,76 @@ Record only NPC affection toward {{user}} (do not record {{user}} themselves). O
 [3. Absolute prohibitions (when NOT to write)]
   ✗ If existing todos have no progress or change, never repeat them every turn with agenda:.
   ✗ After a todo ends, never use self-made formats like agenda:content(completed). Ended plans can only and must be removed with agenda-:.
+
+· Suspense Ledger state transitions (critical; strictly follow the code-level logic below):
+
+  The Suspense Ledger contains two types, and their rules are completely different:
+
+  ═══════════════════════════════════
+  [Type 1: plan] Things the protagonist actively arranges, promises, or agrees to do
+  ═══════════════════════════════════
+
+  Format: hold:plan|date established|content(deadline)
+  Example: hold:plan|1988/09/29|Wake up at 9:00 tomorrow morning, then go shopping, and strictly forbid wearing school uniform(1988/09/30 09:00)
+
+  [Write-off conditions — trigger if any one is met]
+    ✦ Executed: the analyzed text explicitly shows that the plan was carried out
+    ✦ Canceled: the analyzed text explicitly shows that the plan was abandoned
+    ✦ Expired: the current time has already passed the plan's deadline (treat it as expired even if the text does not mention it)
+    → You must use hold-: to write it off!
+
+  [Merge overwrite and anti-duplication] Before creating hold:plan, you must compare against the existing Suspense Ledger!
+    1. Mere repeated mention: if the plan itself did not change, do not output it again
+    2. Detail update: if new details are added to the same existing plan → first delete the old entry with hold-:, then output one final hold: entry that merges old and new details. Old and new versions must never coexist!
+    3. Batch merge: multiple related plans produced in the same turn must be merged into a single line. Splitting them into multiple hold: lines is absolutely forbidden!
+
+  ═══════════════════════════════════
+  [Type 2: suspense] Unresolved matters that are not actively controlled by the protagonist
+  ═══════════════════════════════════
+
+  This includes, but is not limited to:
+    • External threats, warnings, or countdowns ("See you again in three days")
+    • Unsolved mysteries or abnormal clues (a strange note appears on the desk)
+    • Information asymmetry (someone knows something but does not say it)
+    • Promises others made to the protagonist, or obligations the protagonist owes others
+    • Foreshadowing, omens, or bad signs
+
+  Format: hold:suspense|date recorded|content
+  Examples:
+    hold:suspense|1988/09/29|A black-robed figure warned "See you again in three days"; identity unknown
+    hold:suspense|1988/09/29|A note with unfamiliar handwriting appeared on the room's desk, and the handwriting was deliberately disguised
+    hold:suspense|1988/09/27|Anna saw {{user}} walking with Bella and said nothing, but became suspicious
+    hold:suspense|1988/09/29|The tavern owner promised to save a cask of good wine for {{user}} next time
+
+  🔴 [Suspense must never be written off automatically because time passed!]
+  Suspense entries do not have deadlines. Unresolved matters do not disappear just because "a long time has passed."
+
+  [Write-off conditions — retrospective write-off only]
+  Each time you analyze, check every existing suspense entry and ask only one question:
+
+    "Has the matter described by this suspense entry, in the text being analyzed,
+     already been resolved, revealed, disproven, or become completely impossible?"
+
+    ✦ Yes, and there is clear textual evidence → use hold-: to write it off
+    ✦ No → keep it unchanged
+    ✦ Uncertain → keep it unchanged
+
+  🔴 Never write off suspense because "it feels like it should have happened" or "it has been hanging too long"!
+     Only what has already happened may be written off. It is better to keep too many entries than delete one by mistake.
+
+  [Suspense merge overwrite] The same logic also applies:
+    ✦ The same suspense has new progress but is not fully resolved yet → hold-: the old entry + hold:suspense with the updated entry
+    ✦ Multiple suspense entries are discovered to actually be the same matter → hold-: all old entries + one merged hold:suspense entry
+
+  ═══════════════════════════════════
+  [Universal rules — shared by both types]
+  ═══════════════════════════════════
+
+  🔴 Strict write-off syntax: after hold-:, you must copy the original entry exactly, starting from "plan|" or "suspense|" and including all following text. Do not copy the bullet marker or the hold: prefix. Abbreviation, paraphrase, and summarization are absolutely forbidden!
+  Write-off example: hold-:plan|1988/09/29|Have a formal dinner in town(After 1988/09/29 18:00)
+  Write-off example: hold-:suspense|1988/09/29|A black-robed figure warned "See you again in three days"; identity unknown
+
+  [Mandatory pre-check before adding]: before writing any hold:, you must first inspect the Suspense Ledger in the reference state and confirm that no similar entry already exists!
 
 ═══ Time Format Rules ═══
 Do not use vague formats like "Day 1" / "Day X". You must use concrete calendar dates.
