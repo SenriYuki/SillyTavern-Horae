@@ -131,7 +131,8 @@ const DEFAULT_SETTINGS = {
     // 发送给AI的内容控制
     sendTimeline: true,    // 发送剧情轨迹（关闭则无法计算相对时间）
     contextDepth: 9999,      // 一般级别剧情轨迹数量,默认无限
-    sendCharacters: true,  // 发送角色信息（服装、好感度）
+    sendCharacters: true,  // 发送角色信息（在场角色、服装、NPC信息）
+    sendCharacterAffection: true, // 发送角色好感度（子选项，默认开启）
     sendMainCharacterPersonality: false, // 发送主要角色性格（子选项，默认关闭）
     sendItems: true,       // 发送物品栏
     customTables: [],      // 自定义表格 [{id, name, rows, cols, data, prompt}]
@@ -12053,7 +12054,7 @@ function initSettingsEvents() {
     const _SETTINGS_EXPORT_KEYS = [
         'enabled', 'autoParse', 'autoFillPrevTimelineOnSend', 'injectContext', 'useMainPresetForAiTasks', 'showMessagePanel', 'showTopIcon',
         'injectionDepthSource', 'injectionPosition', 'timelineInjectionMode',
-        'sendTimeline', 'contextDepth', 'sendCharacters', 'sendMainCharacterPersonality', 'sendItems',
+        'sendTimeline', 'contextDepth', 'sendCharacters', 'sendCharacterAffection', 'sendMainCharacterPersonality', 'sendItems',
         'sendLocationMemory', 'sendRelationships', 'sendMood',
         'antiParaphraseMode', 'sideplayMode',
         'aiScanIncludeNpc', 'aiScanIncludeAffection', 'aiScanIncludeScene', 'aiScanIncludeRelationship',
@@ -12227,6 +12228,13 @@ function initSettingsEvents() {
 
     $('#horae-setting-send-characters').on('change', function () {
         settings.sendCharacters = this.checked;
+        saveSettings();
+        horaeManager.init(getContext(), settings);
+        updateTokenCounter();
+    });
+
+    $('#horae-setting-send-character-affection').on('change', function () {
+        settings.sendCharacterAffection = this.checked;
         saveSettings();
         horaeManager.init(getContext(), settings);
         updateTokenCounter();
@@ -13249,6 +13257,7 @@ function syncSettingsToUI() {
     $('#horae-setting-send-timeline').prop('checked', settings.sendTimeline);
     $('#horae-setting-context-depth').val(Number.isFinite(parseInt(settings.contextDepth, 10)) ? Math.max(0, parseInt(settings.contextDepth, 10)) : 15);
     $('#horae-setting-send-characters').prop('checked', settings.sendCharacters);
+    $('#horae-setting-send-character-affection').prop('checked', settings.sendCharacterAffection !== false);
     $('#horae-setting-send-main-character-personality').prop('checked', !!settings.sendMainCharacterPersonality);
     $('#horae-setting-send-items').prop('checked', settings.sendItems);
     console.log(
@@ -14926,6 +14935,14 @@ async function generateWithDirectApi(prompt, options = {}) {
 
     // 酒馆助手部分
     const orderedPrompts = [];
+    // const orderedPrompts = [
+    //     "world_info_before",
+    //     "char_description",
+    //     "scenario",
+    //     "world_info_after",
+    //     "chat_history",
+    //     "user_input",
+    // ]
     const skipInjectionMarkers = [
         _createNoContextInjectionMarker(),
         _createNoTimelineInjectionMarker(),
@@ -15059,7 +15076,12 @@ event 唯一且只放在 <horaeevent> 内。
                 source: "openai",   // 根据你的接口类型选择
             },
             ordered_prompts: orderedPrompts,
-            should_stream: shouldStream
+            should_stream: shouldStream,
+            // overrides: {
+            //     chat_history: {
+            //         with_depth_entries: true,
+            //     },
+            // },
         })
 
         console.log(resp, '[Horae] 副API生成结果');

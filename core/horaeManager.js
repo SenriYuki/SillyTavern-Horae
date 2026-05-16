@@ -626,6 +626,7 @@ class HoraeManager {
         const includeTimeline = options?.includeTimeline !== false;
         const sendTimeline = includeTimeline && this.settings?.sendTimeline !== false;
         const sendCharacters = this.settings?.sendCharacters !== false;
+        const sendCharacterAffection = sendCharacters && this.settings?.sendCharacterAffection !== false;
         const sendItems = this.settings?.sendItems !== false;
 
         // 时间
@@ -748,13 +749,15 @@ class HoraeManager {
         }
 
         // 好感度
-        if (sendCharacters) {
+        if (sendCharacterAffection) {
             const affections = Object.entries(state.affection).filter(([_, v]) => v !== 0);
             if (affections.length > 0) {
                 const affStr = affections.map(([k, v]) => `${k}:${v > 0 ? '+' : ''}${v}`).join('|');
                 lines.push(`[${L('好感', 'Affection', '好感度', '호감도', 'Расположение')}|${affStr}]`);
             }
+        }
 
+        if (sendCharacters) {
             // NPC信息
             const npcs = Object.entries(state.npcs);
             if (npcs.length > 0) {

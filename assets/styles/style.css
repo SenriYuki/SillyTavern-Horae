@@ -56,6 +56,16 @@
     border-color: var(--horae-border) !important;
 }
 
+/* 楼层面板按钮隔离，避免宿主全局 button 样式污染 */
+.horae-message-panel button {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    font: inherit !important;
+}
+
 /* 表格单元格input透明 */
 #horae_drawer .horae-excel-table td input:not([type="checkbox"]):not([type="radio"]),
 #horae_drawer .horae-excel-table th input:not([type="checkbox"]):not([type="radio"]) {
@@ -1457,18 +1467,18 @@
 }
 
 .horae-panel-actions button {
-    background: transparent;
-    border: none;
-    color: var(--horae-text-muted);
-    padding: 4px 8px;
+    background: transparent !important;
+    border: none !important;
+    color: var(--horae-text-muted) !important;
+    padding: 4px 8px !important;
     cursor: pointer;
-    border-radius: var(--horae-radius-sm);
+    border-radius: var(--horae-radius-sm) !important;
     transition: all 0.2s ease;
 }
 
 .horae-panel-actions button:hover {
-    background: var(--horae-bg-hover);
-    color: var(--horae-primary-light);
+    background: var(--horae-bg-hover) !important;
+    color: var(--horae-primary-light) !important;
 }
 
 /* 番外/小剧场 */
@@ -1544,17 +1554,19 @@
 
 .horae-panel-value input[type="text"] {
     flex: 1;
-    padding: 6px 10px;
-    background: var(--horae-bg);
-    border: 1px solid var(--horae-border);
-    border-radius: var(--horae-radius-sm);
-    color: var(--horae-text);
-    font-size: 13px;
+    padding: 6px 10px !important;
+    background: var(--horae-bg) !important;
+    border: 1px solid var(--horae-border) !important;
+    border-radius: var(--horae-radius-sm) !important;
+    color: var(--horae-text) !important;
+    font-size: 13px !important;
+    box-shadow: none !important;
 }
 
 .horae-panel-value input[type="text"]:focus {
-    border-color: var(--horae-primary);
-    outline: none;
+    border-color: var(--horae-primary) !important;
+    outline: none !important;
+    box-shadow: none !important;
 }
 
 /* 日期时间输入 */
@@ -1582,12 +1594,13 @@
 
 .horae-editor-row input {
     flex: 1;
-    padding: 6px 10px;
-    background: var(--horae-bg);
-    border: 1px solid var(--horae-border);
-    border-radius: var(--horae-radius-sm);
-    color: var(--horae-text);
-    font-size: 12px;
+    padding: 6px 10px !important;
+    background: var(--horae-bg) !important;
+    border: 1px solid var(--horae-border) !important;
+    border-radius: var(--horae-radius-sm) !important;
+    color: var(--horae-text) !important;
+    font-size: 12px !important;
+    box-shadow: none !important;
 }
 
 .horae-editor-row .char-input {
@@ -1614,12 +1627,13 @@
 .horae-item-row .horae-item-importance {
     width: 70px;
     min-width: 70px;
-    padding: 4px 6px;
-    background: var(--horae-bg);
-    border: 1px solid var(--horae-border);
-    border-radius: var(--horae-radius-sm);
-    color: var(--horae-text);
-    font-size: 11px;
+    padding: 4px 6px !important;
+    background: var(--horae-bg) !important;
+    border: 1px solid var(--horae-border) !important;
+    border-radius: var(--horae-radius-sm) !important;
+    color: var(--horae-text) !important;
+    font-size: 11px !important;
+    box-shadow: none !important;
 }
 
 .horae-item-row .horae-item-importance option[value="!"] {
@@ -1649,11 +1663,11 @@
 }
 
 .horae-editor-row .horae-delete-btn {
-    background: transparent;
-    border: none;
-    color: var(--horae-danger);
+    background: transparent !important;
+    border: none !important;
+    color: var(--horae-danger) !important;
     cursor: pointer;
-    padding: 4px;
+    padding: 4px !important;
 }
 
 /* 好感度编辑行 */
@@ -1702,13 +1716,13 @@
 .horae-btn-add-agenda-row,
 .horae-btn-add-rep-subitem {
     align-self: flex-start;
-    background: transparent;
-    border: 1px dashed var(--horae-border);
-    color: var(--horae-text-muted);
-    padding: 4px 12px;
-    border-radius: var(--horae-radius-sm);
+    background: transparent !important;
+    border: 1px dashed var(--horae-border) !important;
+    color: var(--horae-text-muted) !important;
+    padding: 4px 12px !important;
+    border-radius: var(--horae-radius-sm) !important;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 12px !important;
     display: flex;
     align-items: center;
     gap: 4px;
@@ -1721,8 +1735,8 @@
 .horae-btn-add-mood:hover,
 .horae-btn-add-agenda-row:hover,
 .horae-btn-add-rep-subitem:hover {
-    border-color: var(--horae-primary);
-    color: var(--horae-primary-light);
+    border-color: var(--horae-primary) !important;
+    color: var(--horae-primary-light) !important;
 }
 
 /* 事件编辑器 */
@@ -1744,34 +1758,37 @@
 }
 
 .horae-event-header select {
-    padding: 6px 10px;
-    background: var(--horae-bg);
-    border: 1px solid var(--horae-border);
-    border-radius: var(--horae-radius-sm);
-    color: var(--horae-text);
-    font-size: 12px;
+    padding: 6px 10px !important;
+    background: var(--horae-bg) !important;
+    border: 1px solid var(--horae-border) !important;
+    border-radius: var(--horae-radius-sm) !important;
+    color: var(--horae-text) !important;
+    font-size: 12px !important;
     min-width: 96px;
     flex: 0 0 auto;
+    box-shadow: none !important;
 }
 
 .horae-event-editor textarea {
     width: 100%;
     min-height: 72px;
-    padding: 6px 10px;
-    background: var(--horae-bg);
-    border: 1px solid var(--horae-border);
-    border-radius: var(--horae-radius-sm);
-    color: var(--horae-text);
-    font-size: 12px;
+    padding: 6px 10px !important;
+    background: var(--horae-bg) !important;
+    border: 1px solid var(--horae-border) !important;
+    border-radius: var(--horae-radius-sm) !important;
+    color: var(--horae-text) !important;
+    font-size: 12px !important;
     line-height: 1.5;
     overflow-y: hidden;
     resize: vertical;
+    box-shadow: none !important;
 }
 
 .horae-event-editor textarea:focus,
 .horae-event-header select:focus {
-    border-color: var(--horae-primary);
-    outline: none;
+    border-color: var(--horae-primary) !important;
+    outline: none !important;
+    box-shadow: none !important;
 }
 
 /* 重新扫描区域 */
@@ -1846,10 +1863,21 @@
 }
 
 .horae-panel-footer .horae-btn {
-    padding: 6px 16px;
-    font-size: 12px;
+    padding: 6px 16px !important;
+    font-size: 12px !important;
     white-space: nowrap;
     flex-shrink: 0;
+}
+
+.horae-panel-footer .horae-btn:not(.horae-btn-save) {
+    background: var(--horae-bg-secondary) !important;
+    border: 1px solid var(--horae-border) !important;
+    color: var(--horae-text) !important;
+    box-shadow: none !important;
+}
+
+.horae-panel-footer .horae-btn:not(.horae-btn-save):hover {
+    background: var(--horae-bg-hover) !important;
 }
 
 .horae-btn-save {
