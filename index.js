@@ -24,6 +24,7 @@ const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
 const VERSION = '1.13.3B';
+const DEFAULT_VECTOR_STRIP_TAGS = 'dream_status,Episode,details,think,thinking,Thinking';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -237,7 +238,7 @@ const DEFAULT_SETTINGS = {
     vectorThreshold: 0.72,
     vectorFullTextCount: 3,
     vectorFullTextThreshold: 0.9,
-    vectorStripTags: 'dream_status,Episode,details,think,thinking,Thinking',
+    vectorStripTags: DEFAULT_VECTOR_STRIP_TAGS,
 };
 
 const PROMPT_SETTING_KEYS = [
@@ -718,6 +719,24 @@ function _normalizeVectorRecallPresetsInPlace() {
     return changed;
 }
 
+function _normalizeVectorStripTagsInPlace(saved = {}) {
+    let changed = false;
+    const normalized = typeof settings.vectorStripTags === 'string' ? settings.vectorStripTags.trim() : '';
+    if (settings.vectorStripTags !== normalized) {
+        settings.vectorStripTags = normalized;
+        changed = true;
+    }
+    if (saved?._vectorStripTagsDefaultMigrated !== true && !normalized) {
+        settings.vectorStripTags = DEFAULT_VECTOR_STRIP_TAGS;
+        changed = true;
+    }
+    if (settings._vectorStripTagsDefaultMigrated !== true) {
+        settings._vectorStripTagsDefaultMigrated = true;
+        changed = true;
+    }
+    return changed;
+}
+
 function _normalizeRpgBarConfigInPlace() {
     if (!Array.isArray(settings.rpgBarConfig)) {
         settings.rpgBarConfig = [];
@@ -904,7 +923,7 @@ function loadSettings() {
         settings.autoFillPrevTimelineOnSend = true;
         changed = true;
     }
-    if (_normalizeAutoSummarySettingsInPlace(saved || {}) || _normalizePromptSettingsInPlace() || _normalizeVectorRecallPresetsInPlace() || _normalizeRpgSettingsInPlace()) changed = true;
+    if (_normalizeAutoSummarySettingsInPlace(saved || {}) || _normalizePromptSettingsInPlace() || _normalizeVectorRecallPresetsInPlace() || _normalizeVectorStripTagsInPlace(saved || {}) || _normalizeRpgSettingsInPlace()) changed = true;
     if (_migrateLegacyVectorSettings(settings)) changed = true;
     console.log(
         `[Horae][MainPersonality] loadSettings: saved=${saved?.sendMainCharacterPersonality} merged=${!!settings.sendMainCharacterPersonality} sendCharacters=${settings.sendCharacters !== false} pinnedNpcs=${JSON.stringify(settings.pinnedNpcs || [])}`
