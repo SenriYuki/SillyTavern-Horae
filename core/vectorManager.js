@@ -21,6 +21,7 @@ const MODEL_CONFIG = {
 };
 
 const QUERY_REWRITE_PROMPT_KEY = 'vectorQueryRewriteSystemPrompt';
+const QUERY_REWRITE_TAIL_PROMPT_KEY = 'vectorQueryRewriteTailPrompt';
 const QUERY_REWRITE_CONTEXT_LIMIT = 4;
 const QUERY_REWRITE_MAX_QUERIES = 6;
 const QUERY_REWRITE_MAX_QUERY_LENGTH = 220;
@@ -2372,11 +2373,12 @@ export class VectorManager {
         if (!config.apiKey) throw new Error('Query Rewrite API 密钥未配置，且无法复用 Embedding API 密钥');
         if (!config.model) throw new Error('Query Rewrite 模型未配置');
 
-        const messages = this._buildQueryRewriteMessages(chat, settings);
-        const latestUserMessage = messages[messages.length - 1];
+        const conversationMessages = this._collectQueryRewriteConversation(chat, settings, QUERY_REWRITE_CONTEXT_LIMIT);
+        const latestUserMessage = conversationMessages[conversationMessages.length - 1];
         if (!latestUserMessage || latestUserMessage.role !== 'user') {
             throw new Error('未找到可用于 Query Rewrite 的最新用户消息');
         }
+        const messages = this._buildQueryRewriteMessages(chat, settings, conversationMessages);
 
         const body = {
             model: config.model,
@@ -2558,13 +2560,20 @@ export class VectorManager {
         return base ? `${base}/chat/completions` : '';
     }
 
-    _buildQueryRewriteMessages(chat, settings) {
+    _buildQueryRewriteMessages(chat, settings, conversationMessages = null) {
         const systemPrompt = this._getQueryRewriteSystemPrompt(settings);
+        const tailPrompt = this._getQueryRewriteTailPrompt(settings);
         const messages = [];
         if (systemPrompt) {
             messages.push({ role: 'system', content: systemPrompt });
         }
-        messages.push(...this._collectQueryRewriteConversation(chat, settings, QUERY_REWRITE_CONTEXT_LIMIT));
+        const conversation = Array.isArray(conversationMessages)
+            ? conversationMessages
+            : this._collectQueryRewriteConversation(chat, settings, QUERY_REWRITE_CONTEXT_LIMIT);
+        messages.push(...conversation);
+        if (tailPrompt) {
+            messages.push({ role: 'user', content: tailPrompt });
+        }
         return messages;
     }
 
@@ -2572,6 +2581,13 @@ export class VectorManager {
         const lang = detectEffectiveAiLang(settings);
         return getPromptDefaultSync(lang, QUERY_REWRITE_PROMPT_KEY)
             || getPromptDefaultSync('en', QUERY_REWRITE_PROMPT_KEY)
+            || '';
+    }
+
+    _getQueryRewriteTailPrompt(settings) {
+        const lang = detectEffectiveAiLang(settings);
+        return getPromptDefaultSync(lang, QUERY_REWRITE_TAIL_PROMPT_KEY)
+            || getPromptDefaultSync('en', QUERY_REWRITE_TAIL_PROMPT_KEY)
             || '';
     }
 

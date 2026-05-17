@@ -20,6 +20,7 @@ const _promptFileMap = Object.freeze({
     customMoodPrompt: 'customMoodPrompt.txt',
     customRpgPrompt: 'customRpgPrompt.txt',
     vectorQueryRewriteSystemPrompt: 'vectorQueryRewriteSystemPrompt.txt',
+    vectorQueryRewriteTailPrompt: 'vectorQueryRewriteTailPrompt.txt',
 });
 
 function _normalizeLf(text) {
