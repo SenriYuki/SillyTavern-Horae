@@ -10,7 +10,7 @@
                 <i class="fa-regular fa-clock"></i>
                 Horae 时光记忆
             </div>
-            <span class="horae-version">1.13.2B</span>
+            <span class="horae-version">1.13.3B</span>
         </div>
         
         <!-- 标签页导航 -->
@@ -1137,6 +1137,39 @@
                                     </button>
                                 </div>
                             </div>
+                            <div id="horae-vector-api-query-rewrite-section" class="horae-vector-setting-group" style="display: none;">
+                                <div class="horae-vector-setting-group-title" data-i18n="vector.queryRewriteSettings">Query 重写</div>
+                                <div class="horae-setting-item">
+                                    <label data-i18n="vector.enableQueryRewrite">
+                                        <input type="checkbox" id="horae-setting-vector-query-rewrite-enabled">
+                                        启用 Query 重写
+                                    </label>
+                                </div>
+                                <div class="horae-setting-item">
+                                    <label data-i18n="vector.queryRewriteUrl">
+                                        Query Rewrite API 地址（可选）
+                                        <input type="text" id="horae-setting-vector-query-rewrite-url" placeholder="留空则复用 Embedding API 地址">
+                                    </label>
+                                </div>
+                                <div class="horae-setting-item">
+                                    <label data-i18n="vector.queryRewriteKey">
+                                        Query Rewrite API 密钥（可选）
+                                        <input type="password" id="horae-setting-vector-query-rewrite-key" placeholder="留空则复用 Embedding API 密钥">
+                                    </label>
+                                </div>
+                                <div class="horae-setting-item">
+                                    <label data-i18n="vector.queryRewriteModel">Query Rewrite 模型</label>
+                                    <div style="display:flex; gap:4px; align-items:center;">
+                                        <select id="horae-setting-vector-query-rewrite-model-select" class="horae-edit-field" style="flex:1; min-width:0;">
+                                            <option value="">-- 请先拉取模型列表 --</option>
+                                        </select>
+                                        <button id="horae-btn-fetch-query-rewrite-models" class="horae-btn" style="white-space:nowrap; padding:4px 8px;" data-i18n-title="tooltip.fetchModels" title="">
+                                            <i class="fa-solid fa-arrows-rotate"></i>
+                                        </button>
+                                    </div>
+                                    <span class="horae-setting-sub-hint" data-i18n="vector.queryRewriteFetchHint">可单独填写 Query Rewrite 的地址和密钥；留空时会复用上面的 Embedding API 配置，再点击拉取模型列表。</span>
+                                </div>
+                            </div>
                             <div class="horae-vector-setting-group">
                                 <div class="horae-setting-item">
                                     <label data-i18n="vector.recallPreset">召回参数预设</label>
@@ -1563,7 +1596,7 @@
                 </div>
                 
                 <div class="horae-about">
-                    <p>Horae v1.13.2B | 作者: SenriYuki，柏柏</p>
+                    <p>Horae v1.13.3B | 作者: SenriYuki，柏柏</p>
                     <p>基于时间锚点的AI记忆增强系统</p>
                 </div>
             </div>

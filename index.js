@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki，柏柏
- * 版本: 1.13.2B
+ * 版本: 1.13.3B
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -23,7 +23,7 @@ import { initPromptDefaults, ensurePromptDefaults, getPromptDefaultSync } from '
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.13.2B';
+const VERSION = '1.13.3B';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -218,6 +218,10 @@ const DEFAULT_SETTINGS = {
     vectorApiUrl: 'https://api.siliconflow.cn/v1',                  // OpenAI 兼容 embedding API 地址
     vectorApiKey: '',                  // API 密钥
     vectorApiModel: 'Qwen/Qwen3-Embedding-8B',                // 远程 embedding 模型名称
+    vectorQueryRewriteEnabled: false,   // 启用 Query 重写
+    vectorQueryRewriteUrl: '',         // Query 重写 API 地址（留空=复用 embedding）
+    vectorQueryRewriteKey: '',         // Query 重写 API 密钥（留空=复用 embedding）
+    vectorQueryRewriteModel: 'Qwen/Qwen3.5-27B',       // Query 重写模型名称（留空=关闭）
     vectorPureMode: true,             // 纯向量模式（强模型优化，关闭关键词启发式）
     vectorRerankEnabled: true,        // 启用 Rerank 二次排序
     vectorRerankFullText: true,       // Rerank 使用全文而非摘要（需要长上下文模型如 Qwen3-Reranker）
@@ -12906,6 +12910,30 @@ function initSettingsEvents() {
         }
     });
 
+    $('#horae-setting-vector-query-rewrite-enabled').on('change', function () {
+        settings.vectorQueryRewriteEnabled = this.checked;
+        vectorManager.clearRecallCache('query-rewrite-setting-changed');
+        saveSettings();
+    });
+
+    $('#horae-setting-vector-query-rewrite-url').on('change', function () {
+        settings.vectorQueryRewriteUrl = this.value.trim();
+        vectorManager.clearRecallCache('query-rewrite-setting-changed');
+        saveSettings();
+    });
+
+    $('#horae-setting-vector-query-rewrite-key').on('change', function () {
+        settings.vectorQueryRewriteKey = this.value.trim();
+        vectorManager.clearRecallCache('query-rewrite-setting-changed');
+        saveSettings();
+    });
+
+    $('#horae-setting-vector-query-rewrite-model-select').on('change', function () {
+        settings.vectorQueryRewriteModel = this.value.trim();
+        vectorManager.clearRecallCache('query-rewrite-setting-changed');
+        saveSettings();
+    });
+
     $('#horae-setting-vector-pure-mode').on('change', function () {
         settings.vectorPureMode = this.checked;
         saveSettings();
@@ -12928,6 +12956,7 @@ function initSettingsEvents() {
     });
 
     $('#horae-btn-fetch-embed-models').on('click', fetchEmbeddingModels);
+    $('#horae-btn-fetch-query-rewrite-models').on('click', fetchQueryRewriteModels);
     $('#horae-btn-fetch-rerank-models').on('click', fetchRerankModels);
     $('#horae-btn-test-vector-api').on('click', testVectorApiConnection);
 
@@ -13088,8 +13117,24 @@ function _syncVectorSourceUI() {
     const isApi = settings.vectorSource === 'api';
     $('#horae-vector-local-options').toggle(!isApi);
     $('#horae-vector-api-options').toggle(isApi);
+    $('#horae-vector-api-query-rewrite-section').toggle(isApi);
     $('#horae-vector-api-recall-options').toggle(isApi);
     $('#horae-vector-api-rerank-section').toggle(isApi);
+}
+
+function _upsertModelSelectValue(selectId, value) {
+    const sel = document.getElementById(selectId);
+    const nextValue = String(value || '').trim();
+    if (!sel || !nextValue) return;
+
+    const exists = Array.from(sel.options || []).some(opt => opt.value === nextValue);
+    if (!exists) {
+        const opt = document.createElement('option');
+        opt.value = nextValue;
+        opt.textContent = nextValue;
+        sel.prepend(opt);
+    }
+    sel.value = nextValue;
 }
 
 function _renderVectorRecallPresetSelect() {
@@ -13175,7 +13220,7 @@ function _renderVectorDebugInfo() {
         } else if (info.rerank.enabled && Array.isArray(info.rerank.output)) {
             const rerankRows = info.rerank.output.map(r => `<tr class="${r.passed ? '' : 'horae-vector-debug-dropped'}"><td>${r.messageIndex ?? '-'}</td><td>${_formatDebugSimilarity(r.relevance)}</td><td>${r.passed ? '✓' : '✗'}</td></tr>`).join('');
             rerankBlock = `
-                <div class="horae-vector-debug-row"><span class="horae-vector-debug-key">${escape(t('vector.debugRerankInfo'))}</span><span class="horae-vector-debug-val">minScore=${_formatDebugSimilarity(info.rerank.minScore)} / fullText=${info.rerank.useFullText} / passed=${info.rerank.passedCount}/${info.rerank.output.length}${info.rerank.retainedTop1 ? ' / Top1 retained' : ''}</span></div>
+                <div class="horae-vector-debug-row"><span class="horae-vector-debug-key">${escape(t('vector.debugRerankInfo'))}</span><span class="horae-vector-debug-val">minScore=${_formatDebugSimilarity(info.rerank.minScore)} / fullText=${info.rerank.useFullText} / passed=${info.rerank.passedCount}/${info.rerank.output.length}</span></div>
                 <table class="horae-vector-debug-table"><thead><tr><th>#</th><th>${escape(t('vector.debugColScore'))}</th><th>${escape(t('vector.debugColPassed'))}</th></tr></thead><tbody>${rerankRows}</tbody></table>
             `;
         }
@@ -13407,34 +13452,16 @@ function syncSettingsToUI() {
     $('#horae-setting-vector-dtype').val(settings.vectorDtype || 'q8');
     $('#horae-setting-vector-api-url').val(settings.vectorApiUrl || '');
     $('#horae-setting-vector-api-key').val(settings.vectorApiKey || '');
-    // Embedding 模型：若有保存值则初始化 select 选项
-    if (settings.vectorApiModel) {
-        const _embSel = document.getElementById('horae-setting-vector-api-model');
-        if (_embSel) {
-            _embSel.innerHTML = '';
-            const opt = document.createElement('option');
-            opt.value = settings.vectorApiModel;
-            opt.textContent = settings.vectorApiModel;
-            opt.selected = true;
-            _embSel.appendChild(opt);
-        }
-    }
+    $('#horae-setting-vector-query-rewrite-enabled').prop('checked', !!settings.vectorQueryRewriteEnabled);
+    $('#horae-setting-vector-query-rewrite-url').val(settings.vectorQueryRewriteUrl || '');
+    $('#horae-setting-vector-query-rewrite-key').val(settings.vectorQueryRewriteKey || '');
+    _upsertModelSelectValue('horae-setting-vector-api-model', settings.vectorApiModel || '');
+    _upsertModelSelectValue('horae-setting-vector-query-rewrite-model-select', settings.vectorQueryRewriteModel || '');
     $('#horae-setting-vector-pure-mode').prop('checked', !!settings.vectorPureMode);
     $('#horae-setting-vector-rerank-enabled').prop('checked', !!settings.vectorRerankEnabled);
     $('#horae-vector-rerank-options').toggle(!!settings.vectorRerankEnabled);
     $('#horae-setting-vector-rerank-fulltext').prop('checked', !!settings.vectorRerankFullText);
-    // Rerank 模型：若有保存值则初始化 select 选项
-    if (settings.vectorRerankModel) {
-        const _rrSel = document.getElementById('horae-setting-vector-rerank-model');
-        if (_rrSel) {
-            _rrSel.innerHTML = '';
-            const opt = document.createElement('option');
-            opt.value = settings.vectorRerankModel;
-            opt.textContent = settings.vectorRerankModel;
-            opt.selected = true;
-            _rrSel.appendChild(opt);
-        }
-    }
+    _upsertModelSelectValue('horae-setting-vector-rerank-model', settings.vectorRerankModel || '');
     $('#horae-setting-vector-rerank-url').val(settings.vectorRerankUrl || '');
     $('#horae-setting-vector-rerank-key').val(settings.vectorRerankKey || '');
     $('#horae-setting-vector-rerank-candidates').val(settings.vectorRerankCandidates ?? 25);
@@ -14539,7 +14566,7 @@ function _buildEmbeddingRequest(rawUrl, apiKey, model, texts) {
 }
 
 /** 通用：从端点拉取模型列表 */
-async function _fetchModelList(rawUrl, apiKey) {
+async function _fetchModelList(rawUrl, apiKey, purpose = 'any') {
     if (!rawUrl || !apiKey) throw new Error('请先填写 API 地址和密钥');
     const isGemini = _isGeminiEmbeddingEndpoint(rawUrl);
     if (isGemini) {
@@ -14561,7 +14588,14 @@ async function _fetchModelList(rawUrl, apiKey) {
         return (data.models || [])
             .filter(m => {
                 const methods = m.supportedGenerationMethods || [];
-                return methods.length === 0 || methods.some(x => /embedContent|batchEmbedContents/i.test(x));
+                if (methods.length === 0) return true;
+                if (purpose === 'embedding') {
+                    return methods.some(x => /embedContent|batchEmbedContents/i.test(x));
+                }
+                if (purpose === 'generation') {
+                    return methods.some(x => /generateContent|streamGenerateContent/i.test(x));
+                }
+                return true;
             })
             .map(m => (m.name || '').replace(/^models\//, '') || m.displayName)
             .filter(Boolean);
@@ -14583,6 +14617,29 @@ async function _fetchModelList(rawUrl, apiKey) {
     return (data.data || data || []).map(m => m.id || m.name).filter(Boolean);
 }
 
+function _populateModelSelect(sel, models, prev = '') {
+    if (!sel) return;
+
+    const uniqueModels = [...new Set((models || []).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
+    sel.innerHTML = '';
+
+    for (const model of uniqueModels) {
+        const opt = document.createElement('option');
+        opt.value = model;
+        opt.textContent = model;
+        if (model === prev) opt.selected = true;
+        sel.appendChild(opt);
+    }
+
+    if (prev && !uniqueModels.includes(prev)) {
+        const opt = document.createElement('option');
+        opt.value = prev;
+        opt.textContent = t('toast.modelManual', { name: prev });
+        opt.selected = true;
+        sel.prepend(opt);
+    }
+}
+
 /** 拉取 Embedding 模型列表并填充 <select> */
 async function fetchEmbeddingModels() {
     const btn = document.getElementById('horae-btn-fetch-embed-models');
@@ -14591,21 +14648,34 @@ async function fetchEmbeddingModels() {
     try {
         const url = ($('#horae-setting-vector-api-url').val() || settings.vectorApiUrl || '').trim();
         const key = ($('#horae-setting-vector-api-key').val() || settings.vectorApiKey || '').trim();
-        const models = await _fetchModelList(url, key);
+        const models = await _fetchModelList(url, key, 'embedding');
         if (!models.length) { showToast(t('toast.noModelsFetched'), 'warning'); return; }
         const prev = settings.vectorApiModel || '';
-        sel.innerHTML = '';
-        for (const m of models.sort()) {
-            const opt = document.createElement('option');
-            opt.value = m; opt.textContent = m;
-            if (m === prev) opt.selected = true;
-            sel.appendChild(opt);
-        }
-        if (prev && !models.includes(prev)) {
-            const opt = document.createElement('option');
-            opt.value = prev; opt.textContent = t('toast.modelManual', { name: prev });
-            opt.selected = true; sel.prepend(opt);
-        }
+        _populateModelSelect(sel, models, prev);
+        showToast(t('toast.fetchedModels', { n: models.length }), 'success');
+    } catch (err) {
+        showToast(t('toast.fetchModelsFailed', { error: err.message || err }), 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i>'; }
+    }
+}
+
+/** 拉取 Query 重写模型列表并填充 <select> */
+async function fetchQueryRewriteModels() {
+    const btn = document.getElementById('horae-btn-fetch-query-rewrite-models');
+    const sel = document.getElementById('horae-setting-vector-query-rewrite-model-select');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; }
+    try {
+        const rewriteUrl = ($('#horae-setting-vector-query-rewrite-url').val() || settings.vectorQueryRewriteUrl || '').trim();
+        const rewriteKey = ($('#horae-setting-vector-query-rewrite-key').val() || settings.vectorQueryRewriteKey || '').trim();
+        const embedUrl = ($('#horae-setting-vector-api-url').val() || settings.vectorApiUrl || '').trim();
+        const embedKey = ($('#horae-setting-vector-api-key').val() || settings.vectorApiKey || '').trim();
+        const url = rewriteUrl || embedUrl;
+        const key = rewriteKey || embedKey;
+        const models = await _fetchModelList(url, key, 'generation');
+        if (!models.length) { showToast(t('toast.noModelsFetched'), 'warning'); return; }
+        const prev = settings.vectorQueryRewriteModel || '';
+        _populateModelSelect(sel, models, prev);
         showToast(t('toast.fetchedModels', { n: models.length }), 'success');
     } catch (err) {
         showToast(t('toast.fetchModelsFailed', { error: err.message || err }), 'error');
@@ -14686,21 +14756,10 @@ async function fetchRerankModels() {
         const embedKey = ($('#horae-setting-vector-api-key').val() || settings.vectorApiKey || '').trim();
         const url = rerankUrl || embedUrl;
         const key = rerankKey || embedKey;
-        const models = await _fetchModelList(url, key);
+        const models = await _fetchModelList(url, key, 'any');
         if (!models.length) { showToast(t('toast.noModelsFetched'), 'warning'); return; }
         const prev = settings.vectorRerankModel || '';
-        sel.innerHTML = '';
-        for (const m of models.sort()) {
-            const opt = document.createElement('option');
-            opt.value = m; opt.textContent = m;
-            if (m === prev) opt.selected = true;
-            sel.appendChild(opt);
-        }
-        if (prev && !models.includes(prev)) {
-            const opt = document.createElement('option');
-            opt.value = prev; opt.textContent = t('toast.modelManual', { name: prev });
-            opt.selected = true; sel.prepend(opt);
-        }
+        _populateModelSelect(sel, models, prev);
         showToast(t('toast.fetchedModels', { n: models.length }), 'success');
     } catch (err) {
         showToast(t('toast.fetchModelsFailed', { error: err.message || err }), 'error');
@@ -18515,6 +18574,14 @@ async function onPromptReady(eventData) {
 
     try {
         const chat = horaeManager.getChat();
+        const recallRewritePromise = (
+            !skipVectorRecallOnce &&
+            settings.vectorEnabled &&
+            vectorManager.isReady &&
+            settings.vectorQueryRewriteEnabled === true
+        )
+            ? vectorManager.prepareRecallRewrite(chat, settings)
+            : null;
 
         // 发送前：可选补全上一条AI楼层的时间线
         await _autoFillPreviousAiTimelineBeforeInjection(chat);
@@ -18598,7 +18665,8 @@ async function onPromptReady(eventData) {
                     horaeManager,
                     skipLast,
                     settings,
-                    promptCoveredChatIndices
+                    promptCoveredChatIndices,
+                    { rewritePromise: recallRewritePromise }
                 );
                 console.log(`[Horae] 向量召回结果: ${recallPrompt ? recallPrompt.length + ' 字符' : '空'}`);
             } catch (err) {

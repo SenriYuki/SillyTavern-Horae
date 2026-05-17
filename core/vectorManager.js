@@ -8,6 +8,7 @@
 import { calculateDetailedRelativeTime, getRelativeTimeMeta } from '../utils/timeUtils.js';
 import { t2s } from '../utils/zhConvert.js';
 import { tNodeForLang, detectEffectiveAiLang } from './i18n.js';
+import { getPromptDefaultSync } from './promptDefaults.js';
 
 const DB_NAME = 'HoraeVectors';
 const DB_VERSION = 1;
@@ -18,6 +19,18 @@ const MODEL_CONFIG = {
     'Xenova/bge-small-zh-v1.5': { dimensions: 512, prefix: null },
     'Xenova/multilingual-e5-small': { dimensions: 384, prefix: { query: 'query: ', passage: 'passage: ' } },
 };
+
+const QUERY_REWRITE_PROMPT_KEY = 'vectorQueryRewriteSystemPrompt';
+const QUERY_REWRITE_CONTEXT_LIMIT = 4;
+const QUERY_REWRITE_MAX_QUERIES = 6;
+const QUERY_REWRITE_MAX_QUERY_LENGTH = 220;
+const QUERY_REWRITE_REQUEST_DEFAULTS = Object.freeze({
+    temperature: 0.1,
+    top_p: 0.8,
+    max_tokens: 800,
+    stream: false,
+    enable_thinking: false,
+});
 
 const EMPTY_KEYWORD_TABLE = {
     intent: { first: [], last: [] },
@@ -586,6 +599,8 @@ export class VectorManager {
     }
 
     _buildRecallSettingsSignature(settings) {
+        const rewriteConfig = this._resolveQueryRewriteConfig(settings);
+        const rewriteEnabled = settings?.vectorQueryRewriteEnabled === true;
         return this._hashString(JSON.stringify({
             topK: settings.vectorTopK || 5,
             threshold: settings.vectorThreshold ?? 0.72,
@@ -599,6 +614,11 @@ export class VectorManager {
             rerankCandidates: settings.vectorRerankCandidates || 25,
             rerankRecallThreshold: settings.vectorRerankRecallThreshold ?? 0.3,
             rerankMinScore: this._effectiveRerankMinScore(settings),
+            queryRewriteEnabled: rewriteEnabled,
+            queryRewriteEndpoint: rewriteEnabled ? (rewriteConfig.endpoint || '') : '',
+            queryRewriteModel: rewriteEnabled ? (rewriteConfig.model || '') : '',
+            queryRewriteConfigured: rewriteEnabled && !!(rewriteConfig.endpoint && rewriteConfig.apiKey && rewriteConfig.model),
+            queryRewriteLang: rewriteEnabled ? (this._activeKeywordLang || 'en') : '',
         }));
     }
 
@@ -776,6 +796,124 @@ export class VectorManager {
     }
 
     /**
+     * 多路 Query Rewrite 向量检索：每个 Q 独立召回，再按 messageIndex 合并去重。
+     * @param {string[]} queryTexts
+     * @param {number} topK
+     * @param {number} threshold
+     * @param {Set<number>} excludeIndices
+     * @param {boolean} pureMode
+     * @param {Map<number, Set<string>>} excludeReasonMap
+     */
+    async searchQueryVariants(queryTexts, topK = 5, threshold = 0.72, excludeIndices = new Set(), pureMode = false, excludeReasonMap = null) {
+        if (!this.isReady || this.vectors.size === 0) return [];
+
+        const queries = this._normalizeQueryRewriteQueries(queryTexts);
+        if (queries.length === 0) return [];
+
+        const prepared = queries.map(q => this._prepareText(q, true));
+        console.log(`[Horae Vector] 开始 Query Rewrite 多路 embedding 查询: ${queries.length} 个 Q`);
+        console.log(`[Horae Vector] 多路检索阈值: ${Number(threshold).toFixed(4)} | topK=${topK} | pureMode=${!!pureMode}`);
+
+        const result = await this._embed(prepared);
+        if (!result?.vectors?.length) {
+            console.warn('[Horae Vector] Query Rewrite embedding 返回空结果:', result);
+            return [];
+        }
+
+        const resolveExcludeReasons = (msgIdx) => {
+            if (!(excludeReasonMap instanceof Map)) return ['unknown'];
+            const reasons = excludeReasonMap.get(msgIdx);
+            if (!reasons) return ['unknown'];
+            if (Array.isArray(reasons)) return reasons.length > 0 ? reasons : ['unknown'];
+            if (reasons instanceof Set) return reasons.size > 0 ? [...reasons] : ['unknown'];
+            return [String(reasons)];
+        };
+
+        const excludedByIndex = [];
+        for (const msgIdx of excludeIndices || []) {
+            excludedByIndex.push({ messageIndex: msgIdx, reasons: resolveExcludeReasons(msgIdx) });
+        }
+        if (excludedByIndex.length > 0) {
+            excludedByIndex.sort((a, b) => a.messageIndex - b.messageIndex);
+            console.log(`[Horae Vector] 多路检索排除索引: ${excludedByIndex.length} 条未参与相似度计算`);
+            for (const x of excludedByIndex) {
+                console.log(`  #${x.messageIndex} | reason=${x.reasons.join('+')}`);
+            }
+        }
+
+        const merged = new Map();
+        const RRF_K = 60;
+        const perQueryLimit = Math.max(1, topK);
+        const vectorCount = Math.min(queries.length, result.vectors.length);
+
+        for (let qi = 0; qi < vectorCount; qi++) {
+            const queryVec = result.vectors[qi];
+            if (!Array.isArray(queryVec)) continue;
+
+            const scored = [];
+            const allScored = [];
+            let searchedCount = 0;
+
+            for (const [msgIdx, entry] of this.vectors) {
+                if (excludeIndices.has(msgIdx)) continue;
+                searchedCount++;
+                const sim = this._dotProduct(queryVec, entry.vector);
+                const row = { messageIndex: msgIdx, similarity: sim, document: entry.document };
+                allScored.push(row);
+                if (sim >= threshold) scored.push(row);
+            }
+
+            allScored.sort((a, b) => b.similarity - a.similarity);
+            scored.sort((a, b) => b.similarity - a.similarity);
+            const adjusted = pureMode ? scored : this._adjustThresholdByFrequency(scored, threshold);
+            const deduped = this._deduplicateResults(adjusted).slice(0, perQueryLimit);
+            const bestSim = allScored.length > 0 ? allScored[0].similarity : 0;
+            console.log(`[Horae Vector] Q${qi + 1}: 搜索 ${searchedCount} 条 | 最高相似度=${bestSim.toFixed(4)} | 过阈值=${scored.length} | 入池=${deduped.length}`);
+            console.log(`  Q${qi + 1}: ${queries[qi]}`);
+
+            deduped.forEach((r, rank) => {
+                const hit = {
+                    queryIndex: qi,
+                    query: queries[qi],
+                    similarity: r.similarity,
+                    rank: rank + 1,
+                };
+                const contribution = 1 / (RRF_K + rank);
+                const existing = merged.get(r.messageIndex);
+                if (!existing) {
+                    merged.set(r.messageIndex, {
+                        ...r,
+                        queryHits: [hit],
+                        _queryFusionScore: contribution,
+                    });
+                    return;
+                }
+
+                existing.queryHits.push(hit);
+                existing._queryFusionScore = (existing._queryFusionScore || 0) + contribution;
+                if (r.similarity > existing.similarity) {
+                    existing.similarity = r.similarity;
+                    existing.document = r.document;
+                }
+            });
+        }
+
+        const results = [...merged.values()]
+            .sort((a, b) => ((b._queryFusionScore || 0) - (a._queryFusionScore || 0)) || (b.similarity - a.similarity))
+            .slice(0, topK);
+
+        console.log(`[Horae Vector] Query Rewrite 多路合并: ${results.length} 条`);
+        for (const r of results) {
+            const hitSummary = (r.queryHits || [])
+                .map(h => `Q${h.queryIndex + 1}#${h.rank}:${h.similarity.toFixed(3)}`)
+                .join(', ');
+            console.log(`  #${r.messageIndex} sim=${r.similarity.toFixed(4)} rrf=${(r._queryFusionScore || 0).toFixed(4)} | ${hitSummary}`);
+        }
+
+        return results;
+    }
+
+    /**
      * 噪声文档惩罚（IDF）
      * 平均 IDF 过低说明文档由必然高频词主导（如主角名+场景），略上调阈值
      */
@@ -836,7 +974,7 @@ export class VectorManager {
     /**
      * 智能召回：结构化查询 + 向量搜索并行，合并结果
      */
-    async generateRecallPrompt(horaeManager, skipLast, settings, extraExcludeIndices = new Set()) {
+    async generateRecallPrompt(horaeManager, skipLast, settings, extraExcludeIndices = new Set(), options = {}) {
         const chat = horaeManager.getChat();
         const state = horaeManager.getLatestState(skipLast);
         const effectiveEnd = Math.max(0, chat.length - Math.max(0, skipLast));
@@ -942,6 +1080,10 @@ export class VectorManager {
         }
         console.log(`[Horae Vector] 召回缓存未命中: key=${cacheKeySig}`);
 
+        const rewriteInfo = await this._resolveRecallRewriteInfo(chat, settings, options);
+        const rewriteQueries = rewriteInfo?.queries || [];
+        const rewriteIntent = rewriteInfo?.intent || '';
+
         const merged = new Map();
 
         const pureMode = !!settings.vectorPureMode;
@@ -964,7 +1106,8 @@ export class VectorManager {
             excludeReasonMap,
             recallTopK,
             recallThreshold,
-            pureMode
+            pureMode,
+            { rewriteQueries }
         );
         console.log(`[Horae Vector] 向量混合搜索: ${hybridResults.length} 条命中`);
         for (const r of hybridResults) {
@@ -1028,7 +1171,8 @@ export class VectorManager {
         let rerankDebug = null;
         if (useRerank && results.length > 1) {
             const rerankCandidates = results.slice(0, recallTopK);
-            const rerankQuery = mergedRecallQuery || userQuery || this.buildStateQuery(state, null);
+            const rerankQuery = rewriteIntent || mergedRecallQuery || userQuery || this.buildStateQuery(state, null);
+            const rerankQuerySource = rewriteIntent ? 'rewrite-intent' : 'fallback-merged';
             if (rerankQuery) {
                 try {
                     const useFullText = !!settings.vectorRerankFullText;
@@ -1101,13 +1245,7 @@ export class VectorManager {
                         const passed = reranked.filter(rr => (rr.relevance_score ?? 0) >= minScore);
                         const dropped = reranked.length - passed.length;
                         console.log(`[Horae Vector] Rerank 完成: ${reranked.length} 条 → 阈值=${minScore.toFixed(2)} 通过=${passed.length} 丢弃=${dropped}`);
-                        // 全部被阈值砍光、但最高分仍 ≥ 0.35 时保留 Top1，避免完全静默
-                        let finalReranked = passed;
-                        if (passed.length === 0 && reranked[0] && (reranked[0].relevance_score ?? 0) >= 0.35) {
-                            finalReranked = [reranked[0]];
-                            console.log(`[Horae Vector] Rerank 全部被阈值过滤，但最高分=${reranked[0].relevance_score?.toFixed(3)} 仍过保底线，保留 Top1`);
-                        }
-                        results = finalReranked.map(rr => {
+                        results = passed.map(rr => {
                             const original = rerankCandidates[rr.index];
                             return {
                                 ...original,
@@ -1117,6 +1255,8 @@ export class VectorManager {
                         });
                         rerankDebug = {
                             enabled: true,
+                            query: rerankQuery,
+                            querySource: rerankQuerySource,
                             minScore,
                             useFullText,
                             candidates: rerankCandidates.map((r, i) => ({
@@ -1133,7 +1273,6 @@ export class VectorManager {
                             })),
                             passedCount: passed.length,
                             droppedCount: dropped,
-                            retainedTop1: passed.length === 0 && finalReranked.length > 0,
                             batching: rerankPlan ? {
                                 contextLimit: rerankPlan.contextLimit,
                                 budgetTokens: rerankPlan.docBudget,
@@ -1150,7 +1289,7 @@ export class VectorManager {
                     }
                 } catch (err) {
                     console.warn('[Horae Vector] Rerank 失败，使用原始排序:', err.message);
-                    rerankDebug = { enabled: true, error: err.message };
+                    rerankDebug = { enabled: true, query: rerankQuery, querySource: rerankQuerySource, error: err.message };
                 }
             }
         }
@@ -1181,6 +1320,8 @@ export class VectorManager {
                 user: userQuery,
                 state: stateQueryForRecall,
                 merged: mergedRecallQuery,
+                rewriteIntent,
+                rewriteQueries,
             },
             settings: {
                 topK,
@@ -1202,8 +1343,10 @@ export class VectorManager {
                 messageIndex: r.messageIndex,
                 similarity: r.similarity,
                 source: r.source,
+                queryHits: r.queryHits || null,
                 docPreview: (r.document || '').substring(0, 120),
             })),
+            rewrite: rewriteInfo,
             relevantChars: [...relevantChars],
             rerank: rerankDebug,
             final: results.map(r => ({
@@ -1859,7 +2002,7 @@ export class VectorManager {
     // 向量+关键词混合搜索（兜底）
     // ========================================
 
-    async _hybridSearch(userQuery, state, horaeManager, skipLast, settings, excludeIndices, excludeReasonMap, topK, threshold, pureMode = false) {
+    async _hybridSearch(userQuery, state, horaeManager, skipLast, settings, excludeIndices, excludeReasonMap, topK, threshold, pureMode = false, options = {}) {
         if (!this.isReady || this.vectors.size === 0) return [];
 
         // 跳过 user 消息，取最近一条 AI 消息的完整 meta（含 events）
@@ -1879,11 +2022,26 @@ export class VectorManager {
         // 严格使用用户设置阈值
         const mergedThreshold = threshold;
 
-        let results = await this.search(mergedQuery, topK * 2, mergedThreshold, excludeIndices, pureMode, excludeReasonMap);
-        results = results.map(r => ({ ...r, source: 'merged' }));
-        console.log(`[Horae Vector] 合并查询搜索: ${results.length} 条 | threshold=${mergedThreshold.toFixed(2)}`);
+        const rewriteQueries = Array.isArray(options?.rewriteQueries) ? options.rewriteQueries : [];
+        let results = [];
+        if (rewriteQueries.length > 0) {
+            results = await this.searchQueryVariants(
+                rewriteQueries,
+                topK * 2,
+                mergedThreshold,
+                excludeIndices,
+                pureMode,
+                excludeReasonMap
+            );
+            results = results.map(r => ({ ...r, source: 'rewrite-q' }));
+            console.log(`[Horae Vector] Query Rewrite 多路搜索: queries=${rewriteQueries.length} / 命中=${results.length} 条 | threshold=${mergedThreshold.toFixed(2)}`);
+        } else {
+            results = await this.search(mergedQuery, topK * 2, mergedThreshold, excludeIndices, pureMode, excludeReasonMap);
+            results = results.map(r => ({ ...r, source: 'merged' }));
+            console.log(`[Horae Vector] 合并查询搜索: ${results.length} 条 | threshold=${mergedThreshold.toFixed(2)}`);
+        }
 
-        results.sort((a, b) => b.similarity - a.similarity);
+        results.sort((a, b) => ((b._queryFusionScore || 0) - (a._queryFusionScore || 0)) || (b.similarity - a.similarity));
         results = this._deduplicateResults(results).slice(0, topK);
 
         console.log(`[Horae Vector] 混合搜索结果: ${results.length} 条`);
@@ -2188,6 +2346,341 @@ export class VectorManager {
             console.error('[Horae Vector] API embedding 响应解析失败:', err);
             throw wrapped;
         }
+    }
+
+    async rewriteQuery(chat, settings) {
+        const config = this._resolveQueryRewriteConfig(settings);
+        if (!config.endpoint) throw new Error('Query Rewrite API 地址未配置');
+        if (!config.apiKey) throw new Error('Query Rewrite API 密钥未配置，且无法复用 Embedding API 密钥');
+        if (!config.model) throw new Error('Query Rewrite 模型未配置');
+
+        const messages = this._buildQueryRewriteMessages(chat, settings);
+        const latestUserMessage = messages[messages.length - 1];
+        if (!latestUserMessage || latestUserMessage.role !== 'user') {
+            throw new Error('未找到可用于 Query Rewrite 的最新用户消息');
+        }
+
+        const body = {
+            model: config.model,
+            temperature: QUERY_REWRITE_REQUEST_DEFAULTS.temperature,
+            top_p: QUERY_REWRITE_REQUEST_DEFAULTS.top_p,
+            max_tokens: QUERY_REWRITE_REQUEST_DEFAULTS.max_tokens,
+            stream: QUERY_REWRITE_REQUEST_DEFAULTS.stream,
+            enable_thinking: QUERY_REWRITE_REQUEST_DEFAULTS.enable_thinking,
+            messages,
+        };
+
+        let resp;
+        try {
+            resp = await fetch(config.endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${config.apiKey}`,
+                },
+                body: JSON.stringify(body),
+                signal: (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function')
+                    ? AbortSignal.timeout(30000)
+                    : undefined,
+            });
+        } catch (err) {
+            const wrapped = new Error(err?.message || 'Network error');
+            if (err instanceof TypeError) wrapped.code = 'NETWORK';
+            else if (/timeout|timed out/i.test(err?.message || '')) wrapped.code = 'TIMEOUT';
+            else wrapped.code = 'UNKNOWN';
+            wrapped.cause = err;
+            throw wrapped;
+        }
+
+        if (!resp.ok) {
+            const errText = await resp.text().catch(() => '');
+            const wrapped = new Error(`Query Rewrite API ${resp.status}: ${errText.slice(0, 200)}`);
+            wrapped.status = resp.status;
+            wrapped.body = errText.slice(0, 500);
+            throw wrapped;
+        }
+
+        let json;
+        try {
+            json = await resp.json();
+        } catch (err) {
+            const wrapped = new Error(err?.message || 'Invalid JSON response');
+            wrapped.code = 'FORMAT';
+            throw wrapped;
+        }
+
+        const rawText = this._extractChatCompletionText(json);
+        const parsed = this._parseQueryRewriteResponse(rawText);
+
+        return {
+            endpoint: config.endpoint,
+            model: config.model,
+            messages,
+            rawText,
+            intent: parsed.intent,
+            queries: parsed.queries,
+            usage: json?.usage || null,
+            response: json,
+        };
+    }
+
+    prepareRecallRewrite(chat, settings) {
+        return this._tryRewriteRecallQuery(chat, settings);
+    }
+
+    async _resolveRecallRewriteInfo(chat, settings, options = {}) {
+        if (options?.rewriteInfo) {
+            return this._normalizeRecallRewriteInfo(options.rewriteInfo, settings);
+        }
+        if (options?.rewritePromise) {
+            try {
+                const info = await options.rewritePromise;
+                return this._normalizeRecallRewriteInfo(info, settings);
+            } catch (err) {
+                console.warn('[Horae Vector] 预启动 Query Rewrite 失败，回退合并查询:', err?.message || err);
+                return this._buildQueryRewriteBaseInfo(settings, {
+                    enabled: settings?.vectorQueryRewriteEnabled === true,
+                    error: err?.message || String(err),
+                    code: err?.code || null,
+                    status: err?.status || null,
+                });
+            }
+        }
+        return this._tryRewriteRecallQuery(chat, settings);
+    }
+
+    _buildQueryRewriteBaseInfo(settings, overrides = {}) {
+        const config = this._resolveQueryRewriteConfig(settings);
+        const enabled = settings?.vectorQueryRewriteEnabled === true;
+        return {
+            enabled,
+            configured: enabled && !!(config.endpoint && config.apiKey && config.model),
+            endpoint: config.endpoint || '',
+            model: config.model || '',
+            intent: '',
+            queries: [],
+            ...overrides,
+        };
+    }
+
+    _normalizeRecallRewriteInfo(info, settings) {
+        const base = this._buildQueryRewriteBaseInfo(settings);
+        const merged = { ...base, ...(info || {}) };
+        return {
+            ...merged,
+            intent: this._sanitizeQueryRewriteText(merged.intent || ''),
+            queries: this._normalizeQueryRewriteQueries(merged.queries || []),
+        };
+    }
+
+    async _tryRewriteRecallQuery(chat, settings) {
+        const config = this._resolveQueryRewriteConfig(settings);
+        const baseInfo = this._buildQueryRewriteBaseInfo(settings);
+
+        if (settings?.vectorQueryRewriteEnabled !== true) {
+            return { ...baseInfo, enabled: false, reason: 'disabled' };
+        }
+
+        if (!baseInfo.configured) {
+            const missing = [];
+            if (!config.endpoint) missing.push('endpoint');
+            if (!config.apiKey) missing.push('apiKey');
+            if (!config.model) missing.push('model');
+            return { ...baseInfo, reason: `missing-${missing.join('-') || 'config'}` };
+        }
+
+        try {
+            const rewritten = await this.rewriteQuery(chat, settings);
+            const queries = this._normalizeQueryRewriteQueries(rewritten.queries);
+            console.log(`[Horae Vector] Query Rewrite 完成: intent=${rewritten.intent ? 'yes' : 'no'} / queries=${queries.length}`);
+            for (let i = 0; i < queries.length; i++) {
+                console.log(`  Q${i + 1}: ${queries[i]}`);
+            }
+            if (rewritten.intent) console.log(`  INTENT: ${rewritten.intent}`);
+
+            return {
+                ...baseInfo,
+                enabled: true,
+                intent: rewritten.intent || '',
+                queries,
+                rawText: rewritten.rawText || '',
+                usage: rewritten.usage || null,
+            };
+        } catch (err) {
+            console.warn('[Horae Vector] Query Rewrite 失败，回退合并查询:', err?.message || err);
+            return {
+                ...baseInfo,
+                enabled: true,
+                error: err?.message || String(err),
+                code: err?.code || null,
+                status: err?.status || null,
+            };
+        }
+    }
+
+    _resolveQueryRewriteConfig(settings) {
+        const rewriteUrl = String(settings?.vectorQueryRewriteUrl || '').trim();
+        const rewriteKey = String(settings?.vectorQueryRewriteKey || '').trim();
+        const embedUrl = String(settings?.vectorApiUrl || '').trim();
+        const embedKey = String(settings?.vectorApiKey || '').trim();
+
+        return {
+            endpoint: this._buildChatCompletionsEndpoint(rewriteUrl || embedUrl),
+            apiKey: rewriteKey || embedKey,
+            model: String(settings?.vectorQueryRewriteModel || '').trim(),
+        };
+    }
+
+    _buildChatCompletionsEndpoint(rawUrl) {
+        const base = String(rawUrl || '')
+            .trim()
+            .replace(/\/+$/, '')
+            .replace(/\/embeddings$/i, '')
+            .replace(/\/chat\/completions$/i, '');
+        return base ? `${base}/chat/completions` : '';
+    }
+
+    _buildQueryRewriteMessages(chat, settings) {
+        const systemPrompt = this._getQueryRewriteSystemPrompt(settings);
+        const messages = [];
+        if (systemPrompt) {
+            messages.push({ role: 'system', content: systemPrompt });
+        }
+        messages.push(...this._collectQueryRewriteConversation(chat, settings, QUERY_REWRITE_CONTEXT_LIMIT));
+        return messages;
+    }
+
+    _getQueryRewriteSystemPrompt(settings) {
+        const lang = detectEffectiveAiLang(settings);
+        return getPromptDefaultSync(lang, QUERY_REWRITE_PROMPT_KEY)
+            || getPromptDefaultSync('en', QUERY_REWRITE_PROMPT_KEY)
+            || '';
+    }
+
+    _collectQueryRewriteConversation(chat, settings, limit = 4) {
+        const stripTags = settings?.vectorStripTags || '';
+        const collected = [];
+        let expectUser = true;
+
+        for (let i = (Array.isArray(chat) ? chat.length : 0) - 1; i >= 0 && collected.length < limit; i--) {
+            const msg = chat[i];
+            if (!msg || msg.is_hidden || typeof msg.is_user !== 'boolean') continue;
+            if (!!msg.is_user !== expectUser) continue;
+
+            const content = this._extractConversationText(msg.mes, stripTags);
+            if (!content) continue;
+
+            collected.push({
+                index: i,
+                role: msg.is_user ? 'user' : 'assistant',
+                content,
+            });
+            expectUser = !expectUser;
+        }
+
+        return collected.reverse().map(({ role, content }) => ({ role, content }));
+    }
+
+    _extractConversationText(mes, stripTags) {
+        if (!mes) return '';
+
+        let text = String(mes)
+            .replace(/<think(?:ing)?(?:\s[^>]*)?>[\s\S]*?<\/think(?:ing)?>/gi, ' ')
+            .replace(/<!--[\s\S]*?-->/g, ' ')
+            .replace(/<horae>[\s\S]*?<\/horae>/gi, ' ')
+            .replace(/<horaeevent>[\s\S]*?<\/horaeevent>/gi, ' ');
+
+        if (stripTags) {
+            const tags = stripTags.split(/[,，\s]+/).map(t => t.trim()).filter(Boolean);
+            for (const tag of tags) {
+                const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                text = text.replace(new RegExp(`<${escaped}(?:\\s[^>]*)?>[\\s\\S]*?</${escaped}>`, 'gi'), ' ');
+            }
+        }
+
+        return text
+            .replace(/<[^>]*>/g, ' ')
+            .replace(/\r\n?/g, '\n')
+            .replace(/[ \t]+\n/g, '\n')
+            .replace(/\n{3,}/g, '\n\n')
+            .replace(/[ \t]{2,}/g, ' ')
+            .trim();
+    }
+
+    _extractChatCompletionText(json) {
+        const content = json?.choices?.[0]?.message?.content;
+        if (typeof content === 'string' && content.trim()) {
+            return content.trim();
+        }
+        if (Array.isArray(content)) {
+            const joined = content.map(part => {
+                if (typeof part === 'string') return part;
+                if (typeof part?.text === 'string') return part.text;
+                if (typeof part?.content === 'string') return part.content;
+                return '';
+            }).join('').trim();
+            if (joined) return joined;
+        }
+        const wrapped = new Error('Query Rewrite 响应格式异常：缺少 choices[0].message.content');
+        wrapped.code = 'FORMAT';
+        throw wrapped;
+    }
+
+    _parseQueryRewriteResponse(text) {
+        const lines = String(text || '')
+            .replace(/\r\n?/g, '\n')
+            .replace(/\\n/g, '\n')
+            .split('\n')
+            .map(line => line.trim())
+            .filter(Boolean);
+
+        let intent = '';
+        const queries = [];
+
+        for (const rawLine of lines) {
+            const line = rawLine
+                .replace(/^\s*(?:[-*•]\s*)?(?:\d+[\.)、]\s*)?/, '')
+                .trim();
+            const intentMatch = line.match(/^INTENT\s*[:：]\s*(.+)$/i);
+            if (intentMatch) {
+                intent = intentMatch[1].trim();
+                continue;
+            }
+            const queryMatch = line.match(/^Q\s*\d*\s*[:：]\s*(.+)$/i);
+            if (queryMatch) {
+                const query = this._sanitizeQueryRewriteText(queryMatch[1]);
+                if (query) queries.push(query);
+            }
+        }
+
+        return {
+            intent: this._sanitizeQueryRewriteText(intent),
+            queries: this._normalizeQueryRewriteQueries(queries),
+        };
+    }
+
+    _sanitizeQueryRewriteText(text, maxLength = QUERY_REWRITE_MAX_QUERY_LENGTH) {
+        return String(text || '')
+            .trim()
+            .replace(/^["'“”‘’`]+|["'“”‘’`]+$/g, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .substring(0, maxLength);
+    }
+
+    _normalizeQueryRewriteQueries(queries) {
+        const seen = new Set();
+        const normalized = [];
+        for (const raw of Array.isArray(queries) ? queries : []) {
+            const query = this._sanitizeQueryRewriteText(raw);
+            if (!query) continue;
+            const key = query.toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            normalized.push(query);
+            if (normalized.length >= QUERY_REWRITE_MAX_QUERIES) break;
+        }
+        return normalized;
     }
 
     _estimateRerankTokens(text) {
