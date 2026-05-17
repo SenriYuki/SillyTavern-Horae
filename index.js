@@ -644,7 +644,7 @@ const BUILTIN_VECTOR_RECALL_PRESETS = [
             vectorRerankFullText: true,
             vectorRerankCandidates: 20,
             vectorRerankRecallThreshold: 0.3,
-            vectorRerankMinScore: 0.95,
+            vectorRerankMinScore: 0.9,
             vectorTopK: 5,
             vectorThreshold: 0.85,
             vectorFullTextCount: 2,

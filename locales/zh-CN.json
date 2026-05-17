@@ -833,7 +833,7 @@
         "queryRewriteUrl": "Query Rewrite API 地址（可选）",
         "queryRewriteKey": "Query Rewrite API 密钥（可选）",
         "queryRewriteModel": "Query 重写模型",
-        "queryRewriteFetchHint": "可单独填写 Query Rewrite 的地址和密钥；留空时会复用上面的 Embedding API 配置，再点击拉取模型列表。",
+        "queryRewriteFetchHint": "可单独填写 Query Rewrite 的地址和密钥；留空时会复用上面的 Embedding API 配置，再点击拉取模型列表。\n推荐模型：Qwen/Qwen3.5-27B",
         "pureMode": "纯向量模式（强模型优化）",
         "pureModeHint": "适用于高维 API 模型（如 Qwen3-Embedding、text-embedding-3-large）。\n会关闭关键词扩展、事件短语匹配、高频惩罚等。\n完全依赖模型的语义理解，减少低质噪声。\n小模型或低维模型请勿开启，否则召回质量会下降。",
         "enableRerank": "启用重排序（Rerank）",

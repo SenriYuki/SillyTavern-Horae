@@ -836,7 +836,7 @@
         "queryRewriteUrl": "Query Rewrite API URL (optional)",
         "queryRewriteKey": "Query Rewrite API Key (optional)",
         "queryRewriteModel": "Query Rewrite Model",
-        "queryRewriteFetchHint": "You can fill a dedicated Query Rewrite URL and key. If left blank, the Embedding API settings above will be reused when fetching the model list.",
+        "queryRewriteFetchHint": "You can fill a dedicated Query Rewrite URL and key. If left blank, the Embedding API settings above will be reused when fetching the model list.\nRecommended model: Qwen/Qwen3.5-27B",
         "pureMode": "Pure Vector Mode (Strong Model Optimized)",
         "pureModeHint": "For high-dimensional API models (e.g. Qwen3-Embedding, text-embedding-3-large).\nDisables keyword expansion, event phrase matching, high-frequency penalty, etc.\nRelies fully on model's semantic understanding, reducing low-quality noise.\nDo NOT enable for small or low-dimensional models, as recall quality will degrade.",
         "enableRerank": "Enable Rerank Re-ranking",

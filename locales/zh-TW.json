@@ -756,6 +756,7 @@
         "deleteRecallPreset": "刪除",
         "newRecallPresetPrompt": "輸入新的召回參數預設名稱：",
         "recallPresetHint": "選擇預設後會立即套用目前召回參數。小模型建議適合本地模型和免費 Embedding；大模型建議適合高維 API Embedding；搭配 Rerank 建議會使用更大的候選池再精排。內建預設不可覆蓋或刪除。",
+        "queryRewriteFetchHint": "可單獨填寫 Query Rewrite 的地址和金鑰；留空時會複用上面的 Embedding API 設定，再點擊拉取模型列表。\n推薦模型：Qwen/Qwen3.5-27B",
         "rerankCandidates": "Rerank 候選池條數",
         "rerankCandidatesHint": "開啟 Rerank 時，先用寬鬆閾值召回這麼多候選，作為精排前的候選池；Rerank 排序後仍會受上方 Top-K 控制，只把最終前 K 條注入上下文。建議 20~40。",
         "rerankRecallThreshold": "Rerank 召回閾值",

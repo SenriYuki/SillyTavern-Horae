@@ -918,6 +918,7 @@
         "apiKey": "API Key",
         "embeddingModelLabel": "Embeddingモデル",
         "fetchModelsHint": "URLとキーを入力してからクリックで取得。\n推奨：qwen3-embedding-8B",
+        "queryRewriteFetchHint": "専用の Query Rewrite URL とキーを入力できます。空欄の場合、モデル一覧の取得時に上の Embedding API 設定を再利用します。\n推奨モデル：Qwen/Qwen3.5-27B",
         "testApi": "ベクトルAPI接続テスト",
         "pureMode": "ピュアベクトルモード（強力モデル最適化）",
         "pureModeHint": "高次元APIモデル向け（例：Qwen3-Embedding、text-embedding-3-large）。\nキーワード展開、イベントフレーズマッチング、高頻度ペナルティ等を無効化。\nモデルのセマンティック理解に完全に依存し、低品質ノイズを削減。\n小規模や低次元モデルでは有効にしないでください。検索品質が低下します。",
