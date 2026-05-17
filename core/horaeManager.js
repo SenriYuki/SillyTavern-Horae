@@ -238,7 +238,7 @@ class HoraeManager {
                         for (const itemName of Object.keys(state.items)) {
                             if (getItemBaseName(itemName).toLowerCase() === baseName.toLowerCase()) {
                                 delete state.items[itemName];
-                                console.log(`[Horae] 物品数量归零自动删除: ${itemName}`);
+                                console.debug(`[Horae] 物品数量归零自动删除: ${itemName}`);
                             }
                         }
                         continue;
@@ -253,7 +253,7 @@ class HoraeManager {
                         for (const itemName of Object.keys(state.items)) {
                             if (getItemBaseName(itemName).toLowerCase() === baseName.toLowerCase()) {
                                 delete state.items[itemName];
-                                console.log(`[Horae] 物品已消耗自动删除: ${itemName}`);
+                                console.debug(`[Horae] 物品已消耗自动删除: ${itemName}`);
                             }
                         }
                         continue;
@@ -1083,7 +1083,7 @@ class HoraeManager {
             // 过滤掉被活跃摘要覆盖的原始事件（_compressedBy 且摘要为 active）
             const timelineChat = this.getChat();
             const autoSums = timelineChat?.[0]?.horae_meta?.autoSummaries || [];
-            const activeSumIds = new Set(autoSums.filter(s => s.active).map(s => s.id));
+            const activeSumIds = new Set(autoSums.filter(s => s?.id && s.active !== false).map(s => s.id));
             const keepStart = this._resolveAutoSummaryKeepStart(skipLast);
             // 被活跃摘要压缩的事件不发送；摘要为 inactive 时其 _summaryId 事件不发送
             const events = allEvents.filter(e => {
@@ -1197,7 +1197,7 @@ class HoraeManager {
                 // 预构建 summaryId→日期范围 映射，让摘要事件带上时间跨度
                 const _sumDateRanges = {};
                 for (const s of autoSums) {
-                    if (!s.active || !s.originalEvents?.length) continue;
+                    if (s.active === false || !s.originalEvents?.length) continue;
                     const dates = s.originalEvents.map(oe => oe.timestamp?.story_date).filter(Boolean);
                     if (dates.length > 0) {
                         const first = dates[0], last = dates[dates.length - 1];

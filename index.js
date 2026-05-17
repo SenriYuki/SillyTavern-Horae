@@ -1429,6 +1429,7 @@ function updateStatusDisplay() {
 function updateTimelineDisplay() {
     // 渲染前先确保所有 active 摘要在 events 中都有卡片（缺失就补回，不会 deactivate 摘要）
     try { cleanOrphanSummaries(); } catch (e) { console.warn('[Horae] projectSummaryCards before render failed:', e); }
+    try { repairSummaryCompressedMarkers(); } catch (e) { console.warn('[Horae] repairSummaryCompressedMarkers before render failed:', e); }
 
     const filterLevel = document.getElementById('horae-timeline-filter')?.value || 'all';
     const searchKeyword = (document.getElementById('horae-timeline-search')?.value || '').trim().toLowerCase();
@@ -1472,7 +1473,7 @@ function updateTimelineDisplay() {
     // 获取摘要映射（summaryId → entry），用于判定压缩状态
     const chat = horaeManager.getChat();
     const summaries = chat?.[0]?.horae_meta?.autoSummaries || [];
-    const activeSummaryIds = new Set(summaries.filter(s => s.active).map(s => s.id));
+    const activeSummaryIds = new Set(summaries.filter(s => s?.id && s.active !== false).map(s => s.id));
     const renderSummaryLevelBadge = (summaryEntry) => {
         const depth = _normalizeSummaryDepth(summaryEntry?.depth);
         return `<span class="horae-level-badge summary">${t('timeline.summaryBadge')} L${depth}</span>`;
@@ -3219,6 +3220,31 @@ function toggleNpcFavorite(npcName) {
 }
 
 /**
+ * 比较物品名时忽略前导 emoji 和数量后缀，兼容“豆包(3个)”这类变体
+ */
+function getComparableItemName(name) {
+    return getItemBaseName(String(name || '').replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u, '').trim()).toLowerCase();
+}
+
+function isSameItemNameVariant(a, b) {
+    const left = String(a || '').trim();
+    const right = String(b || '').trim();
+    if (!left || !right) return false;
+    const leftBase = getComparableItemName(left);
+    const rightBase = getComparableItemName(right);
+    return left.toLowerCase() === right.toLowerCase() || (!!leftBase && leftBase === rightBase);
+}
+
+function resolveLatestItemEntry(itemName, state = horaeManager.getLatestState()) {
+    const items = state?.items || {};
+    if (Object.prototype.hasOwnProperty.call(items, itemName)) {
+        return { name: itemName, info: items[itemName] };
+    }
+    const matchName = Object.keys(items).find(name => isSameItemNameVariant(name, itemName));
+    return matchName ? { name: matchName, info: items[matchName] } : null;
+}
+
+/**
  * 更新物品页面显示
  */
 function updateItemsDisplay() {
@@ -3251,7 +3277,8 @@ function updateItemsDisplay() {
         // 保留当前选项，更新选项列表
         const holderOptions = [`<option value="all">${t('ui.allHolders')}</option>`];
         holders.forEach(holder => {
-            holderOptions.push(`<option value="${holder}" ${holder === currentHolder ? 'selected' : ''}>${holder}</option>`);
+            const holderHtml = escapeHtml(holder);
+            holderOptions.push(`<option value="${holderHtml}" ${holder === currentHolder ? 'selected' : ''}>${holderHtml}</option>`);
         });
         holderFilterEl.innerHTML = holderOptions.join('');
     }
@@ -3290,52 +3317,56 @@ function updateItemsDisplay() {
 
     listEl.innerHTML = entries.map(([name, info]) => {
         const icon = info.icon || '📦';
+        const nameHtml = escapeHtml(name);
+        const iconHtml = escapeHtml(icon);
         const importance = info.importance || '';
         const isCritical = importance === '!!' || importance === '关键' || importance === '關鍵' || importance === 'critical';
         const isImportant = importance === '!' || importance === '重要' || importance === 'important';
         const importanceClass = isCritical ? 'critical' : isImportant ? 'important' : 'normal';
         const importanceLabel = isCritical ? t('levels.critical') : isImportant ? t('levels.important') : '';
-        const importanceBadge = importanceLabel ? `<span class="horae-item-importance ${importanceClass}">${importanceLabel}</span>` : '';
+        const importanceBadge = importanceLabel ? `<span class="horae-item-importance ${importanceClass}">${escapeHtml(importanceLabel)}</span>` : '';
+        const holderHtml = escapeHtml(info.holder || '');
+        const locationHtml = escapeHtml(info.location || '');
 
         // 修复显示格式：持有者 · 位置
         let positionStr = '';
         if (info.holder && info.location) {
-            positionStr = `<span class="holder">${info.holder}</span> · ${info.location}`;
+            positionStr = `<span class="holder">${holderHtml}</span> · ${locationHtml}`;
         } else if (info.holder) {
-            positionStr = `<span class="holder">${info.holder}</span> ${t('ui.heldBy')}`;
+            positionStr = `<span class="holder">${holderHtml}</span> ${escapeHtml(t('ui.heldBy'))}`;
         } else if (info.location) {
-            positionStr = t('ui.locatedAt', { location: info.location });
+            positionStr = escapeHtml(t('ui.locatedAt', { location: info.location }));
         } else {
-            positionStr = t('ui.locationUnknown');
+            positionStr = escapeHtml(t('ui.locationUnknown'));
         }
 
         const isSelected = selectedItems.has(name);
         const selectedClass = isSelected ? 'selected' : '';
         const checkboxDisplay = itemsMultiSelectMode ? 'flex' : 'none';
         const description = info.description || '';
-        const descHtml = description ? `<div class="horae-full-item-desc">${description}</div>` : '';
+        const descHtml = description ? `<div class="horae-full-item-desc">${escapeHtml(description)}</div>` : '';
         const isLocked = !!info._locked;
         const lockIcon = isLocked ? 'fa-lock' : 'fa-lock-open';
-        const lockTitle = isLocked ? t('ui.locked') : t('ui.clickToLock');
+        const lockTitle = escapeHtml(isLocked ? t('ui.locked') : t('ui.clickToLock'));
 
         return `
-            <div class="horae-full-item horae-editable-item ${importanceClass} ${selectedClass}" data-item-name="${name}">
+            <div class="horae-full-item horae-editable-item ${importanceClass} ${selectedClass}" data-item-name="${nameHtml}">
                 <div class="horae-item-checkbox" style="display: ${checkboxDisplay}">
                     <input type="checkbox" ${isSelected ? 'checked' : ''}>
                 </div>
                 <div class="horae-full-item-icon horae-item-emoji">
-                    ${icon}
+                    ${iconHtml}
                 </div>
                 <div class="horae-full-item-info">
-                    <div class="horae-full-item-name">${name} ${importanceBadge}</div>
+                    <div class="horae-full-item-name">${nameHtml} ${importanceBadge}</div>
                     <div class="horae-full-item-location">${positionStr}</div>
                     ${descHtml}
                 </div>
-                ${(settings.rpgMode && settings.sendRpgEquipment) ? `<button class="horae-item-equip-btn" data-item-name="${name}" title="${t('ui.equipToChar')}"><i class="fa-solid fa-shirt"></i></button>` : ''}
-                <button class="horae-item-lock-btn" data-item-name="${name}" title="${lockTitle}" style="opacity:${isLocked ? '1' : '0.35'}">
+                ${(settings.rpgMode && settings.sendRpgEquipment) ? `<button class="horae-item-equip-btn" data-item-name="${nameHtml}" title="${escapeHtml(t('ui.equipToChar'))}"><i class="fa-solid fa-shirt"></i></button>` : ''}
+                <button class="horae-item-lock-btn" data-item-name="${nameHtml}" title="${lockTitle}" style="opacity:${isLocked ? '1' : '0.35'}">
                     <i class="fa-solid ${lockIcon}"></i>
                 </button>
-                <button class="horae-item-edit-btn" data-edit-type="item" data-edit-name="${name}" title="${t('common.edit')}">
+                <button class="horae-item-edit-btn" data-edit-type="item" data-edit-name="${nameHtml}" title="${escapeHtml(t('common.edit'))}">
                     <i class="fa-solid fa-pen"></i>
                 </button>
             </div>
@@ -3382,11 +3413,14 @@ function bindEditButtons() {
  */
 function openItemEditModal(itemName) {
     const state = horaeManager.getLatestState();
-    const item = state.items?.[itemName];
-    if (!item) {
+    const resolved = resolveLatestItemEntry(itemName, state);
+    if (!resolved) {
+        updateItemsDisplay();
         showToast(t('toast.itemNotFoundGeneric'), 'error');
         return;
     }
+    const actualItemName = resolved.name;
+    const item = resolved.info;
 
     const modalHtml = `
         <div id="horae-edit-modal" class="horae-modal">
@@ -3397,11 +3431,11 @@ function openItemEditModal(itemName) {
                 <div class="horae-modal-body horae-edit-modal-body">
                     <div class="horae-edit-field">
                         <label>${t('placeholder.itemName')}</label>
-                        <input type="text" id="edit-item-name" value="${itemName}" placeholder="${t('placeholder.itemName')}">
+                        <input type="text" id="edit-item-name" value="${escapeHtml(actualItemName)}" placeholder="${t('placeholder.itemName')}">
                     </div>
                     <div class="horae-edit-field">
                         <label>${t('label.icon')}</label>
-                        <input type="text" id="edit-item-icon" value="${item.icon || ''}" maxlength="2" placeholder="📦">
+                        <input type="text" id="edit-item-icon" value="${escapeHtml(item.icon || '')}" maxlength="2" placeholder="📦">
                     </div>
                     <div class="horae-edit-field">
                         <label>${t('label.importance')}</label>
@@ -3413,15 +3447,15 @@ function openItemEditModal(itemName) {
                     </div>
                     <div class="horae-edit-field">
                         <label>${t('label.description')}</label>
-                        <textarea id="edit-item-desc" placeholder="${t('placeholder.itemDesc')}">${item.description || ''}</textarea>
+                        <textarea id="edit-item-desc" placeholder="${t('placeholder.itemDesc')}">${escapeHtml(item.description || '')}</textarea>
                     </div>
                     <div class="horae-edit-field">
                         <label>${t('label.holder')}</label>
-                        <input type="text" id="edit-item-holder" value="${item.holder || ''}" placeholder="${t('placeholder.holderName')}">
+                        <input type="text" id="edit-item-holder" value="${escapeHtml(item.holder || '')}" placeholder="${t('placeholder.holderName')}">
                     </div>
                     <div class="horae-edit-field">
                         <label>${t('label.location')}</label>
-                        <input type="text" id="edit-item-location" value="${item.location || ''}" placeholder="${t('placeholder.locationName')}">
+                        <input type="text" id="edit-item-location" value="${escapeHtml(item.location || '')}" placeholder="${t('placeholder.locationName')}">
                     </div>
                 </div>
                 <div class="horae-modal-footer">
@@ -3458,14 +3492,13 @@ function openItemEditModal(itemName) {
 
         // 更新所有消息中的该物品（含数量后缀变体，如 sword(3)）
         const chat = horaeManager.getChat();
-        const nameChanged = newName !== itemName;
-        const editBaseName = getItemBaseName(itemName).toLowerCase();
+        const nameChanged = newName !== actualItemName;
 
         for (let i = 0; i < chat.length; i++) {
             const meta = chat[i].horae_meta;
             if (!meta?.items) continue;
             const matchKey = Object.keys(meta.items).find(k =>
-                k === itemName || getItemBaseName(k).toLowerCase() === editBaseName
+                isSameItemNameVariant(k, actualItemName)
             );
             if (!matchKey) continue;
             if (nameChanged) {
@@ -5362,28 +5395,33 @@ function bindItemsEvents() {
             const name = btn.dataset.itemName;
             if (!name) return;
             const state = horaeManager.getLatestState();
-            const itemInfo = state.items?.[name];
-            if (!itemInfo) return;
+            const resolved = resolveLatestItemEntry(name, state);
+            if (!resolved) {
+                updateItemsDisplay();
+                return;
+            }
+            const actualName = resolved.name;
+            const itemInfo = resolved.info;
             const chat = horaeManager.getChat();
             for (let i = chat.length - 1; i >= 0; i--) {
                 const meta = chat[i]?.horae_meta;
                 if (!meta?.items) continue;
-                const key = Object.keys(meta.items).find(k => k === name || k.replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u, '').trim() === name);
+                const key = Object.keys(meta.items).find(k => isSameItemNameVariant(k, actualName));
                 if (key) {
                     meta.items[key]._locked = !meta.items[key]._locked;
                     getContext().saveChat();
                     updateItemsDisplay();
-                    showToast(meta.items[key]._locked ? t('toast.itemLocked', { name }) : t('toast.itemUnlocked', { name }), meta.items[key]._locked ? 'success' : 'info');
+                    showToast(meta.items[key]._locked ? t('toast.itemLocked', { name: actualName }) : t('toast.itemUnlocked', { name: actualName }), meta.items[key]._locked ? 'success' : 'info');
                     return;
                 }
             }
             const first = chat[0];
             if (!first.horae_meta) first.horae_meta = createEmptyMeta();
             if (!first.horae_meta.items) first.horae_meta.items = {};
-            first.horae_meta.items[name] = { ...itemInfo, _locked: true };
+            first.horae_meta.items[actualName] = { ...itemInfo, _locked: true };
             getContext().saveChat();
             updateItemsDisplay();
-            showToast(t('toast.itemLocked', { name }), 'success');
+            showToast(t('toast.itemLocked', { name: actualName }), 'success');
         });
     });
 }
@@ -5405,8 +5443,14 @@ function _equipItemToChar(itemName, owner, slotName, replacedItem) {
     const first = chat[0];
     if (!first.horae_meta) first.horae_meta = createEmptyMeta();
     const state = horaeManager.getLatestState();
-    const itemInfo = state.items?.[itemName];
-    if (!itemInfo) { showToast(t('toast.itemNotFound', { name: itemName }), 'warning'); return; }
+    const resolved = resolveLatestItemEntry(itemName, state);
+    if (!resolved) {
+        updateItemsDisplay();
+        showToast(t('toast.itemNotFound', { name: itemName }), 'warning');
+        return;
+    }
+    const actualItemName = resolved.name;
+    const itemInfo = resolved.info;
 
     if (!first.horae_meta.rpg) first.horae_meta.rpg = {};
     const rpg = first.horae_meta.rpg;
@@ -5423,7 +5467,7 @@ function _equipItemToChar(itemName, owner, slotName, replacedItem) {
 
     // 构建装备条目（携带完整物品信息）
     const eqEntry = {
-        name: itemName,
+        name: actualItemName,
         attrs: {},
         _itemMeta: {
             icon: itemInfo.icon || '',
@@ -5434,13 +5478,13 @@ function _equipItemToChar(itemName, owner, slotName, replacedItem) {
         },
     };
     // 已有装备属性（从 eqAttrMap 等来源）
-    const existingEqData = _findExistingEquipAttrs(itemName);
+    const existingEqData = _findExistingEquipAttrs(actualItemName);
     if (existingEqData) eqEntry.attrs = { ...existingEqData };
 
     rpg.equipment[owner][slotName].push(eqEntry);
 
     // 从物品栏中移除
-    _removeItemFromState(itemName);
+    _removeItemFromState(actualItemName);
 
     getContext().saveChat();
 }
@@ -5492,8 +5536,10 @@ function _removeItemFromState(itemName) {
     if (!chat?.length) return;
     for (let i = chat.length - 1; i >= 0; i--) {
         const meta = chat[i]?.horae_meta;
-        if (meta?.items?.[itemName]) {
-            delete meta.items[itemName];
+        if (!meta?.items) continue;
+        const key = Object.keys(meta.items).find(k => isSameItemNameVariant(k, itemName));
+        if (key) {
+            delete meta.items[key];
             return;
         }
     }
@@ -5504,7 +5550,7 @@ function _findExistingEquipAttrs(itemName) {
         const rpg = horaeManager.getRpgStateAt(0);
         for (const [, slots] of Object.entries(rpg.equipment || {})) {
             for (const [, items] of Object.entries(slots)) {
-                const found = items.find(e => e.name === itemName);
+                const found = items.find(e => isSameItemNameVariant(e.name, itemName));
                 if (found?.attrs && Object.keys(found.attrs).length > 0) return { ...found.attrs };
             }
         }
@@ -5524,8 +5570,12 @@ function _openEquipItemDialog(itemName) {
         return;
     }
     const state = horaeManager.getLatestState();
-    const itemInfo = state.items?.[itemName];
-    if (!itemInfo) return;
+    const resolved = resolveLatestItemEntry(itemName, state);
+    if (!resolved) {
+        updateItemsDisplay();
+        return;
+    }
+    const actualItemName = resolved.name;
 
     const modal = document.createElement('div');
     modal.className = 'horae-modal';
@@ -5600,13 +5650,13 @@ function _openEquipItemDialog(itemName) {
         const existing = eqValues[owner]?.[slotName] || [];
         const replaced = existing.length >= max ? existing[0] : null;
 
-        _equipItemToChar(itemName, owner, slotName, replaced);
+        _equipItemToChar(actualItemName, owner, slotName, replaced);
         modal.remove();
         updateItemsDisplay();
         renderEquipmentValues();
         _bindEquipmentEvents();
         updateAllRpgHuds();
-        showToast(t('toast.itemEquipped', { item: itemName, owner, slot: slotName }), 'success');
+        showToast(t('toast.itemEquipped', { item: actualItemName, owner, slot: slotName }), 'success');
     };
 
     modal.querySelector('#horae-equip-cancel').onclick = () => modal.remove();
@@ -5669,7 +5719,8 @@ function toggleItemSelection(itemName) {
     }
 
     // 更新UI
-    const item = document.querySelector(`#horae-items-full-list .horae-full-item[data-item-name="${itemName}"]`);
+    const item = Array.from(document.querySelectorAll('#horae-items-full-list .horae-full-item'))
+        .find(el => el.dataset.itemName === itemName);
     if (item) {
         const checkbox = item.querySelector('input[type="checkbox"]');
         if (checkbox) checkbox.checked = selectedItems.has(itemName);
@@ -5722,8 +5773,9 @@ async function deleteSelectedItems() {
         if (meta && meta.items) {
             let changed = false;
             for (const itemName of itemsToDelete) {
-                if (meta.items[itemName]) {
-                    delete meta.items[itemName];
+                const keys = Object.keys(meta.items).filter(key => isSameItemNameVariant(key, itemName));
+                for (const key of keys) {
+                    delete meta.items[key];
                     changed = true;
                 }
             }
@@ -8346,7 +8398,7 @@ function _restoreCompressedFlags(meta, saved) {
     if (nonSummaryFlags.length > 0 && meta.events.length > 0) {
         const chat = horaeManager.getChat();
         const sums = chat?.[0]?.horae_meta?.autoSummaries || [];
-        const activeSumIds = new Set(sums.filter(s => s.active).map(s => s.id));
+        const activeSumIds = new Set(sums.filter(s => s?.id && s.active !== false).map(s => s.id));
         for (const evt of meta.events) {
             if (evt.isSummary || evt._summaryId || evt._compressedBy) continue;
             const matchFlag = nonSummaryFlags.find(f => f._compressedBy && activeSumIds.has(f._compressedBy));
@@ -8368,6 +8420,47 @@ function _restoreCompressedFlags(meta, saved) {
 }
 
 /**
+ * 补齐活跃摘要覆盖范围内原始事件的压缩标记。
+ * 只改事件标记，不隐藏 #0，避免影响 chat[0] 承载的全局元数据。
+ */
+function repairSummaryCompressedMarkers() {
+    const chat = horaeManager.getChat();
+    const sums = chat?.[0]?.horae_meta?.autoSummaries;
+    if (!chat?.length || !sums?.length) return 0;
+
+    const activeIds = new Set(sums.filter(s => s?.id && s.active !== false).map(s => s.id));
+    let fixed = 0;
+
+    for (const s of sums) {
+        if (!s?.id || s.active === false) continue;
+        for (const idx of getSummaryMsgIndices(s)) {
+            if (!Number.isInteger(idx) || !chat[idx]) continue;
+            const meta = chat[idx].horae_meta;
+            if (!meta || meta._skipHorae) continue;
+            if (meta.event && !meta.events) {
+                meta.events = [meta.event];
+                delete meta.event;
+            }
+            if (!Array.isArray(meta.events)) continue;
+
+            for (const evt of meta.events) {
+                if (!evt || evt.isSummary || evt._summaryId || evt._carryoverSeed) continue;
+                if (!evt._compressedBy || !activeIds.has(evt._compressedBy)) {
+                    evt._compressedBy = s.id;
+                    fixed++;
+                }
+            }
+        }
+    }
+
+    if (fixed > 0) {
+        console.log(`[Horae] repairSummaryCompressedMarkers: 补齐 ${fixed} 个摘要压缩标记`);
+        try { getContext().saveChat(); } catch (_) { }
+    }
+    return fixed;
+}
+
+/**
  * 摘要卡片完整性修复（「只补不杀」策略）：
  * 旧版：若 active 摘要的 events 卡片不见了，就关闭整个摘要、回退原始时间线
  *       → 导致玩了几层后摘要莫名「掉」回去
@@ -8383,7 +8476,7 @@ function cleanOrphanSummaries() {
 
     let restored = 0;
     for (const s of sums) {
-        if (!s.active || !s.range || !s.id) continue;
+        if (s.active === false || !s.range || !s.id) continue;
         const summaryId = s.id;
 
         let cardFound = false;
@@ -8455,10 +8548,10 @@ async function enforceHiddenState() {
 
     let fixed = 0;
     for (const s of sums) {
-        if (!s.active) continue;
+        if (!s?.id || s.active === false) continue;
         const summaryId = s.id;
         for (const i of getSummaryMsgIndices(s)) {
-            if (i === 0 || !chat[i]) continue;
+            if (!chat[i]) continue;
             if (!chat[i].is_hidden) {
                 chat[i].is_hidden = true;
                 fixed++;
@@ -8496,10 +8589,10 @@ function repairAllSummaryStates() {
 
     let fixed = 0;
     for (const s of sums) {
-        if (!s.active) continue;
+        if (!s?.id || s.active === false) continue;
         const summaryId = s.id;
         for (const i of getSummaryMsgIndices(s)) {
-            if (i === 0 || !chat[i]) continue;
+            if (!chat[i]) continue;
             if (!chat[i].is_hidden) {
                 chat[i].is_hidden = true;
                 fixed++;
@@ -12429,7 +12522,7 @@ function initSettingsEvents() {
         $('#horae-auto-summary-options').toggle(this.checked);
     });
     $('#horae-setting-auto-summary-keep').on('change', function () {
-        settings.autoSummaryKeepRecent = Math.max(3, parseInt(this.value) || 10);
+        settings.autoSummaryKeepRecent = Math.max(2, parseInt(this.value) || 10);
         this.value = settings.autoSummaryKeepRecent;
         saveSettings();
     });
