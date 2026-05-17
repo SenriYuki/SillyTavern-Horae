@@ -4,7 +4,7 @@
 {{context}}
 
 【前回のユーザー行動】
-{{previousUserMessage}}
+{{user}}: {{previousUserMessage}}
 
 【分析対象テキスト】
 {{content}}

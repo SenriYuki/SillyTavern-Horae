@@ -4,7 +4,7 @@
 {{context}}
 
 【上一条用户行动】
-{{previousUserMessage}}
+{{user}}: {{previousUserMessage}}
 
 【待分析文本】
 {{content}}

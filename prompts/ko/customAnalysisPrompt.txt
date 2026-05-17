@@ -4,7 +4,7 @@
 {{context}}
 
 【이전 사용자 행동】
-{{previousUserMessage}}
+{{user}}: {{previousUserMessage}}
 
 【분석 대상 텍스트】
 {{content}}

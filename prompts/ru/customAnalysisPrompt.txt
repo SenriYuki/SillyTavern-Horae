@@ -4,7 +4,7 @@
 {{context}}
 
 【Предыдущее действие пользователя】
-{{previousUserMessage}}
+{{user}}: {{previousUserMessage}}
 
 【Текст для анализа】
 {{content}}

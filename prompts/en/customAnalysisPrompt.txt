@@ -4,7 +4,7 @@ Please analyze the following AI reply text, extract key information, and output 
 {{context}}
 
 [Previous User Action]
-{{previousUserMessage}}
+{{user}}: {{previousUserMessage}}
 
 [Text to Analyze]
 {{content}}
