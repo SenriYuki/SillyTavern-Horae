@@ -218,7 +218,7 @@ const DEFAULT_SETTINGS = {
     vectorApiUrl: 'https://api.siliconflow.cn/v1',                  // OpenAI 兼容 embedding API 地址
     vectorApiKey: '',                  // API 密钥
     vectorApiModel: 'Qwen/Qwen3-Embedding-8B',                // 远程 embedding 模型名称
-    vectorQueryRewriteEnabled: false,   // 启用 Query 重写
+    vectorQueryRewriteEnabled: true,   // 启用 Query 重写
     vectorQueryRewriteUrl: '',         // Query 重写 API 地址（留空=复用 embedding）
     vectorQueryRewriteKey: '',         // Query 重写 API 密钥（留空=复用 embedding）
     vectorQueryRewriteModel: 'Qwen/Qwen3.5-27B',       // Query 重写模型名称（留空=关闭）
