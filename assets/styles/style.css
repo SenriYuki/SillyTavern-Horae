@@ -1374,6 +1374,23 @@
     }
 }
 
+@media screen and (max-width: 768px) {
+    #horae-vector-api-query-rewrite-section label[data-i18n="vector.queryRewriteUrl"],
+    #horae-vector-api-query-rewrite-section label[data-i18n="vector.queryRewriteKey"] {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    #horae-vector-api-query-rewrite-section label[data-i18n="vector.queryRewriteUrl"] input,
+    #horae-vector-api-query-rewrite-section label[data-i18n="vector.queryRewriteKey"] input {
+        box-sizing: border-box;
+        margin-left: 0;
+        min-width: 0;
+        width: 100%;
+    }
+}
+
 .horae-setting-inline-controls {
     display: flex;
     align-items: center;

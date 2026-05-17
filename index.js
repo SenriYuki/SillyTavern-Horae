@@ -268,6 +268,7 @@ let _chatFullyLoaded = false;
 let _autoSummaryRanThisTurn = false;
 let _vectorEnsureIndexPromise = null;
 let _vectorEnsureIndexChatId = null;
+let _vectorDeferredIndexKeys = new Set();
 let itemsMultiSelectMode = false;  // 物品多选模式
 let selectedItems = new Set();     // 选中的物品名称
 let npcMultiSelectMode = false;     // NPC多选模式
@@ -13543,10 +13544,15 @@ function _updateVectorStatus() {
 
 /** 计算当前聊天中缺失/过期的向量索引数量（仅统计可索引消息） */
 function _countVectorIndexGap(chat) {
-    if (!Array.isArray(chat) || chat.length === 0) return { missing: 0, indexable: 0 };
+    if (!Array.isArray(chat) || chat.length === 0) return { missing: 0, indexable: 0, missingIndices: [] };
 
     let missing = 0;
     let indexable = 0;
+    const missingIndices = [];
+    const markMissing = (idx) => {
+        missing++;
+        missingIndices.push(idx);
+    };
 
     for (let i = 0; i < chat.length; i++) {
         const msg = chat[i];
@@ -13561,19 +13567,77 @@ function _countVectorIndexGap(chat) {
         indexable++;
         const existing = vectorManager.vectors.get(i);
         if (!existing) {
-            missing++;
+            markMissing(i);
             continue;
         }
 
         try {
             const hash = vectorManager._hashString(doc);
-            if (existing.hash !== hash) missing++;
+            if (existing.hash !== hash) markMissing(i);
         } catch (_) {
-            missing++;
+            markMissing(i);
         }
     }
 
-    return { missing, indexable };
+    return { missing, indexable, missingIndices };
+}
+
+function _findPreviousAiIndexBeforeCurrentUser(chat) {
+    if (!Array.isArray(chat) || chat.length < 2) return -1;
+
+    const lastIndex = chat.length - 1;
+    if (!chat[lastIndex]?.is_user) return -1;
+
+    for (let i = lastIndex - 1; i >= 0; i--) {
+        const msg = chat[i];
+        if (!msg || msg.is_user) continue;
+        if (msg.horae_meta?._skipHorae) continue;
+        return i;
+    }
+
+    return -1;
+}
+
+function _scheduleDeferredVectorMessageIndex(messageIndex, chatId) {
+    if (!Number.isInteger(messageIndex) || messageIndex < 0 || !chatId || chatId === 'unknown') return;
+
+    const key = `${chatId}:${messageIndex}`;
+    if (_vectorDeferredIndexKeys.has(key)) return;
+    _vectorDeferredIndexKeys.add(key);
+
+    setTimeout(async () => {
+        try {
+            if (!settings.vectorEnabled || !vectorManager.isReady) return;
+
+            const currentChatId = _deriveChatId(getContext());
+            if (currentChatId !== chatId) {
+                console.log(`[Horae Vector] 后台补建跳过：聊天已切换 ${chatId} -> ${currentChatId}`);
+                return;
+            }
+
+            const chat = horaeManager.getChat();
+            if (!Array.isArray(chat)) return;
+
+            if (vectorManager.chatId !== chatId) {
+                await vectorManager.loadChat(chatId, chat);
+            }
+
+            const msg = chat[messageIndex];
+            const meta = msg?.horae_meta;
+            if (!msg || msg.is_user || !meta || meta._skipHorae) return;
+
+            const doc = vectorManager.buildVectorDocument(meta);
+            if (!doc) return;
+
+            await vectorManager.addMessage(messageIndex, meta);
+            console.log(`[Horae Vector] 后台补建完成：楼层 #${messageIndex}`);
+        } catch (err) {
+            console.warn(`[Horae Vector] 后台补建失败 #${messageIndex}:`, err);
+        } finally {
+            _vectorDeferredIndexKeys.delete(key);
+            _updateVectorStatus();
+        }
+    }, 0);
 }
 
 /** 清理向量索引中的不可追踪楼层（user/无meta/番外/无可索引文档） */
@@ -13618,8 +13682,14 @@ async function _ensureVectorIndexBeforeRecall() {
 
     await _pruneVectorUntrackableEntries(chat);
 
-    const { missing, indexable } = _countVectorIndexGap(chat);
+    const { missing, indexable, missingIndices } = _countVectorIndexGap(chat);
     if (missing <= 0) return;
+
+    const previousAiIndex = _findPreviousAiIndexBeforeCurrentUser(chat);
+    if (missing === 1 && missingIndices[0] === previousAiIndex) {
+        console.log(`[Horae Vector] 仅上一条AI楼层 #${previousAiIndex} 缺失/过期，延后后台补建，不阻塞本轮发送`);
+        return { deferredMessageIndex: previousAiIndex, chatId };
+    }
 
     // showToast(`检测到 ${missing}/${indexable} 条向量索引缺失，正在补建索引。请勿切换或退出聊天。`, 'warning');
 
@@ -17975,6 +18045,7 @@ async function _autoFillPreviousAiTimelineBeforeInjection(chat) {
 
     console.log(`[Horae] 前置补全完成：已写回上一条AI楼层 #${targetIndex} 的完整解析结果`);
     // showToast(t('toast.autoFillPrevTimelineDone', { id: targetIndex }), 'success');
+    return targetIndex;
 }
 
 // ============================================
@@ -18591,6 +18662,81 @@ function _stripNoSystemPromptInjectionMarkers(chatMessages) {
     return found;
 }
 
+function _resolvePromptReadySkipLast(chat) {
+    if (!chat || chat.length === 0) return 0;
+    const lastMsg = chat[chat.length - 1];
+    if (lastMsg && !lastMsg.is_user && lastMsg.horae_meta && (
+        lastMsg.horae_meta.timestamp?.story_date ||
+        lastMsg.horae_meta.scene?.location ||
+        Object.keys(lastMsg.horae_meta.items || {}).length > 0 ||
+        Object.keys(lastMsg.horae_meta.costumes || {}).length > 0 ||
+        Object.keys(lastMsg.horae_meta.affection || {}).length > 0 ||
+        Object.keys(lastMsg.horae_meta.npcs || {}).length > 0 ||
+        (lastMsg.horae_meta.events || []).length > 0 ||
+        (lastMsg.horae_meta._rpgChanges && Object.keys(lastMsg.horae_meta._rpgChanges).length > 0)
+    )) {
+        return 1;
+    }
+    return 0;
+}
+
+function _collectVectorPromptExcludeIndices(chat, promptChat, promptVisibility) {
+    const promptCoveredChatIndices = _collectPromptCoveredChatIndices(chat, promptChat);
+    if (promptVisibility?.ignoredBoundaryAiIndices?.size > 0) {
+        let removed = 0;
+        for (const idx of promptVisibility.ignoredBoundaryAiIndices) {
+            if (promptCoveredChatIndices.delete(idx)) removed++;
+        }
+        if (removed > 0) {
+            console.log(`[Horae] Prompt边界缓冲已忽略 ${removed} 条楼层（keepRecent=${promptVisibility.keepRecent} -> prompt=${promptVisibility.promptKeepRecent}）`);
+        }
+    }
+    return promptCoveredChatIndices;
+}
+
+async function _runVectorRecallBeforePromptReady(chat, promptChat, skipLast, promptVisibility, skipVectorRecallOnce) {
+    let deferredVectorIndex = null;
+    try {
+        console.log(`[Horae] 向量检查: vectorEnabled=${settings.vectorEnabled}, isReady=${vectorManager.isReady}, vectors=${vectorManager.vectors.size}`);
+        if (skipVectorRecallOnce) {
+            console.log('[Horae] Internal no-recall marker detected, skip vector recall for this request');
+            return '';
+        }
+        if (!settings.vectorEnabled || !vectorManager.isReady) return '';
+
+        const recallRewritePromise = settings.vectorQueryRewriteEnabled === true
+            ? vectorManager.prepareRecallRewrite(chat, settings)
+            : null;
+
+        deferredVectorIndex = await _ensureVectorIndexBeforeRecall();
+
+        const promptCoveredChatIndices = _collectVectorPromptExcludeIndices(chat, promptChat, promptVisibility);
+        if (promptCoveredChatIndices.size > 0) {
+            console.log(`[Horae] Prompt已覆盖楼层: ${promptCoveredChatIndices.size}，召回将排除这些楼层`);
+        }
+
+        const recallPrompt = await vectorManager.generateRecallPrompt(
+            horaeManager,
+            skipLast,
+            settings,
+            promptCoveredChatIndices,
+            { rewritePromise: recallRewritePromise }
+        );
+        console.log(`[Horae] 向量召回结果: ${recallPrompt ? recallPrompt.length + ' 字符' : '空'}`);
+        return recallPrompt || '';
+    } catch (err) {
+        console.error('[Horae] 向量召回失败:', err);
+        return '';
+    } finally {
+        if (deferredVectorIndex?.deferredMessageIndex >= 0) {
+            _scheduleDeferredVectorMessageIndex(
+                deferredVectorIndex.deferredMessageIndex,
+                deferredVectorIndex.chatId
+            );
+        }
+    }
+}
+
 async function onPromptReady(eventData) {
     const skipVectorRecallOnce = _stripNoVectorRecallMarkers(eventData?.chat);
     const skipContextInjectionOnce = _stripNoContextInjectionMarkers(eventData?.chat);
@@ -18609,35 +18755,27 @@ async function onPromptReady(eventData) {
 
     try {
         const chat = horaeManager.getChat();
-        const recallRewritePromise = (
-            !skipVectorRecallOnce &&
-            settings.vectorEnabled &&
-            vectorManager.isReady &&
-            settings.vectorQueryRewriteEnabled === true
-        )
-            ? vectorManager.prepareRecallRewrite(chat, settings)
-            : null;
+        const earlySkipLast = _resolvePromptReadySkipLast(chat);
+        const earlyPromptVisibility = _buildPromptVisibilityContext(chat, earlySkipLast);
+        const vectorRecallPromise = _runVectorRecallBeforePromptReady(
+            chat,
+            eventData.chat,
+            earlySkipLast,
+            earlyPromptVisibility,
+            skipVectorRecallOnce
+        );
 
         // 发送前：可选补全上一条AI楼层的时间线
-        await _autoFillPreviousAiTimelineBeforeInjection(chat);
+        const autoFillPromise = _autoFillPreviousAiTimelineBeforeInjection(chat);
+        const autoFilledIndex = await autoFillPromise;
+        if (Number.isInteger(autoFilledIndex) && autoFilledIndex >= 0) {
+            _scheduleDeferredVectorMessageIndex(autoFilledIndex, _deriveChatId(getContext()));
+        }
 
         // swipe/regenerate检测
-        let skipLast = 0;
-        if (chat && chat.length > 0) {
-            const lastMsg = chat[chat.length - 1];
-            if (lastMsg && !lastMsg.is_user && lastMsg.horae_meta && (
-                lastMsg.horae_meta.timestamp?.story_date ||
-                lastMsg.horae_meta.scene?.location ||
-                Object.keys(lastMsg.horae_meta.items || {}).length > 0 ||
-                Object.keys(lastMsg.horae_meta.costumes || {}).length > 0 ||
-                Object.keys(lastMsg.horae_meta.affection || {}).length > 0 ||
-                Object.keys(lastMsg.horae_meta.npcs || {}).length > 0 ||
-                (lastMsg.horae_meta.events || []).length > 0 ||
-                (lastMsg.horae_meta._rpgChanges && Object.keys(lastMsg.horae_meta._rpgChanges).length > 0)
-            )) {
-                skipLast = 1;
-                console.log('[Horae] 检测到swipe/regenerate，跳过末尾消息的旧记忆');
-            }
+        const skipLast = _resolvePromptReadySkipLast(chat);
+        if (skipLast > 0) {
+            console.log('[Horae] 检测到swipe/regenerate，跳过末尾消息的旧记忆');
         }
 
         const eqAutoApplied = _autoApplyEquipmentTemplatesByRace({ persist: false });
@@ -18676,38 +18814,7 @@ async function onPromptReady(eventData) {
             console.log('[Horae] Internal no-timeline marker detected, skip story timeline injection for this request');
         }
 
-        let recallPrompt = '';
-        console.log(`[Horae] 向量检查: vectorEnabled=${settings.vectorEnabled}, isReady=${vectorManager.isReady}, vectors=${vectorManager.vectors.size}`);
-        if (skipVectorRecallOnce) {
-            console.log('[Horae] Internal no-recall marker detected, skip vector recall for this request');
-        } else if (settings.vectorEnabled && vectorManager.isReady) {
-            try {
-                await _ensureVectorIndexBeforeRecall();
-                const promptCoveredChatIndices = _collectPromptCoveredChatIndices(chat, eventData.chat);
-                if (promptVisibility.ignoredBoundaryAiIndices?.size > 0) {
-                    let removed = 0;
-                    for (const idx of promptVisibility.ignoredBoundaryAiIndices) {
-                        if (promptCoveredChatIndices.delete(idx)) removed++;
-                    }
-                    if (removed > 0) {
-                        console.log(`[Horae] Prompt边界缓冲已忽略 ${removed} 条楼层（keepRecent=${promptVisibility.keepRecent} -> prompt=${promptVisibility.promptKeepRecent}）`);
-                    }
-                }
-                if (promptCoveredChatIndices.size > 0) {
-                    console.log(`[Horae] Prompt已覆盖楼层: ${promptCoveredChatIndices.size}，召回将排除这些楼层`);
-                }
-                recallPrompt = await vectorManager.generateRecallPrompt(
-                    horaeManager,
-                    skipLast,
-                    settings,
-                    promptCoveredChatIndices,
-                    { rewritePromise: recallRewritePromise }
-                );
-                console.log(`[Horae] 向量召回结果: ${recallPrompt ? recallPrompt.length + ' 字符' : '空'}`);
-            } catch (err) {
-                console.error('[Horae] 向量召回失败:', err);
-            }
-        }
+        const recallPrompt = await vectorRecallPromise;
 
         const skipByBriefScope = _shouldSkipSystemPromptInjectionOnSend();
         const skipSystemPromptOnSend = skipByBriefScope || skipSystemPromptInjectionOnce;
