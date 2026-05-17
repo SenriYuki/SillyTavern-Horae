@@ -13198,10 +13198,26 @@ function _renderVectorDebugInfo() {
     const escape = (s) => $('<div>').text(s == null ? '' : String(s)).html();
     const ts = new Date(info.timestamp || Date.now()).toLocaleString();
 
+    const rewriteIntent = info.query?.rewriteIntent || info.rewrite?.intent || '';
+    const rewriteQueries = Array.isArray(info.query?.rewriteQueries)
+        ? info.query.rewriteQueries
+        : (Array.isArray(info.rewrite?.queries) ? info.rewrite.queries : []);
+    const rewriteActive = info.rewrite?.enabled === true || !!rewriteIntent || rewriteQueries.length > 0;
+    const rewriteResultLines = [];
+    if (rewriteIntent) rewriteResultLines.push(`INTENT: ${rewriteIntent}`);
+    rewriteQueries.forEach((q, i) => rewriteResultLines.push(`Q${i + 1}: ${q}`));
+    if (rewriteResultLines.length === 0 && info.rewrite?.error) {
+        rewriteResultLines.push(`ERROR: ${info.rewrite.error}`);
+    } else if (rewriteResultLines.length === 0 && info.rewrite?.reason && info.rewrite.reason !== 'disabled') {
+        rewriteResultLines.push(`- (${info.rewrite.reason})`);
+    }
+
     const queryRows = [
         [t('vector.debugQueryUser'), info.query?.user],
         [t('vector.debugQueryState'), info.query?.state],
-        [t('vector.debugQueryMerged'), info.query?.merged],
+        rewriteActive
+            ? [t('vector.debugQueryRewriteResult') || '重写结果', rewriteResultLines.join('\n')]
+            : [t('vector.debugQueryMerged'), info.query?.merged],
     ].map(([k, v]) => `<div class="horae-vector-debug-row"><span class="horae-vector-debug-key">${escape(k)}</span><span class="horae-vector-debug-val">${escape(v || '-')}</span></div>`).join('');
 
     const settingsLine = info.settings

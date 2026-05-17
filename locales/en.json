@@ -864,6 +864,7 @@
         "debugQueryUser": "User input",
         "debugQueryState": "Current state",
         "debugQueryMerged": "Merged query",
+        "debugQueryRewriteResult": "Rewrite result",
         "debugSettings": "Runtime settings",
         "debugStructured": "Structured hits",
         "debugEmbedding": "Vector recall",

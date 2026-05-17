@@ -946,6 +946,7 @@
         "debugQueryUser": "ユーザー入力",
         "debugQueryState": "現在の状況",
         "debugQueryMerged": "統合クエリ",
+        "debugQueryRewriteResult": "リライト結果",
         "debugSettings": "実行パラメータ",
         "debugStructured": "構造化ヒット",
         "debugEmbedding": "ベクトル検索",

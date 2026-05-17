@@ -861,6 +861,7 @@
         "debugQueryUser": "用户输入",
         "debugQueryState": "当前情境",
         "debugQueryMerged": "合并查询",
+        "debugQueryRewriteResult": "重写结果",
         "debugSettings": "运行参数",
         "debugStructured": "结构化命中",
         "debugEmbedding": "向量召回",

@@ -773,6 +773,7 @@
         "debugQueryUser": "使用者輸入",
         "debugQueryState": "目前情境",
         "debugQueryMerged": "合併查詢",
+        "debugQueryRewriteResult": "重寫結果",
         "debugSettings": "執行參數",
         "debugStructured": "結構化命中",
         "debugEmbedding": "向量召回",

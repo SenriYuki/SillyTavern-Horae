@@ -940,6 +940,7 @@
         "debugQueryUser": "Ввод пользователя",
         "debugQueryState": "Текущая ситуация",
         "debugQueryMerged": "Объединённый запрос",
+        "debugQueryRewriteResult": "Результат перезаписи",
         "debugSettings": "Параметры выполнения",
         "debugStructured": "Структурные совпадения",
         "debugEmbedding": "Векторный поиск",

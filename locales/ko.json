@@ -944,6 +944,7 @@
         "debugQueryUser": "사용자 입력",
         "debugQueryState": "현재 상황",
         "debugQueryMerged": "통합 쿼리",
+        "debugQueryRewriteResult": "재작성 결과",
         "debugSettings": "실행 매개변수",
         "debugStructured": "구조화 적중",
         "debugEmbedding": "벡터 검색",

@@ -913,6 +913,24 @@ export class VectorManager {
         return results;
     }
 
+    _formatRewriteQuerySource(queryHits) {
+        if (!Array.isArray(queryHits) || queryHits.length === 0) return 'Q';
+        const indices = [...new Set(queryHits
+            .map(hit => Number.isInteger(hit?.queryIndex) ? hit.queryIndex : null)
+            .filter(idx => idx !== null && idx >= 0))]
+            .sort((a, b) => a - b);
+        if (indices.length === 0) return 'Q';
+        return indices.map(idx => `Q${idx + 1}`).join(',');
+    }
+
+    _appendSourceLabel(source, label) {
+        const base = String(source || '').trim();
+        if (!base) return label;
+        return /^Q\d+(?:,Q\d+)*$/.test(base)
+            ? `${base},${label}`
+            : `${base}+${label}`;
+    }
+
     /**
      * 噪声文档惩罚（IDF）
      * 平均 IDF 过低说明文档由必然高频词主导（如主角名+场景），略上调阈值
@@ -1158,7 +1176,7 @@ export class VectorManager {
                 if (hasRelevant) {
                     const cur = fusionScore.get(r.messageIndex) || 0;
                     fusionScore.set(r.messageIndex, cur + 1 / (RRF_K + 0));
-                    r.source = (r.source || '') + '+char';
+                    r.source = this._appendSourceLabel(r.source, 'char');
                 }
             }
             console.log(`[Horae Vector] 角色相关性 RRF bonus: 相关角色=[${[...relevantChars].join(',')}]`);
@@ -2033,7 +2051,7 @@ export class VectorManager {
                 pureMode,
                 excludeReasonMap
             );
-            results = results.map(r => ({ ...r, source: 'rewrite-q' }));
+            results = results.map(r => ({ ...r, source: this._formatRewriteQuerySource(r.queryHits) }));
             console.log(`[Horae Vector] Query Rewrite 多路搜索: queries=${rewriteQueries.length} / 命中=${results.length} 条 | threshold=${mergedThreshold.toFixed(2)}`);
         } else {
             results = await this.search(mergedQuery, topK * 2, mergedThreshold, excludeIndices, pureMode, excludeReasonMap);
