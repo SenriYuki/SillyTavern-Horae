@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki，柏柏
- * 版本: 1.13.5B
+ * 版本: 1.13.6B
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -23,7 +23,7 @@ import { initPromptDefaults, ensurePromptDefaults, getPromptDefaultSync } from '
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.13.5B';
+const VERSION = '1.13.6B';
 const DEFAULT_VECTOR_STRIP_TAGS = 'dream_status,Episode,details,think,thinking,Thinking';
 
 // 配套正则规则（自动注入ST原生正则系统）
@@ -273,6 +273,7 @@ let _autoSummaryRanThisTurn = false;
 let _vectorEnsureIndexPromise = null;
 let _vectorEnsureIndexChatId = null;
 let _vectorDeferredIndexKeys = new Set();
+let _lastChatMessageRefs = [];
 let itemsMultiSelectMode = false;  // 物品多选模式
 let selectedItems = new Set();     // 选中的物品名称
 let npcMultiSelectMode = false;     // NPC多选模式
@@ -1738,6 +1739,108 @@ function getSummaryMsgIndices(entry) {
         for (let i = entry.range[0]; i <= entry.range[1]; i++) fromEvents.push(i);
     }
     return [...new Set(fromEvents)];
+}
+
+function _snapshotCurrentChatMessageRefs() {
+    const chat = horaeManager.getChat();
+    _lastChatMessageRefs = Array.isArray(chat) ? chat.slice() : [];
+}
+
+function _resolveSummaryDeletionBoundary(chat, reportedChatLength = null) {
+    if (!Array.isArray(chat)) return 0;
+
+    const currentRefs = new Set(chat);
+    const missingOldIndices = [];
+    let sharedOldRefs = 0;
+    for (let i = 0; i < _lastChatMessageRefs.length; i++) {
+        const oldMsg = _lastChatMessageRefs[i];
+        if (!oldMsg) continue;
+        if (currentRefs.has(oldMsg)) sharedOldRefs++;
+        else missingOldIndices.push(i);
+    }
+    if (missingOldIndices.length > 0 && sharedOldRefs > 0) {
+        return Math.min(...missingOldIndices);
+    }
+
+    const reported = parseInt(reportedChatLength, 10);
+    if (Number.isFinite(reported) && reported >= 0) {
+        return Math.floor(reported);
+    }
+
+    return chat.length;
+}
+
+function _summaryCoversIndexAtOrAfter(entry, boundaryIndex) {
+    if (!entry || !Number.isInteger(boundaryIndex)) return false;
+
+    for (const idx of getSummaryMsgIndices(entry)) {
+        if (Number.isInteger(idx) && idx >= boundaryIndex) return true;
+    }
+
+    const range = _getSummaryEntryRange(entry);
+    return !!(range && range[1] >= boundaryIndex);
+}
+
+function _pickSummaryCoveringDeletedFloor(chat, boundaryIndex) {
+    const sums = chat?.[0]?.horae_meta?.autoSummaries;
+    if (!Array.isArray(sums) || !Number.isInteger(boundaryIndex)) return null;
+
+    const candidates = [];
+    for (const s of sums) {
+        if (!s?.id) continue;
+        if (!_summaryCoversIndexAtOrAfter(s, boundaryIndex)) continue;
+
+        const range = _getSummaryEntryRange(s);
+        const depth = _normalizeSummaryDepth(s.depth);
+        const span = range ? Math.max(1, range[1] - range[0] + 1) : Number.MAX_SAFE_INTEGER;
+        candidates.push({
+            entry: s,
+            depth,
+            start: range?.[0] ?? Number.MAX_SAFE_INTEGER,
+            end: range?.[1] ?? Number.MAX_SAFE_INTEGER,
+            span,
+        });
+    }
+
+    candidates.sort((a, b) =>
+        b.depth - a.depth ||
+        a.start - b.start ||
+        b.end - a.end ||
+        a.span - b.span
+    );
+    return candidates[0]?.entry || null;
+}
+
+async function _removeSummariesCoveringDeletedFloors(chat, boundaryIndex) {
+    if (!Array.isArray(chat) || !chat.length || !Number.isInteger(boundaryIndex)) return [];
+    const removed = [];
+    const seen = new Set();
+    let guard = 0;
+
+    while (guard++ < 100) {
+        const target = _pickSummaryCoveringDeletedFloor(chat, boundaryIndex);
+        if (!target?.id) break;
+        if (seen.has(target.id)) {
+            console.warn(`[Horae] 摘要删除级联检测到重复目标，已停止: ${target.id}`);
+            break;
+        }
+        seen.add(target.id);
+
+        const result = await _removeSummaryAndRestoreHierarchy(chat, target.id);
+        if (!result?.removedEntry) break;
+        removed.push(result.removedEntry);
+    }
+
+    if (removed.length > 0) {
+        const detail = removed.map(s => {
+            const range = _getSummaryEntryRange(s);
+            const rangeText = range ? `#${range[0]}-#${range[1]}` : '#?';
+            return `L${_normalizeSummaryDepth(s.depth)} ${rangeText}`;
+        }).join(', ');
+        console.log(`[Horae] 删除消息后级联清理 ${removed.length} 条摘要: ${detail}`);
+    }
+
+    return removed;
 }
 
 function _pickPreferredSummaryOwner(prev, next) {
@@ -10391,7 +10494,7 @@ async function handlePanelAiAnalyzeAction(messageId, runAnalysis, options = {}) 
     if (typeof runAnalysis !== 'function') return false;
 
     const {
-        reanalyzeConfirmText = '该楼层已有时间线数据，是否重新分析？',
+        reanalyzeConfirmText = t('confirm.aiReanalyzeExistingTimeline'),
         analyzingToastText = '正在分析中，请稍后',
     } = options;
 
@@ -10900,7 +11003,7 @@ function rescanMessageMeta(messageId, panelEl) {
 
     const existingMeta = horaeManager.getMessageMeta(messageId) || createEmptyMeta();
     const shouldRebuild = _hasTimelineSummary(existingMeta);
-    if (shouldRebuild && !confirm('该楼层已有时间线数据，是否重新分析？')) {
+    if (shouldRebuild && !confirm(t('confirm.rescanExistingTimeline'))) {
         return;
     }
 
@@ -18270,6 +18373,7 @@ async function onMessageReceived(messageId) {
     try {
         refreshAllDisplays();
         renderCustomTablesList();
+        _snapshotCurrentChatMessageRefs();
     } catch (err) {
         console.error('[Horae] refreshAllDisplays 失败:', err);
     }
@@ -18310,18 +18414,21 @@ async function onMessageReceived(messageId) {
 }
 
 /**
- * 消息删除时触发 — 重建表格数据
+ * 消息删除时触发 — 级联清理失效摘要并重建派生数据
  */
-async function onMessageDeleted() {
+async function onMessageDeleted(reportedChatLength = null) {
     if (!settings.enabled) return;
 
     try {
+        const chat = horaeManager.getChat();
+        const summaryDeletionBoundary = _resolveSummaryDeletionBoundary(chat, reportedChatLength);
+        await _removeSummariesCoveringDeletedFloors(chat, summaryDeletionBoundary);
+
         horaeManager.rebuildTableData();
         horaeManager.rebuildRelationships();
         horaeManager.rebuildLocationMemory();
         horaeManager.rebuildRpgData();
 
-        const chat = horaeManager.getChat();
         if (settings.autoSummaryEnabled && settings.sendTimeline) {
             const keepRecent = Math.max(0, parseInt(settings.autoSummaryKeepRecent, 10) || 10);
             const activeCovered = _collectActiveSummaryCoveredIndices(chat);
@@ -18329,6 +18436,7 @@ async function onMessageDeleted() {
         }
 
         await getContext().saveChat();
+        _snapshotCurrentChatMessageRefs();
     } catch (err) {
         console.error('[Horae] onMessageDeleted 失败:', err);
     }
@@ -18366,6 +18474,7 @@ function onMessageEdited(messageId) {
 
             refreshAllDisplays();
             renderCustomTablesList();
+            _snapshotCurrentChatMessageRefs();
 
             if (settings.showMessagePanel) {
                 const messageEl = document.querySelector(`.mes[mesid="${messageId}"]`);
@@ -19205,9 +19314,11 @@ async function onChatChanged() {
         }
 
         _rebuildGlobalDataForCurrentChat();
+        await _removeSummariesCoveringDeletedFloors(horaeManager.getChat(), horaeManager.getChat()?.length || 0);
         refreshAllDisplays();
         renderCustomTablesList();
         renderDicePanel();
+        _snapshotCurrentChatMessageRefs();
     } catch (err) {
         console.error('[Horae] onChatChanged 初始化失败:', err);
     }
@@ -19324,6 +19435,7 @@ function onSwipePanel(messageId) {
 
             refreshAllDisplays();
             renderCustomTablesList();
+            _snapshotCurrentChatMessageRefs();
         } catch (err) {
             console.error(`[Horae] onSwipePanel #${messageId} 失败:`, err);
         }
@@ -19550,6 +19662,7 @@ jQuery(async () => {
     // 并行自动摘要：用户发消息时并行触发（独立API走直接HTTP，不影响主连接）
     if (event_types.USER_MESSAGE_RENDERED) {
         eventSource.on(event_types.USER_MESSAGE_RENDERED, () => {
+            if (settings.enabled) _snapshotCurrentChatMessageRefs();
             if (!settings.enabled || !settings.autoSummaryEnabled || !settings.sendTimeline) return;
             _autoSummaryRanThisTurn = true;
             checkAutoSummary().catch((e) => {
@@ -19560,6 +19673,7 @@ jQuery(async () => {
     }
 
     refreshAllDisplays();
+    _snapshotCurrentChatMessageRefs();
 
     if (settings.vectorEnabled) {
         setTimeout(() => _initVectorModel(), 1000);
