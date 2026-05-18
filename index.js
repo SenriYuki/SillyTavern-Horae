@@ -18835,6 +18835,46 @@ function _collectVectorPromptExcludeIndices(chat, promptChat, promptVisibility) 
     return promptCoveredChatIndices;
 }
 
+function _getVectorRecallHiddenCandidateInfo(chat, skipLast = 0, promptCoveredChatIndices = new Set()) {
+    const info = {
+        eligible: 0,
+        hiddenIndexable: 0,
+        excludedRecent: 0,
+        excludedPrompt: 0,
+        effectiveEnd: 0,
+    };
+    if (!Array.isArray(chat) || chat.length === 0) return info;
+
+    const effectiveEnd = Math.max(0, chat.length - Math.max(0, skipLast));
+    const recentStart = Math.max(0, effectiveEnd - 5);
+    info.effectiveEnd = effectiveEnd;
+
+    for (let i = 0; i < effectiveEnd; i++) {
+        const msg = chat[i];
+        if (!msg || msg.is_user || !msg.is_hidden) continue;
+
+        const meta = msg.horae_meta;
+        if (!meta || meta._skipHorae) continue;
+
+        const doc = vectorManager.buildVectorDocument(meta);
+        if (!doc) continue;
+
+        info.hiddenIndexable++;
+        if (i >= recentStart) {
+            info.excludedRecent++;
+            continue;
+        }
+        if (promptCoveredChatIndices?.has?.(i)) {
+            info.excludedPrompt++;
+            continue;
+        }
+
+        info.eligible++;
+    }
+
+    return info;
+}
+
 async function _runVectorRecallBeforePromptReady(chat, promptChat, skipLast, promptVisibility, skipVectorRecallOnce) {
     let deferredVectorIndex = null;
     try {
@@ -18845,16 +18885,25 @@ async function _runVectorRecallBeforePromptReady(chat, promptChat, skipLast, pro
         }
         if (!settings.vectorEnabled || !vectorManager.isReady) return '';
 
+        const promptCoveredChatIndices = _collectVectorPromptExcludeIndices(chat, promptChat, promptVisibility);
+        if (promptCoveredChatIndices.size > 0) {
+            console.log(`[Horae] Prompt已覆盖楼层: ${promptCoveredChatIndices.size}，召回将排除这些楼层`);
+        }
+
+        const candidateInfo = _getVectorRecallHiddenCandidateInfo(chat, skipLast, promptCoveredChatIndices);
+        if (candidateInfo.eligible <= 0) {
+            console.log(
+                `[Horae] 无可召回隐藏楼层，跳过向量召回与 Query Rewrite ` +
+                `(hiddenIndexable=${candidateInfo.hiddenIndexable}, recent=${candidateInfo.excludedRecent}, prompt=${candidateInfo.excludedPrompt})`
+            );
+            return '';
+        }
+
         const recallRewritePromise = settings.vectorQueryRewriteEnabled === true
             ? vectorManager.prepareRecallRewrite(chat, settings)
             : null;
 
         deferredVectorIndex = await _ensureVectorIndexBeforeRecall();
-
-        const promptCoveredChatIndices = _collectVectorPromptExcludeIndices(chat, promptChat, promptVisibility);
-        if (promptCoveredChatIndices.size > 0) {
-            console.log(`[Horae] Prompt已覆盖楼层: ${promptCoveredChatIndices.size}，召回将排除这些楼层`);
-        }
 
         const recallPrompt = await vectorManager.generateRecallPrompt(
             horaeManager,

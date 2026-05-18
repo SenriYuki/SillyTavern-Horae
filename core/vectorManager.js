@@ -694,6 +694,18 @@ export class VectorManager {
             .substring(0, 300);
     }
 
+    _countSearchableVectors(excludeIndices = new Set()) {
+        if (this.vectors.size === 0) return 0;
+        const excluded = excludeIndices && typeof excludeIndices.has === 'function'
+            ? excludeIndices
+            : new Set();
+        let count = 0;
+        for (const [msgIdx] of this.vectors) {
+            if (!excluded.has(msgIdx)) count++;
+        }
+        return count;
+    }
+
     /**
      * 向量检索
      * @param {string} queryText
@@ -705,6 +717,12 @@ export class VectorManager {
      */
     async search(queryText, topK = 5, threshold = 0.72, excludeIndices = new Set(), pureMode = false, excludeReasonMap = null) {
         if (!this.isReady || !queryText || this.vectors.size === 0) return [];
+
+        const searchableCount = this._countSearchableVectors(excludeIndices);
+        if (searchableCount <= 0) {
+            console.log('[Horae Vector] 检索候选为空，跳过 embedding 查询');
+            return [];
+        }
 
         const prepared = this._prepareText(queryText, true);
         console.log('[Horae Vector] 开始 embedding 查询...');
@@ -810,6 +828,12 @@ export class VectorManager {
 
         const queries = this._normalizeQueryRewriteQueries(queryTexts);
         if (queries.length === 0) return [];
+
+        const searchableCount = this._countSearchableVectors(excludeIndices);
+        if (searchableCount <= 0) {
+            console.log('[Horae Vector] Query Rewrite 检索候选为空，跳过 embedding 查询');
+            return [];
+        }
 
         const prepared = queries.map(q => this._prepareText(q, true));
         console.log(`[Horae Vector] 开始 Query Rewrite 多路 embedding 查询: ${queries.length} 个 Q`);
