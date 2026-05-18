@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki，柏柏
- * 版本: 1.13.4B
+ * 版本: 1.13.5B
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -23,7 +23,7 @@ import { initPromptDefaults, ensurePromptDefaults, getPromptDefaultSync } from '
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.13.4B';
+const VERSION = '1.13.5B';
 const DEFAULT_VECTOR_STRIP_TAGS = 'dream_status,Episode,details,think,thinking,Thinking';
 
 // 配套正则规则（自动注入ST原生正则系统）
@@ -120,7 +120,7 @@ const DEFAULT_SETTINGS = {
     autoParse: true,
     autoFillPrevTimelineOnSend: true, // 发送前自动补全上一条AI消息的时间线（默认关闭，避免静默误写历史）
     injectContext: true,
-    useMainPresetForAiTasks: false, // AI分析/批量扫描/手动压缩是否使用酒馆主预设（generate）
+    injectCustomPrompts: true, // 是否在摘要/总结后台任务中注入自定义头尾提示词
     showMessagePanel: true,
     injectionDepthSource: 'system', // 注入深度来源: system(原逻辑) / preset(按完整提示词末尾偏移)
     injectionPosition: 0,
@@ -143,6 +143,8 @@ const DEFAULT_SETTINGS = {
     customCompressPrompt: '',    // 自定义剧情压缩提示词（空=使用默认）
     customAutoSummaryPrompt: '', // 自定义自动摘要提示词（空=使用默认；独立于手动压缩）
     customAutoResummaryPrompt: '', // 自定义二次总结提示词（空=使用默认）
+    customHeadPrompt: '',        // 摘要/总结任务自定义头部提示词
+    customTailPrompt: '',        // 摘要/总结任务自定义尾部提示词
     aiScanIncludeNpc: false,     // AI摘要是否提取NPC
     aiScanIncludeAffection: false, // AI摘要是否提取好感度
     aiScanIncludeScene: false,    // AI摘要是否提取场景记忆
@@ -248,6 +250,8 @@ const PROMPT_SETTING_KEYS = [
     'customCompressPrompt',
     'customAutoSummaryPrompt',
     'customAutoResummaryPrompt',
+    'customHeadPrompt',
+    'customTailPrompt',
     'customTablesPrompt',
     'customLocationPrompt',
     'customRelationshipPrompt',
@@ -11504,8 +11508,8 @@ function initSettingsEvents() {
         saveSettings();
     });
 
-    $('#horae-setting-use-main-preset').on('change', function () {
-        settings.useMainPresetForAiTasks = this.checked;
+    $('#horae-setting-inject-custom-prompts').on('change', function () {
+        settings.injectCustomPrompts = this.checked;
         saveSettings();
     });
 
@@ -12032,6 +12036,8 @@ function initSettingsEvents() {
             ['customCompressPrompt', 'horae-custom-compress-prompt', 'horae-compress-prompt-count', () => getDefaultCompressPrompt()],
             ['customAutoSummaryPrompt', 'horae-custom-auto-summary-prompt', 'horae-auto-summary-prompt-count', () => getDefaultAutoSummaryPrompt()],
             ['customAutoResummaryPrompt', 'horae-custom-auto-resummary-prompt', 'horae-auto-resummary-prompt-count', () => getDefaultAutoResummaryPrompt()],
+            ['customHeadPrompt', 'horae-custom-head-prompt', 'horae-custom-head-prompt-count', () => ''],
+            ['customTailPrompt', 'horae-custom-tail-prompt', 'horae-custom-tail-prompt-count', () => ''],
             ['customTablesPrompt', 'horae-custom-tables-prompt', 'horae-tables-prompt-count', () => horaeManager.getDefaultTablesPrompt()],
             ['customLocationPrompt', 'horae-custom-location-prompt', 'horae-location-prompt-count', () => horaeManager.getDefaultLocationPrompt()],
             ['customRelationshipPrompt', 'horae-custom-relationship-prompt', 'horae-relationship-prompt-count', () => horaeManager.getDefaultRelationshipPrompt()],
@@ -12150,6 +12156,8 @@ function initSettingsEvents() {
             ['customCompressPrompt', 'horae-custom-compress-prompt', 'horae-compress-prompt-count', () => getDefaultCompressPrompt()],
             ['customAutoSummaryPrompt', 'horae-custom-auto-summary-prompt', 'horae-auto-summary-prompt-count', () => getDefaultAutoSummaryPrompt()],
             ['customAutoResummaryPrompt', 'horae-custom-auto-resummary-prompt', 'horae-auto-resummary-prompt-count', () => getDefaultAutoResummaryPrompt()],
+            ['customHeadPrompt', 'horae-custom-head-prompt', 'horae-custom-head-prompt-count', () => ''],
+            ['customTailPrompt', 'horae-custom-tail-prompt', 'horae-custom-tail-prompt-count', () => ''],
             ['customTablesPrompt', 'horae-custom-tables-prompt', 'horae-tables-prompt-count', () => horaeManager.getDefaultTablesPrompt()],
             ['customLocationPrompt', 'horae-custom-location-prompt', 'horae-location-prompt-count', () => horaeManager.getDefaultLocationPrompt()],
             ['customRelationshipPrompt', 'horae-custom-relationship-prompt', 'horae-relationship-prompt-count', () => horaeManager.getDefaultRelationshipPrompt()],
@@ -12169,7 +12177,7 @@ function initSettingsEvents() {
 
     // ── Horae 全局配置 导出/导入/重置 ──
     const _SETTINGS_EXPORT_KEYS = [
-        'enabled', 'autoParse', 'autoFillPrevTimelineOnSend', 'injectContext', 'useMainPresetForAiTasks', 'showMessagePanel', 'showTopIcon',
+        'enabled', 'autoParse', 'autoFillPrevTimelineOnSend', 'injectContext', 'injectCustomPrompts', 'showMessagePanel', 'showTopIcon',
         'injectionDepthSource', 'injectionPosition', 'timelineInjectionMode',
         'sendTimeline', 'contextDepth', 'sendCharacters', 'sendCharacterAffection', 'sendMainCharacterPersonality', 'sendItems',
         'sendLocationMemory', 'sendRelationships', 'sendMood',
@@ -12718,6 +12726,16 @@ function initSettingsEvents() {
         saveSettings();
     });
 
+    $('#horae-custom-head-prompt, #horae-custom-tail-prompt').on('input', function () {
+        const isHead = this.id === 'horae-custom-head-prompt';
+        const countSelector = this.id === 'horae-custom-head-prompt'
+            ? '#horae-custom-head-prompt-count'
+            : '#horae-custom-tail-prompt-count';
+        settings[isHead ? 'customHeadPrompt' : 'customTailPrompt'] = this.value;
+        $(countSelector).text(this.value.length);
+        saveSettings();
+    });
+
     $('#horae-btn-reset-system-prompt').on('click', () => {
         if (!confirm(t('confirm.restoreRpgPrompts'))) return;
         settings.customSystemPrompt = '';
@@ -13212,6 +13230,8 @@ function _refreshSystemPromptDisplay() {
         ['customCompressPrompt', 'horae-custom-compress-prompt', 'horae-compress-prompt-count', () => getDefaultCompressPrompt()],
         ['customAutoSummaryPrompt', 'horae-custom-auto-summary-prompt', 'horae-auto-summary-prompt-count', () => getDefaultAutoSummaryPrompt()],
         ['customAutoResummaryPrompt', 'horae-custom-auto-resummary-prompt', 'horae-auto-resummary-prompt-count', () => getDefaultAutoResummaryPrompt()],
+        ['customHeadPrompt', 'horae-custom-head-prompt', 'horae-custom-head-prompt-count', () => ''],
+        ['customTailPrompt', 'horae-custom-tail-prompt', 'horae-custom-tail-prompt-count', () => ''],
         ['customTablesPrompt', 'horae-custom-tables-prompt', 'horae-tables-prompt-count', () => horaeManager.getDefaultTablesPrompt()],
         ['customLocationPrompt', 'horae-custom-location-prompt', 'horae-location-prompt-count', () => horaeManager.getDefaultLocationPrompt()],
         ['customRelationshipPrompt', 'horae-custom-relationship-prompt', 'horae-relationship-prompt-count', () => horaeManager.getDefaultRelationshipPrompt()],
@@ -13421,7 +13441,7 @@ function syncSettingsToUI() {
     $('#horae-setting-auto-parse').prop('checked', settings.autoParse);
     $('#horae-setting-auto-fill-prev-timeline').prop('checked', settings.autoFillPrevTimelineOnSend === true);
     $('#horae-setting-inject-context').prop('checked', settings.injectContext);
-    $('#horae-setting-use-main-preset').prop('checked', !!settings.useMainPresetForAiTasks);
+    $('#horae-setting-inject-custom-prompts').prop('checked', !!settings.injectCustomPrompts);
     $('#horae-setting-show-panel').prop('checked', settings.showMessagePanel);
     $('#horae-setting-show-top-icon').prop('checked', settings.showTopIcon !== false);
     $('#horae-ext-show-top-icon').prop('checked', settings.showTopIcon !== false);
@@ -13530,6 +13550,8 @@ function syncSettingsToUI() {
     const compressPromptVal = settings.customCompressPrompt || getDefaultCompressPrompt();
     const autoSumPromptVal = settings.customAutoSummaryPrompt || getDefaultAutoSummaryPrompt();
     const autoResumPromptVal = settings.customAutoResummaryPrompt || getDefaultAutoResummaryPrompt();
+    const customHeadPromptVal = settings.customHeadPrompt || '';
+    const customTailPromptVal = settings.customTailPrompt || '';
     const tablesPromptVal = settings.customTablesPrompt || horaeManager.getDefaultTablesPrompt();
     const locationPromptVal = settings.customLocationPrompt || horaeManager.getDefaultLocationPrompt();
     const relPromptVal = settings.customRelationshipPrompt || horaeManager.getDefaultRelationshipPrompt();
@@ -13541,6 +13563,8 @@ function syncSettingsToUI() {
     $('#horae-custom-compress-prompt').val(compressPromptVal);
     $('#horae-custom-auto-summary-prompt').val(autoSumPromptVal);
     $('#horae-custom-auto-resummary-prompt').val(autoResumPromptVal);
+    $('#horae-custom-head-prompt').val(customHeadPromptVal);
+    $('#horae-custom-tail-prompt').val(customTailPromptVal);
     $('#horae-custom-tables-prompt').val(tablesPromptVal);
     $('#horae-custom-location-prompt').val(locationPromptVal);
     $('#horae-custom-relationship-prompt').val(relPromptVal);
@@ -13552,6 +13576,8 @@ function syncSettingsToUI() {
     $('#horae-compress-prompt-count').text(compressPromptVal.length);
     $('#horae-auto-summary-prompt-count').text(autoSumPromptVal.length);
     $('#horae-auto-resummary-prompt-count').text(autoResumPromptVal.length);
+    $('#horae-custom-head-prompt-count').text(customHeadPromptVal.length);
+    $('#horae-custom-tail-prompt-count').text(customTailPromptVal.length);
     $('#horae-tables-prompt-count').text(tablesPromptVal.length);
     $('#horae-location-prompt-count').text(locationPromptVal.length);
     $('#horae-relationship-prompt-count').text(relPromptVal.length);
@@ -14045,6 +14071,28 @@ function _shouldSkipSystemPromptInjectionOnSend() {
     return !!settings.subApiScopeBrief;
 }
 
+function _shouldInjectCustomPrompts(taskType = '', opts = {}) {
+    if (!settings.injectCustomPrompts) return false;
+    if (opts.injectCustomPrompts === false) return false;
+    if (opts.injectCustomPrompts === true) return true;
+    return ['autoSummary', 'manualSummary', 'brief'].includes(taskType);
+}
+
+function _getCustomPromptInjectionParts(taskType = '', opts = {}) {
+    if (!_shouldInjectCustomPrompts(taskType, opts)) {
+        return { head: '', tail: '' };
+    }
+    return {
+        head: String(settings.customHeadPrompt || '').trim(),
+        tail: String(settings.customTailPrompt || '').trim(),
+    };
+}
+
+function _pushSystemPromptIfAny(messages, content) {
+    const text = String(content || '').trim();
+    if (text) messages.push({ role: 'system', content: text });
+}
+
 /**
  * 副API/主API统一生成入口（总结相关任务）
  * taskType:
@@ -14065,7 +14113,7 @@ async function generateForSummary(prompt, options = {}) {
     console.log(`[Horae] generateForSummary: task=${taskType || 'default'}, useCustom=${useCustom}, hasUrl=${hasUrl}, hasKey=${hasKey}, hasModel=${hasModel}`);
     if (useCustom && hasUrl && hasKey && hasModel) {
         console.log(`[Horae] 使用副API生成`);
-        return await generateWithDirectApi(prompt, { taskType, messageIndex });
+        return await generateWithDirectApi(prompt, { ...options, taskType, messageIndex });
     }
     if (useCustom && (!hasUrl || !hasKey || !hasModel)) {
         const missing = [!hasUrl && 'API地址', !hasKey && 'API密钥', !hasModel && '模型名称'].filter(Boolean).join('、');
@@ -14095,6 +14143,7 @@ async function generateForSummary(prompt, options = {}) {
         noContextInjectionMarker: shouldSkipContextInject,
         noTimelineInjectionMarker: shouldSkipTimelineInject,
         noSystemPromptInjectionMarker: shouldSkipSystemInject,
+        injectCustomPrompts: options?.injectCustomPrompts,
     });
 }
 
@@ -14509,7 +14558,7 @@ async function _generateSummaryFromResummaryPayload(chat, payload, userName) {
         const eventText = chunk.map(e => `[${e.level}] ${e.date}${e.time ? ' ' + e.time : ''}: ${e.summary}`).join('\n');
 
         const prompt = _buildAutoResummaryPrompt(userName, eventText, chunk.length);
-        const response = await generateForSummary(prompt, { taskType: 'autoSummary' });
+        const response = await generateForSummary(prompt, { taskType: 'autoSummary', injectCustomPrompts: true });
         const extracted = _extractHoraeSummaryText(response);
         if (!extracted.ok) {
             _showHoraeSummaryFormatWarning('二次总结', extracted.reason);
@@ -14535,7 +14584,7 @@ async function _generateSummaryFromResummaryPayload(chat, payload, userName) {
         for (const group of groups) {
             const eventText = group.map((text, i) => `[段${i + 1}] ${text}`).join('\n');
             const prompt = _buildAutoResummaryPrompt(userName, eventText, group.length);
-            const response = await generateForSummary(prompt, { taskType: 'autoSummary' });
+            const response = await generateForSummary(prompt, { taskType: 'autoSummary', injectCustomPrompts: true });
             const extracted = _extractHoraeSummaryText(response);
             if (!extracted.ok) {
                 _showHoraeSummaryFormatWarning('二次总结', extracted.reason);
@@ -15055,13 +15104,16 @@ async function testSubApiConnection() {
 }
 
 /** 构建多轮对话消息数组——模仿酒馆原生 system/assistant/user 交替结构，提高 NSFW 通过率 */
-async function _buildSummaryMessages(prompt) {
+async function _buildSummaryMessages(prompt, options = {}) {
+    const taskType = options?.taskType || '';
+    const customPromptInjection = _getCustomPromptInjectionParts(taskType, options);
     const messages = [];
     let _oaiSettings = null;
     try {
         const mod = await import('/scripts/openai.js');
         _oaiSettings = mod.oai_settings;
     } catch (_) { }
+    _pushSystemPromptIfAny(messages, customPromptInjection.head);
     if (_oaiSettings?.main_prompt) {
         messages.push({ role: 'system', content: _oaiSettings.main_prompt });
     }
@@ -15084,6 +15136,7 @@ async function _buildSummaryMessages(prompt) {
     if (_oaiSettings?.jailbreak_prompt) {
         messages.push({ role: 'system', content: _oaiSettings.jailbreak_prompt });
     }
+    _pushSystemPromptIfAny(messages, customPromptInjection.tail);
     return messages;
 }
 
@@ -15168,7 +15221,8 @@ async function generateWithDirectApi(prompt, options = {}) {
         // url = url.replace(/\/+$/, '') + '/chat/completions';
         url = url.replace(/\/+$/, '');
     }
-    const messages = await _buildSummaryMessages(prompt);
+    const customPromptInjection = _getCustomPromptInjectionParts(taskType, options);
+    const messages = await _buildSummaryMessages(prompt, { taskType, ...options });
     const body = {
         model: settings.autoSummaryModel.trim(),
         messages,
@@ -15209,6 +15263,7 @@ async function generateWithDirectApi(prompt, options = {}) {
     // generateRaw 的 user_input 在 prompt-ready 阶段不一定落到 eventData.chat[].content，
     // 所以把 marker 明确作为 system prompt 放进 ordered_prompts，确保 onPromptReady 能识别并短路。
     orderedPrompts.push({ role: 'system', content: skipInjectionMarkers });
+    _pushSystemPromptIfAny(orderedPrompts, customPromptInjection.head);
     // orderedPrompts.push('user_input');
     if (!skipSnapshotTimelineInjection) {
         console.log(`分析的楼层号:${messageIndex}`);
@@ -15319,6 +15374,7 @@ event 唯一且只放在 <horaeevent> 内。
 1. 本楼核心事件：` });
     }
 
+    _pushSystemPromptIfAny(orderedPrompts, customPromptInjection.tail);
 
     // console.log(`副API组装提示词:\n${JSON.stringify(orderedPrompts)}`);
 
@@ -16037,7 +16093,7 @@ async function checkAutoSummary() {
             prompt += `\n\n【全文对话记录】：\n${sourceText}`;
         }
 
-        const response = await generateForSummary(prompt, { taskType: 'autoSummary' });
+        const response = await generateForSummary(prompt, { taskType: 'autoSummary', injectCustomPrompts: true });
         if (!response?.trim()) {
             showToast(t('toast.autoSummaryEmpty'), 'warning');
             return;
@@ -17732,9 +17788,9 @@ async function clearAllData() {
 }
 
 /**
- * AI任务生成入口（可按设置切换 generateRaw / generate）
+ * AI任务生成入口
  * @param {string} prompt
- * @param {{ messageIndex?: number, noVectorRecallMarker?: boolean, noContextInjectionMarker?: boolean, noTimelineInjectionMarker?: boolean, noSystemPromptInjectionMarker?: boolean }} opts
+ * @param {{ messageIndex?: number, noVectorRecallMarker?: boolean, noContextInjectionMarker?: boolean, noTimelineInjectionMarker?: boolean, noSystemPromptInjectionMarker?: boolean, injectCustomPrompts?: boolean }} opts
  */
 async function _generateForAiTasks(prompt, opts = {}) {
     const {
@@ -17747,8 +17803,7 @@ async function _generateForAiTasks(prompt, opts = {}) {
     } = opts;
     const shouldStream = _shouldStreamSummaryTasks();
     const skipSnapshotTimelineInjection = taskType === 'autoSummary';
-    const context = getContext();
-    const markerLines = [];
+    const customPromptInjection = _getCustomPromptInjectionParts(taskType, opts);
     const orderedPrompts = [];
     const skipInjectionMarkers = [
         _createNoContextInjectionMarker(),
@@ -17759,6 +17814,7 @@ async function _generateForAiTasks(prompt, opts = {}) {
     // generateRaw 的 user_input 在 prompt-ready 阶段不一定落到 eventData.chat[].content，
     // 所以把 marker 明确作为 system prompt 放进 ordered_prompts，确保 onPromptReady 能识别并短路。
     orderedPrompts.push({ role: 'system', content: skipInjectionMarkers });
+    _pushSystemPromptIfAny(orderedPrompts, customPromptInjection.head);
 
     if (!skipSnapshotTimelineInjection) {
         console.log(`分析的楼层:${messageIndex}`);
@@ -17770,15 +17826,6 @@ async function _generateForAiTasks(prompt, opts = {}) {
         if (snapshotPrompt?.trim()) orderedPrompts.push({ role: 'system', content: snapshotPrompt.trim() });
     } else {
         console.log('[Horae] autoSummary task: skip snapshot/timeline ordered_prompts injection');
-    }
-
-    if (settings.useMainPresetForAiTasks && typeof context?.generate === 'function') {
-        const finalPrompt = `${skipInjectionMarkers}\n${prompt}`
-        return await context.generate('quiet', {
-            quiet_prompt: finalPrompt,
-            quietToLoud: false,
-            skipWIAN: false,
-        });
     }
 
     orderedPrompts.push('user_input');
@@ -17862,6 +17909,7 @@ event 唯一且只放在 <horaeevent> 内。
 1. 本楼核心事件：` });
     }
 
+    _pushSystemPromptIfAny(orderedPrompts, customPromptInjection.tail);
 
     const resp = await TavernHelper.generateRaw({
         user_input: prompt,

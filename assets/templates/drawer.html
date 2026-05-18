@@ -10,7 +10,7 @@
                 <i class="fa-regular fa-clock"></i>
                 Horae 时光记忆
             </div>
-            <span class="horae-version">1.13.4B</span>
+            <span class="horae-version">1.13.5B</span>
         </div>
         
         <!-- 标签页导航 -->
@@ -527,12 +527,12 @@
                     </div>
 
                     <div class="horae-setting-item">
-                        <label data-i18n="settings.useMainPresetForAiTasks">
-                            <input type="checkbox" id="horae-setting-use-main-preset">
-                            后台 AI 任务使用酒馆主预设
+                        <label data-i18n="settings.injectCustomPrompts">
+                            <input type="checkbox" id="horae-setting-inject-custom-prompts">
+                            注入自定义提示词
                         </label>
-                        <span class="horae-setting-hint" data-i18n="settings.useMainPresetForAiTasksHint">
-                            影响 AI 智能补全、单条分析、手动/自动总结等 Horae 后台 AI 任务。默认不使用酒馆主预设；只有在破不开甲或副任务输出异常时再开启。
+                        <span class="horae-setting-hint" data-i18n="settings.injectCustomPromptsHint">
+                            摘要，总结时如果因破不开甲而失败，可以在下方自定义提示词里面加上破甲词
                         </span>
                     </div>
 
@@ -1553,6 +1553,27 @@
                                 <span id="horae-rpg-prompt-count">0</span> 字符
                             </div>
                         </div>
+
+                        <div class="horae-custom-prompt-pair">
+                            <div class="horae-prompt-editor-group">
+                                <div class="horae-prompt-editor-header">
+                                    <span data-i18n="prompts.customHeadPrompt">自定义头部提示词</span>
+                                </div>
+                                <textarea id="horae-custom-head-prompt" class="horae-prompt-textarea" rows="6" data-i18n-placeholder="prompts.customHeadPromptPlaceholder" placeholder="留空则不添加自定义头部提示词..."></textarea>
+                                <div class="horae-prompt-char-count">
+                                    <span id="horae-custom-head-prompt-count">0</span> 字符
+                                </div>
+                            </div>
+                            <div class="horae-prompt-editor-group">
+                                <div class="horae-prompt-editor-header">
+                                    <span data-i18n="prompts.customTailPrompt">自定义尾部提示词</span>
+                                </div>
+                                <textarea id="horae-custom-tail-prompt" class="horae-prompt-textarea" rows="6" data-i18n-placeholder="prompts.customTailPromptPlaceholder" placeholder="留空则不添加自定义尾部提示词..."></textarea>
+                                <div class="horae-prompt-char-count">
+                                    <span id="horae-custom-tail-prompt-count">0</span> 字符
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -1600,7 +1621,7 @@
                 </div>
                 
                 <div class="horae-about">
-                    <p>Horae v1.13.4B | 作者: SenriYuki，柏柏</p>
+                    <p>Horae v1.13.5B | 作者: SenriYuki，柏柏</p>
                     <p>基于时间锚点的AI记忆增强系统</p>
                 </div>
             </div>

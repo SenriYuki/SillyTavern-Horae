@@ -254,8 +254,8 @@
         "autoFillPrevTimelineOnSend": "전송 시 이전 AI 메시지 타임라인 자동 보완",
         "autoFillPrevTimelineOnSendHint": "전송 전에 이전 AI 응답에 <horae>/<horaeevent>가 없으면 해당 메시지 이전의 가벼운 상태, 캐릭터 정보, 이전 사용자 행동을 참고하여 전체 AI 분석을 수행하고, 추출된 모든 데이터를 채팅 기록에 다시 씁니다. 이 기능은 AI를 호출하며 기본값은 꺼짐입니다.",
         "injectContext": "상태 컨텍스트 자동 주입",
-        "useMainPresetForAiTasks": "백그라운드 AI 작업에 Tavern 메인 프리셋 사용",
-        "useMainPresetForAiTasksHint": "AI 스마트 요약, 단일 메시지 분석, 수동/자동 요약 등 Horae 백그라운드 AI 작업에 영향을 줍니다. 기본값은 사용 안 함입니다. jailbreak가 실패하거나 보조 작업 출력이 이상할 때만 켜세요.",
+        "injectCustomPrompts": "사용자 지정 프롬프트 주입",
+        "injectCustomPromptsHint": "브리프나 요약 작업이 jailbreak 실패로 막히면 아래 사용자 지정 프롬프트에 jailbreak 문구를 추가할 수 있습니다.",
         "showPanel": "메시지 메타데이터 패널 표시",
         "showTopIcon": "상단 내비게이션 아이콘 표시",
         "showTopIconHint": "끄면 상단 아이콘이 완전히 숨겨집니다. 확장 프로그램 패널 → Horae Memory에서 다시 활성화하세요.",
@@ -1428,7 +1428,11 @@
         "locationPrompt": "장면 기억 프롬프트",
         "relationshipPrompt": "관계도 프롬프트",
         "moodPrompt": "감정 추적 프롬프트",
-        "rpgPrompt": "RPG 모드 프롬프트"
+        "rpgPrompt": "RPG 모드 프롬프트",
+        "customHeadPrompt": "사용자 지정 머리말 프롬프트",
+        "customTailPrompt": "사용자 지정 꼬리말 프롬프트",
+        "customHeadPromptPlaceholder": "비워 두면 사용자 지정 머리말 프롬프트를 추가하지 않습니다...",
+        "customTailPromptPlaceholder": "비워 두면 사용자 지정 꼬리말 프롬프트를 추가하지 않습니다..."
     },
     "time": {
         "today": "오늘",

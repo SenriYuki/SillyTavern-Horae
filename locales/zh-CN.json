@@ -163,8 +163,8 @@
         "autoFillPrevTimelineOnSend": "发送时自动补全上一条 AI 消息时间线",
         "autoFillPrevTimelineOnSendHint": "发送前若上一条 AI 回复缺少 <horae>/<horaeevent>，会使用该楼层之前的轻量状态、角色身份和上一条用户行动作为参考，对该楼层进行完整 AI 分析并写回历史。此功能会调用 AI，默认关闭。",
         "injectContext": "自动注入状态上下文",
-        "useMainPresetForAiTasks": "后台 AI 任务使用酒馆主预设",
-        "useMainPresetForAiTasksHint": "影响 AI 智能补全、单条分析、手动/自动总结等 Horae 后台 AI 任务。默认不使用酒馆主预设；只有在破不开甲或副任务输出异常时再开启。\n如果没事不要开，有些时候反而会变得奇怪",
+        "injectCustomPrompts": "注入自定义提示词",
+        "injectCustomPromptsHint": "摘要，总结时如果因破不开甲而失败，可以在下方自定义提示词里面加上破甲词",
         "showPanel": "显示消息元数据面板",
         "showTopIcon": "显示顶部导航栏图标",
         "showTopIconHint": "关闭后顶部图标完全隐藏，不留空位。可通过扩展面板（积木图标）中的「Horae 时光记忆」栏位重新开启。",
@@ -974,7 +974,11 @@
         "locationPrompt": "场景记忆提示词",
         "relationshipPrompt": "关系网络提示词",
         "moodPrompt": "情绪追踪提示词",
-        "rpgPrompt": "RPG 模式提示词"
+        "rpgPrompt": "RPG 模式提示词",
+        "customHeadPrompt": "自定义头部提示词",
+        "customTailPrompt": "自定义尾部提示词",
+        "customHeadPromptPlaceholder": "留空则不添加自定义头部提示词...",
+        "customTailPromptPlaceholder": "留空则不添加自定义尾部提示词..."
     },
     "time": {
         "today": "今天",

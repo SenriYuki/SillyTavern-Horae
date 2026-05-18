@@ -256,8 +256,8 @@
         "autoFillPrevTimelineOnSend": "送信時に直前のAIメッセージのタイムラインを自動補完",
         "autoFillPrevTimelineOnSendHint": "送信前に直前のAI返信に <horae>/<horaeevent> がない場合、そのメッセージ以前の軽量状態・キャラクター情報・直前のユーザー行動を参考にして完全なAI分析を行い、抽出した全データを履歴に書き戻します。この機能はAIを呼び出すため、既定ではオフです。",
         "injectContext": "状態コンテキストを自動注入",
-        "useMainPresetForAiTasks": "バックグラウンドAIタスクで酒館メインプリセットを使用",
-        "useMainPresetForAiTasksHint": "AIスマート要約、単一メッセージ分析、手動/自動要約などのHoraeバックグラウンドAIタスクに影響します。既定では使用しません。脱獄（jailbreak）が通らない、または副タスクの出力が不安定な場合のみ有効化してください。",
+        "injectCustomPrompts": "カスタムプロンプトを注入",
+        "injectCustomPromptsHint": "概要・要約時にjailbreakが通らず失敗する場合は、下のカスタムプロンプトにjailbreak用語を追加できます。",
         "showPanel": "メッセージメタデータパネルを表示",
         "showTopIcon": "上部ナビゲーションアイコンを表示",
         "showTopIconHint": "オフにすると上部アイコンは完全に非表示になります。再度有効にするには拡張機能パネル → Horae Memory から。",
@@ -1448,7 +1448,11 @@
         "locationPrompt": "シーン記憶プロンプト",
         "relationshipPrompt": "人間関係ネットワークプロンプト",
         "moodPrompt": "感情追跡プロンプト",
-        "rpgPrompt": "RPGモードプロンプト"
+        "rpgPrompt": "RPGモードプロンプト",
+        "customHeadPrompt": "カスタム先頭プロンプト",
+        "customTailPrompt": "カスタム末尾プロンプト",
+        "customHeadPromptPlaceholder": "空欄ならカスタム先頭プロンプトを追加しません...",
+        "customTailPromptPlaceholder": "空欄ならカスタム末尾プロンプトを追加しません..."
     },
     "time": {
         "today": "今日",

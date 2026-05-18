@@ -163,8 +163,8 @@
         "autoFillPrevTimelineOnSend": "Auto-fill previous AI message timeline before send",
         "autoFillPrevTimelineOnSendHint": "Before sending, if the previous AI reply is missing <horae>/<horaeevent>, Horae performs a full AI analysis on that message using lightweight state, character identity, and the previous user action as context, then writes all extracted data back to chat history. This calls AI and is off by default.",
         "injectContext": "Auto-inject state context",
-        "useMainPresetForAiTasks": "Use Tavern main preset for background AI tasks",
-        "useMainPresetForAiTasksHint": "Affects Horae background AI tasks such as AI Smart Summary, single-message analysis, and manual/auto summarization. Off by default; enable only if jailbreak fails or task output is abnormal.",
+        "injectCustomPrompts": "Inject Custom Prompts",
+        "injectCustomPromptsHint": "If brief or summary tasks fail because jailbreak does not pass, add jailbreak terms in the custom prompts below.",
         "showPanel": "Show message metadata panel",
         "showTopIcon": "Show top navigation icon",
         "showTopIconHint": "When off, the top icon is completely hidden. Re-enable via Extensions panel → Horae Memory.",
@@ -977,7 +977,11 @@
         "locationPrompt": "Scene Memory Prompt",
         "relationshipPrompt": "Relationship Network Prompt",
         "moodPrompt": "Mood Tracking Prompt",
-        "rpgPrompt": "RPG Mode Prompt"
+        "rpgPrompt": "RPG Mode Prompt",
+        "customHeadPrompt": "Custom Header Prompt",
+        "customTailPrompt": "Custom Footer Prompt",
+        "customHeadPromptPlaceholder": "Leave empty to skip the custom header prompt...",
+        "customTailPromptPlaceholder": "Leave empty to skip the custom footer prompt..."
     },
     "time": {
         "today": "today",

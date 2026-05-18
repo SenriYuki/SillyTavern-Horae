@@ -3582,6 +3582,17 @@
     overflow: hidden;
 }
 
+.horae-custom-prompt-pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.horae-custom-prompt-pair .horae-prompt-editor-group {
+    min-width: 0;
+}
+
 .horae-prompt-editor-header {
     display: flex;
     align-items: center;
@@ -6299,5 +6310,9 @@ body .horae-context-menu {
     .horae-rpg-section-head .horae-rpg-btn-sm {
         padding: 6px 10px;
         font-size: 13px;
+    }
+
+    .horae-custom-prompt-pair {
+        grid-template-columns: 1fr;
     }
 }
