@@ -247,6 +247,8 @@
         "basicSettings": "基本設置",
         "enableHorae": "啟用 Horae",
         "autoParse": "自動解析AI回覆中的標籤",
+        "gzipSaveRequests": "對訊息保存進行 Gzip 壓縮",
+        "gzipSaveRequestsHint": "僅壓縮 /api/chats/save 和 /api/chats/group/save 的請求體；如果請求已帶 Content-Encoding 或瀏覽器不支援 CompressionStream，會自動跳過。",
         "autoFillPrevTimelineOnSend": "發送時自動補全上一條 AI 訊息時間線",
         "autoFillPrevTimelineOnSendHint": "發送前若上一條 AI 回覆缺少 <horae>/<horaeevent>，會使用該樓層之前的輕量狀態、角色身份和上一條用戶行動作為參考，對該樓層進行完整 AI 分析並寫回歷史。此功能會調用 AI，預設關閉。",
         "injectContext": "自動注入狀態上下文",

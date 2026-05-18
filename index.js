@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki，柏柏
- * 版本: 1.13.6B
+ * 版本: 1.13.7B
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -16,6 +16,7 @@ import { vectorManager } from './core/vectorManager.js';
 import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTime, generateTimeReference, getCurrentSystemTime, formatStoryDate, formatFullDateTime, parseStoryDate } from './utils/timeUtils.js';
 import { t, tForLang, initI18n, getLanguage, isZhLocale, setLanguage, detectEffectiveAiLangIsZh, detectEffectiveAiLang } from './core/i18n.js';
 import { initPromptDefaults, ensurePromptDefaults, getPromptDefaultSync } from './core/promptDefaults.js';
+import { installSaveRequestGzipFetchHook } from './utils/saveRequestGzip.js';
 
 // ============================================
 // 常量定义
@@ -23,7 +24,7 @@ import { initPromptDefaults, ensurePromptDefaults, getPromptDefaultSync } from '
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.13.6B';
+const VERSION = '1.13.7B';
 const DEFAULT_VECTOR_STRIP_TAGS = 'dream_status,Episode,details,think,thinking,Thinking';
 
 // 配套正则规则（自动注入ST原生正则系统）
@@ -122,6 +123,7 @@ const DEFAULT_SETTINGS = {
     injectContext: true,
     injectCustomPrompts: true, // 是否在摘要/总结后台任务中注入自定义头尾提示词
     showMessagePanel: true,
+    gzipSaveRequests: true, // 对消息保存接口请求体进行 Gzip 压缩
     injectionDepthSource: 'system', // 注入深度来源: system(原逻辑) / preset(按完整提示词末尾偏移)
     injectionPosition: 0,
     timelineInjectionMode: 'separate', // inline(原逻辑合并注入) / separate(剧情轨迹独立前置)
@@ -11601,6 +11603,11 @@ function initSettingsEvents() {
         saveSettings();
     });
 
+    $('#horae-setting-gzip-save-requests').on('change', function () {
+        settings.gzipSaveRequests = this.checked;
+        saveSettings();
+    });
+
     $('#horae-setting-auto-fill-prev-timeline').on('change', function () {
         settings.autoFillPrevTimelineOnSend = this.checked;
         saveSettings();
@@ -12280,7 +12287,7 @@ function initSettingsEvents() {
 
     // ── Horae 全局配置 导出/导入/重置 ──
     const _SETTINGS_EXPORT_KEYS = [
-        'enabled', 'autoParse', 'autoFillPrevTimelineOnSend', 'injectContext', 'injectCustomPrompts', 'showMessagePanel', 'showTopIcon',
+        'enabled', 'autoParse', 'gzipSaveRequests', 'autoFillPrevTimelineOnSend', 'injectContext', 'injectCustomPrompts', 'showMessagePanel', 'showTopIcon',
         'injectionDepthSource', 'injectionPosition', 'timelineInjectionMode',
         'sendTimeline', 'contextDepth', 'sendCharacters', 'sendCharacterAffection', 'sendMainCharacterPersonality', 'sendItems',
         'sendLocationMemory', 'sendRelationships', 'sendMood',
@@ -13542,6 +13549,7 @@ function _syncVectorRecallPresetInputs() {
 function syncSettingsToUI() {
     $('#horae-setting-enabled').prop('checked', settings.enabled);
     $('#horae-setting-auto-parse').prop('checked', settings.autoParse);
+    $('#horae-setting-gzip-save-requests').prop('checked', settings.gzipSaveRequests !== false);
     $('#horae-setting-auto-fill-prev-timeline').prop('checked', settings.autoFillPrevTimelineOnSend === true);
     $('#horae-setting-inject-context').prop('checked', settings.injectContext);
     $('#horae-setting-inject-custom-prompts').prop('checked', !!settings.injectCustomPrompts);
@@ -19594,6 +19602,10 @@ jQuery(async () => {
 
     await initNavbarFunction();
     loadSettings();
+    installSaveRequestGzipFetchHook({
+        isEnabled: () => settings.gzipSaveRequests !== false,
+        logger: console,
+    });
     ensureRegexRules();
 
     const pluginBasePath = `/scripts/extensions/${EXTENSION_FOLDER}`;

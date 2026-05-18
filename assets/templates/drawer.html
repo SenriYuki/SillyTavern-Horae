@@ -10,7 +10,7 @@
                 <i class="fa-regular fa-clock"></i>
                 Horae 时光记忆
             </div>
-            <span class="horae-version">1.13.6B</span>
+            <span class="horae-version">1.13.7B</span>
         </div>
         
         <!-- 标签页导航 -->
@@ -511,6 +511,15 @@
                             <input type="checkbox" id="horae-setting-auto-parse" checked>
                             自动解析AI回复中的标签
                         </label>
+                    </div>
+                    <div class="horae-setting-item">
+                        <label data-i18n="settings.gzipSaveRequests">
+                            <input type="checkbox" id="horae-setting-gzip-save-requests" checked>
+                            对消息保存进行Gzip压缩
+                        </label>
+                        <span class="horae-setting-hint" data-i18n="settings.gzipSaveRequestsHint">
+                            仅压缩聊天保存接口的请求体。若请求已带 Content-Encoding 或浏览器不支持 CompressionStream，会自动跳过。
+                        </span>
                     </div>
                     <div class="horae-setting-item">
                         <label data-i18n="settings.injectContext">
@@ -1621,7 +1630,7 @@
                 </div>
                 
                 <div class="horae-about">
-                    <p>Horae v1.13.6B | 作者: SenriYuki，柏柏</p>
+                    <p>Horae v1.13.7B | 作者: SenriYuki，柏柏</p>
                     <p>基于时间锚点的AI记忆增强系统</p>
                 </div>
             </div>

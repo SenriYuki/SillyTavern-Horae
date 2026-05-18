@@ -251,6 +251,8 @@
         "basicSettings": "기본 설정",
         "enableHorae": "Horae 활성화",
         "autoParse": "AI 응답 태그 자동 파싱",
+        "gzipSaveRequests": "메시지 저장 요청 Gzip 압축",
+        "gzipSaveRequestsHint": "/api/chats/save 및 /api/chats/group/save 요청 본문만 압축합니다. 요청에 이미 Content-Encoding이 있거나 브라우저가 CompressionStream을 지원하지 않으면 자동으로 건너뜁니다.",
         "autoFillPrevTimelineOnSend": "전송 시 이전 AI 메시지 타임라인 자동 보완",
         "autoFillPrevTimelineOnSendHint": "전송 전에 이전 AI 응답에 <horae>/<horaeevent>가 없으면 해당 메시지 이전의 가벼운 상태, 캐릭터 정보, 이전 사용자 행동을 참고하여 전체 AI 분석을 수행하고, 추출된 모든 데이터를 채팅 기록에 다시 씁니다. 이 기능은 AI를 호출하며 기본값은 꺼짐입니다.",
         "injectContext": "상태 컨텍스트 자동 주입",
