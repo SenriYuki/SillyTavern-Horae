@@ -149,8 +149,8 @@ const DEFAULT_SETTINGS = {
     customTailPrompt: '',        // 摘要/总结任务自定义尾部提示词
     aiScanIncludeNpc: false,     // AI摘要是否提取NPC
     aiScanIncludeAffection: false, // AI摘要是否提取好感度
-    aiScanIncludeScene: true,    // AI摘要是否提取场景记忆
-    aiScanIncludeRelationship: true, // AI摘要是否提取关系网络
+    aiScanIncludeScene: false,    // AI摘要是否提取场景记忆
+    aiScanIncludeRelationship: false, // AI摘要是否提取关系网络
     panelWidth: 100,               // 消息面板宽度百分比（50-100）
     panelOffset: 0,                // 消息面板右偏移量（px）
     themeMode: 'dark',             // 插件主题：dark / light / custom-{index}
