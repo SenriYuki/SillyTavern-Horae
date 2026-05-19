@@ -149,8 +149,8 @@ const DEFAULT_SETTINGS = {
     customTailPrompt: '',        // 摘要/总结任务自定义尾部提示词
     aiScanIncludeNpc: false,     // AI摘要是否提取NPC
     aiScanIncludeAffection: false, // AI摘要是否提取好感度
-    aiScanIncludeScene: false,    // AI摘要是否提取场景记忆
-    aiScanIncludeRelationship: false, // AI摘要是否提取关系网络
+    aiScanIncludeScene: true,    // AI摘要是否提取场景记忆
+    aiScanIncludeRelationship: true, // AI摘要是否提取关系网络
     panelWidth: 100,               // 消息面板宽度百分比（50-100）
     panelOffset: 0,                // 消息面板右偏移量（px）
     themeMode: 'dark',             // 插件主题：dark / light / custom-{index}
@@ -159,10 +159,10 @@ const DEFAULT_SETTINGS = {
     globalTables: [],              // 全局表格（跨角色卡共享）
     showTopIcon: true,             // 显示顶部导航栏图标
     customTablesPrompt: '',        // 自定义表格填写规则提示词（空=使用默认）
-    sendLocationMemory: false,     // 发送场景记忆（地点固定特征描述）
+    sendLocationMemory: true,     // 发送场景记忆（地点固定特征描述）
     customLocationPrompt: '',      // 自定义场景记忆提示词（空=使用默认）
-    sendRelationships: false,      // 发送关系网络
-    sendMood: false,               // 发送情绪/心理状态追踪
+    sendRelationships: true,      // 发送关系网络
+    sendMood: true,               // 发送情绪/心理状态追踪
     customRelationshipPrompt: '',  // 自定义关系网络提示词（空=使用默认）
     customMoodPrompt: '',          // 自定义情绪追踪提示词（空=使用默认）
     // 自动摘要
