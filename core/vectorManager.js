@@ -25,6 +25,12 @@ const QUERY_REWRITE_TAIL_PROMPT_KEY = 'vectorQueryRewriteTailPrompt';
 const QUERY_REWRITE_CONTEXT_LIMIT = 4;
 const QUERY_REWRITE_MAX_QUERIES = 6;
 const QUERY_REWRITE_MAX_QUERY_LENGTH = 220;
+const QUERY_REWRITE_SNAPSHOT_MAX_CHARS = 1800;
+const QUERY_REWRITE_SNAPSHOT_MAX_PRESENT = 12;
+const QUERY_REWRITE_SNAPSHOT_MAX_ITEMS = 12;
+const QUERY_REWRITE_SNAPSHOT_MAX_AGENDA = 5;
+const QUERY_REWRITE_EVENT_SUMMARY_LIMIT = 5;
+const QUERY_REWRITE_EVENT_SUMMARY_MAX_CHARS = 1000;
 const QUERY_REWRITE_REQUEST_DEFAULTS = Object.freeze({
     temperature: 0.1,
     top_p: 0.8,
@@ -471,6 +477,21 @@ export class VectorManager {
         this._lastDebugInfo = debugInfo;
     }
 
+    _readCachedRecallPrompt(cacheKey, cacheKeySig) {
+        const cachedRecall = this._getRecallCache(cacheKey);
+        if (!cachedRecall) return null;
+
+        console.log(`[Horae Vector] 召回缓存命中: key=${cacheKeySig} / size=${this._recallCache.size}`);
+        this._applyCachedRecallDebugInfo({
+            ...cachedRecall,
+            keySig: cachedRecall.keySig || cacheKeySig,
+        });
+        return {
+            hit: true,
+            recallText: cachedRecall.recallText || '',
+        };
+    }
+
     _buildRecallCacheKey(chat, state, skipLast, settings, excludeIndices, queryInfo = {}) {
         const effectiveEnd = Math.max(0, (Array.isArray(chat) ? chat.length : 0) - Math.max(0, skipLast));
         const payload = {
@@ -483,6 +504,10 @@ export class VectorManager {
                 state: queryInfo.stateQuery || '',
                 merged: queryInfo.mergedQuery || '',
             },
+            rewrite: {
+                stateSnapshotSig: queryInfo.rewriteStateSnapshot ? this._hashString(queryInfo.rewriteStateSnapshot) : '',
+                eventSummarySig: queryInfo.rewriteEventSummary ? this._hashString(queryInfo.rewriteEventSummary) : '',
+            },
             exclude: [...(excludeIndices || [])].sort((a, b) => a - b),
             stateSig: this._buildRecallStateSignature(state),
             chatSig: this._buildRecallChatSignature(chat, effectiveEnd),
@@ -491,6 +516,147 @@ export class VectorManager {
             keywordLang: this._activeKeywordLang || 'en',
         };
         return JSON.stringify(payload);
+    }
+
+    _buildRecallContext(horaeManager, skipLast, settings, extraExcludeIndices = new Set(), options = {}, flags = {}) {
+        const chat = horaeManager.getChat();
+        const state = horaeManager.getLatestState(skipLast);
+        const effectiveEnd = Math.max(0, chat.length - Math.max(0, skipLast));
+        const topK = settings.vectorTopK || 5;
+        const threshold = settings.vectorThreshold ?? 0.72;
+
+        this._refreshKeywordTable(settings);
+
+        const useRerank = !!(settings.vectorRerankEnabled && settings.vectorRerankModel);
+        const recallTopK = useRerank
+            ? Math.max(topK, settings.vectorRerankCandidates || topK * 5)
+            : topK;
+        const recallThreshold = flags.includeSearchParams === false
+            ? null
+            : (useRerank
+                ? (settings.vectorRerankRecallThreshold ?? 0.3)
+                : this._dynamicThreshold(threshold));
+
+        let rawUserMsg = '';
+        for (let i = chat.length - 1; i >= 0; i--) {
+            if (chat[i].is_user) { rawUserMsg = chat[i].mes || ''; break; }
+        }
+        const userQuery = this.cleanUserMessage(rawUserMsg);
+
+        let lastMetaForQuery = null;
+        for (let i = chat.length - 1 - skipLast; i >= 0; i--) {
+            if (!chat[i].is_user && chat[i].horae_meta && !chat[i].horae_meta._skipHorae) {
+                lastMetaForQuery = chat[i].horae_meta;
+                break;
+            }
+        }
+        const stateQueryForRecall = this.buildStateQuery(state, lastMetaForQuery);
+        const mergedRecallQuery = this.buildMergedRecallQuery(stateQueryForRecall, userQuery);
+        const rewriteStateSnapshot = this._sanitizeQueryRewriteStateSnapshot(
+            options?.rewriteStateSnapshot || options?.stateSnapshot || options?.stateSnapshotText || ''
+        );
+        const rewriteEventSummary = this._sanitizeQueryRewriteEventSummary(
+            options?.rewriteEventSummary || options?.eventSummary || options?.eventSummaryText || ''
+        );
+
+        const EXCLUDE_RECENT = 5;
+        const excludeIndices = new Set();
+        const excludeReasonMap = new Map();
+        const addExcludeReason = (idx, reason) => {
+            if (!excludeReasonMap.has(idx)) excludeReasonMap.set(idx, new Set());
+            excludeReasonMap.get(idx).add(reason);
+        };
+        let visibleExcludedCount = 0;
+        for (let i = 0; i < effectiveEnd; i++) {
+            const msg = chat[i];
+            if (!msg || msg.is_user || msg.is_hidden) continue;
+            if (!msg.horae_meta || msg.horae_meta._skipHorae) continue;
+            excludeIndices.add(i);
+            addExcludeReason(i, 'visible-message');
+            visibleExcludedCount++;
+        }
+        for (let i = Math.max(0, effectiveEnd - EXCLUDE_RECENT); i < effectiveEnd; i++) {
+            excludeIndices.add(i);
+            addExcludeReason(i, 'recent-window');
+        }
+        if (extraExcludeIndices && typeof extraExcludeIndices[Symbol.iterator] === 'function') {
+            for (const idx of extraExcludeIndices) {
+                if (Number.isInteger(idx) && idx >= 0 && idx < effectiveEnd) {
+                    excludeIndices.add(idx);
+                    addExcludeReason(idx, 'already-in-prompt');
+                }
+            }
+        }
+        const promptExcludedCount = [...excludeReasonMap.values()]
+            .reduce((count, reasons) => count + (reasons.has('already-in-prompt') ? 1 : 0), 0);
+        if (flags.logExclusions !== false) {
+            if (visibleExcludedCount > 0) {
+                console.log(`[Horae Vector] 排除未隐藏楼层: ${visibleExcludedCount} 条`);
+            }
+            if (promptExcludedCount > 0) {
+                console.log(`[Horae Vector] 额外排除已在Prompt中的楼层: ${promptExcludedCount} 条`);
+            }
+            if (excludeIndices.size > 0) {
+                const sortedExcluded = [...excludeIndices].sort((a, b) => a - b);
+                console.log(`[Horae Vector] 本次检索排除楼层明细: ${sortedExcluded.length} 条`);
+                for (const idx of sortedExcluded) {
+                    const reasons = [...(excludeReasonMap.get(idx) || ['unknown'])];
+                    console.log(`  #${idx} | reason=${reasons.join('+')}`);
+                }
+            }
+        }
+
+        const cacheKey = this._buildRecallCacheKey(
+            chat,
+            state,
+            skipLast,
+            settings,
+            excludeIndices,
+            {
+                userQuery,
+                stateQuery: stateQueryForRecall,
+                mergedQuery: mergedRecallQuery,
+                rewriteStateSnapshot,
+                rewriteEventSummary,
+            }
+        );
+        const cacheKeySig = this._hashString(cacheKey);
+
+        return {
+            chat,
+            state,
+            effectiveEnd,
+            topK,
+            threshold,
+            useRerank,
+            recallTopK,
+            recallThreshold,
+            userQuery,
+            stateQueryForRecall,
+            mergedRecallQuery,
+            rewriteStateSnapshot,
+            rewriteEventSummary,
+            excludeIndices,
+            excludeReasonMap,
+            cacheKey,
+            cacheKeySig,
+        };
+    }
+
+    getCachedRecallPrompt(horaeManager, skipLast, settings, extraExcludeIndices = new Set(), options = {}) {
+        const recallContext = this._buildRecallContext(
+            horaeManager,
+            skipLast,
+            settings,
+            extraExcludeIndices,
+            options,
+            { logExclusions: false, includeSearchParams: false }
+        );
+        return this._readCachedRecallPrompt(recallContext.cacheKey, recallContext.cacheKeySig);
+    }
+
+    _shouldCacheRecallResult(rewriteInfo) {
+        return !(rewriteInfo?.enabled === true && rewriteInfo?.configured === true && !!rewriteInfo?.error);
     }
 
     _buildRecallStateSignature(state) {
@@ -578,6 +744,13 @@ export class VectorManager {
                 isSummary: !!evt?.isSummary,
                 summaryId: evt?._summaryId || '',
                 isImportant: !!evt?.is_important,
+            })),
+            agenda: (meta?.agenda || []).map(item => ({
+                type: item?.type || '',
+                date: item?.date || '',
+                text: item?.text || '',
+                done: !!item?.done,
+                deleted: !!item?._deleted,
             })),
             rpg: this._buildRecallRpgSnapshot(meta?._rpgChanges),
         };
@@ -680,6 +853,308 @@ export class VectorManager {
         if (stateQuery) sections.push(`在"${stateQuery}"的背景下`);
         if (userQuery) sections.push(`玩家试图 ${userQuery}`);
         return sections.join('\n').trim();
+    }
+
+    /**
+     * 构建 Query Rewrite 专用轻量状态快照。
+     * 只给重写模型解释后续 user 输入所需的状态事实，避免复用完整注入 prompt 带来噪声。
+     */
+    buildQueryRewriteStateSnapshot(horaeManager, skipLast = 0, settings = {}) {
+        if (!horaeManager || typeof horaeManager.getLatestState !== 'function') return '';
+
+        const state = horaeManager.getLatestState(skipLast);
+        if (!state) return '';
+
+        const lang = detectEffectiveAiLang(settings);
+        const L = (zh, en, ja, ko, ru) => {
+            if (lang === 'zh-CN' || lang === 'zh-TW') return zh;
+            if (lang === 'ja') return ja;
+            if (lang === 'ko') return ko;
+            if (lang === 'ru') return ru;
+            return en;
+        };
+
+        const bodyLines = [];
+        const timeText = [state.timestamp?.story_date, state.timestamp?.story_time].filter(Boolean).join(' ');
+        if (timeText) bodyLines.push(`${L('当前时间', 'Current time', '現在時刻', '현재 시간', 'Текущее время')}: ${timeText}`);
+        if (state.scene?.location) bodyLines.push(`${L('当前地点', 'Current location', '現在地', '현재 장소', 'Текущее место')}: ${state.scene.location}`);
+        if (state.scene?.atmosphere) bodyLines.push(`${L('氛围', 'Atmosphere', '雰囲気', '분위기', 'Атмосфера')}: ${state.scene.atmosphere}`);
+
+        const presentChars = [...new Set(state.scene?.characters_present || [])].filter(Boolean).slice(0, QUERY_REWRITE_SNAPSHOT_MAX_PRESENT);
+        const rpg = settings?.rpgMode && typeof horaeManager.getRpgStateAt === 'function'
+            ? horaeManager.getRpgStateAt(skipLast)
+            : null;
+        if (presentChars.length > 0) {
+            bodyLines.push(`[${L('在场角色', 'Present characters', '登場人物', '등장 인물', 'Присутствующие')}]`);
+            for (const name of presentChars) {
+                const parts = [name];
+                const costume = this._findQueryRewriteCostume(state.costumes || {}, name);
+                if (costume) parts.push(`${L('服装', 'costume', '衣装', '복장', 'костюм')}=${costume}`);
+                if (state.mood?.[name]) parts.push(`${L('情绪', 'mood', '感情', '감정', 'настроение')}=${state.mood[name]}`);
+                const rpgSummary = this._buildQueryRewriteRpgSummaryForCharacter(name, rpg, settings);
+                if (rpgSummary) parts.push(`RPG=${rpgSummary}`);
+                bodyLines.push(`- ${this._truncateQueryRewriteSnapshotLine(parts.join(' | '), 240)}`);
+            }
+        }
+
+        const itemLines = this._buildQueryRewriteItemSnapshotLines(state, L);
+        if (itemLines.length > 0) {
+            bodyLines.push(`[${L('关键/在场相关物品', 'Key or present-related items', '重要/現在関連アイテム', '핵심/현장 관련 아이템', 'Ключевые или связанные предметы')}]`);
+            bodyLines.push(...itemLines);
+        }
+
+        const agendaLines = this._buildQueryRewriteAgendaSnapshotLines(horaeManager, skipLast, L);
+        if (agendaLines.length > 0) {
+            bodyLines.push(`[${L('未解决悬念簿', 'Open agenda/holds', '未解決予定/伏線', '미해결 안건/복선', 'Открытые планы/интриги')}]`);
+            bodyLines.push(...agendaLines);
+        }
+
+        if (bodyLines.length === 0) return '';
+
+        const lines = [
+            L('[Horae 状态快照 - 只读]', '[Horae State Snapshot - read-only]', '[Horae 状態スナップショット - 読み取り専用]', '[Horae 상태 스냅샷 - 읽기 전용]', '[Horae Снимок состояния - только чтение]'),
+            ...bodyLines,
+            L('[/Horae 状态快照]', '[/Horae State Snapshot]', '[/Horae 状態スナップショット]', '[/Horae 상태 스냅샷]', '[/Horae Снимок состояния]'),
+        ];
+
+        return this._sanitizeQueryRewriteStateSnapshot(lines.join('\n'));
+    }
+
+    /**
+     * 构建 Query Rewrite 的历史状态快照：
+     * 最近上下文通常是 A旧 → U上次 → A最新 → U最新。
+     * 这里取 A旧 之后的状态，并把快照追加到 A旧 后，避免依赖 A最新 的自动补全结果。
+     */
+    buildQueryRewriteHistoricalStateSnapshot(horaeManager, skipLast = 0, settings = {}) {
+        if (!horaeManager || typeof horaeManager.getChat !== 'function') return '';
+        const chat = horaeManager.getChat();
+        if (!Array.isArray(chat) || chat.length === 0) return '';
+
+        const conversation = this._collectQueryRewriteConversation(chat, settings, QUERY_REWRITE_CONTEXT_LIMIT);
+        const snapshotPos = this._resolveQueryRewriteSnapshotConversationPosition(conversation);
+        if (snapshotPos < 0) return '';
+
+        const snapshotMsgIndex = conversation[snapshotPos]?.index;
+        if (!Number.isInteger(snapshotMsgIndex) || snapshotMsgIndex < 0) return '';
+
+        const snapshotSkipLast = Math.max(0, chat.length - (snapshotMsgIndex + 1));
+        return this.buildQueryRewriteStateSnapshot(horaeManager, snapshotSkipLast, settings);
+    }
+
+    /**
+     * 构建 A旧 之前最近若干条事件摘要，作为 Query Rewrite 的检索线索。
+     */
+    buildQueryRewriteHistoricalEventSummary(horaeManager, skipLast = 0, settings = {}) {
+        if (!horaeManager || typeof horaeManager.getChat !== 'function' || typeof horaeManager.getEvents !== 'function') return '';
+        const chat = horaeManager.getChat();
+        if (!Array.isArray(chat) || chat.length === 0) return '';
+
+        const conversation = this._collectQueryRewriteConversation(chat, settings, QUERY_REWRITE_CONTEXT_LIMIT);
+        const snapshotPos = this._resolveQueryRewriteSnapshotConversationPosition(conversation);
+        if (snapshotPos < 0) return '';
+
+        const snapshotMsgIndex = conversation[snapshotPos]?.index;
+        if (!Number.isInteger(snapshotMsgIndex) || snapshotMsgIndex <= 0) return '';
+
+        const eventSkipLast = Math.max(0, chat.length - snapshotMsgIndex);
+        const events = horaeManager.getEvents(0, 'all', eventSkipLast) || [];
+        const picked = events
+            .filter(row => row?.event?.summary)
+            .slice(-QUERY_REWRITE_EVENT_SUMMARY_LIMIT);
+        if (picked.length === 0) return '';
+
+        const lang = detectEffectiveAiLang(settings);
+        const L = (zh, en, ja, ko, ru) => {
+            if (lang === 'zh-CN' || lang === 'zh-TW') return zh;
+            if (lang === 'ja') return ja;
+            if (lang === 'ko') return ko;
+            if (lang === 'ru') return ru;
+            return en;
+        };
+
+        const lines = [
+            L('[此前事件线索]', '[Previous Event Clues]', '[以前のイベント手がかり]', '[이전 사건 단서]', '[Предыдущие события]'),
+        ];
+        for (const row of picked) {
+            const msgNum = Number.isInteger(row?.messageIndex) ? `#${row.messageIndex}` : '#?';
+            const date = row?.timestamp?.story_date || '';
+            const time = row?.timestamp?.story_time || '';
+            const timeText = [date, time].filter(Boolean).join(' ');
+            const level = row?.event?.level || '';
+            const summary = this._truncateQueryRewriteSnapshotLine(row.event.summary, 180);
+            const head = [msgNum, timeText, level].filter(Boolean).join(' ');
+            lines.push(`- ${head ? `${head}: ` : ''}${summary}`);
+        }
+        lines.push(L('[/此前事件线索]', '[/Previous Event Clues]', '[/以前のイベント手がかり]', '[/이전 사건 단서]', '[/Предыдущие события]'));
+
+        const text = lines.join('\n')
+            .replace(/\r\n?/g, '\n')
+            .replace(/[ \t]+\n/g, '\n')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+        if (text.length <= QUERY_REWRITE_EVENT_SUMMARY_MAX_CHARS) return text;
+        return `${text.slice(0, QUERY_REWRITE_EVENT_SUMMARY_MAX_CHARS - 4).trimEnd()}\n...`;
+    }
+
+    _findQueryRewriteCostume(costumes, charName) {
+        if (!costumes || !charName) return '';
+        if (costumes[charName]) return costumes[charName];
+        const key = Object.keys(costumes).find(k => k === charName || k.includes(charName) || charName.includes(k));
+        return key ? costumes[key] || '' : '';
+    }
+
+    _buildQueryRewriteRpgSummaryForCharacter(charName, rpg, settings = {}) {
+        if (!charName || !rpg) return '';
+        const rpgName = this._resolveQueryRewriteRpgName(charName, rpg);
+        if (!rpgName) return '';
+
+        const parts = [];
+        if (settings?.sendRpgBars !== false) {
+            const bars = rpg.bars?.[rpgName] || {};
+            for (const [key, val] of Object.entries(bars).slice(0, 4)) {
+                if (!Array.isArray(val)) continue;
+                const label = val[2] || String(key).toUpperCase();
+                if (val[0] === undefined || val[1] === undefined) continue;
+                parts.push(`${label} ${val[0]}/${val[1]}`);
+            }
+            const status = rpg.status?.[rpgName];
+            if (Array.isArray(status) && status.length > 0) {
+                parts.push(`status:${status.slice(0, 4).join('/')}`);
+            }
+        }
+
+        if (settings?.sendRpgLevel && (rpg.levels?.[rpgName] != null || rpg.xp?.[rpgName])) {
+            const lv = rpg.levels?.[rpgName];
+            const xp = rpg.xp?.[rpgName];
+            let text = lv != null ? `Lv.${lv}` : '';
+            if (Array.isArray(xp)) text += `${text ? ' ' : ''}XP ${xp[0]}/${xp[1]}`;
+            else if (xp) text += `${text ? ' ' : ''}XP ${xp}`;
+            if (text) parts.push(text);
+        }
+
+        return this._truncateQueryRewriteSnapshotLine(parts.join(', '), 160);
+    }
+
+    _resolveQueryRewriteRpgName(charName, rpg) {
+        const names = new Set([
+            ...Object.keys(rpg?.bars || {}),
+            ...Object.keys(rpg?.status || {}),
+            ...Object.keys(rpg?.levels || {}),
+            ...Object.keys(rpg?.xp || {}),
+        ]);
+        if (names.has(charName)) return charName;
+        for (const name of names) {
+            if (name && (name.includes(charName) || charName.includes(name))) return name;
+        }
+        return '';
+    }
+
+    _buildQueryRewriteItemSnapshotLines(state, L) {
+        const entries = Object.entries(state?.items || {});
+        if (entries.length === 0) return [];
+
+        const presentChars = [...new Set(state?.scene?.characters_present || [])].filter(Boolean);
+        const location = state?.scene?.location || '';
+        const scored = entries.map(([name, info], index) => {
+            const holder = info?.holder || '';
+            const itemLocation = info?.location || '';
+            const important = this._isQueryRewriteImportantItem(info);
+            const holderMatch = this._queryRewriteTextMatchesAnyName(holder, presentChars);
+            const locationMatch = !!(location && itemLocation && (itemLocation.includes(location) || location.includes(itemLocation)));
+            const score = (important ? 4 : 0) + (holderMatch ? 2 : 0) + (locationMatch ? 1 : 0);
+            return { name, info, index, score, important };
+        }).filter(row => row.score > 0);
+
+        scored.sort((a, b) => (b.score - a.score) || (a.index - b.index));
+
+        return scored.slice(0, QUERY_REWRITE_SNAPSHOT_MAX_ITEMS).map(({ name, info, important }) => {
+            const icon = info?.icon || '';
+            const imp = important ? `[${info?.importance || L('重要', 'important', '重要', '중요', 'важно')}]` : '';
+            const desc = info?.description ? ` | ${info.description}` : '';
+            const holder = info?.holder || '';
+            const loc = info?.location ? `@${info.location}` : '';
+            const owner = holder || loc ? ` = ${holder}${loc}` : '';
+            return `- ${this._truncateQueryRewriteSnapshotLine(`${icon}${name}${imp}${desc}${owner}`, 220)}`;
+        });
+    }
+
+    _isQueryRewriteImportantItem(info) {
+        const raw = String(info?.importance || '').trim();
+        return raw === '!' || raw === '!!' || /重要|关键|關鍵|important|critical|key/i.test(raw);
+    }
+
+    _queryRewriteTextMatchesAnyName(text, names) {
+        const value = String(text || '').trim();
+        if (!value) return false;
+        return (names || []).some(name => {
+            const n = String(name || '').trim();
+            return n && (value.includes(n) || n.includes(value));
+        });
+    }
+
+    _buildQueryRewriteAgendaSnapshotLines(horaeManager, skipLast, L) {
+        const activeAgenda = this._collectQueryRewriteActiveAgenda(horaeManager, skipLast);
+        return activeAgenda.slice(0, QUERY_REWRITE_SNAPSHOT_MAX_AGENDA).map(item => {
+            const type = typeof horaeManager?.normalizeAgendaType === 'function'
+                ? horaeManager.normalizeAgendaType(item.type || '计划')
+                : (item.type || L('计划', 'plan', '予定', '계획', 'план'));
+            const date = item.date ? `${item.date}|` : '';
+            return `- ${this._truncateQueryRewriteSnapshotLine(`${type}|${date}${item.text || ''}`, 240)}`;
+        });
+    }
+
+    _collectQueryRewriteActiveAgenda(horaeManager, skipLast = 0) {
+        const chat = typeof horaeManager?.getChat === 'function' ? horaeManager.getChat() : [];
+        if (!Array.isArray(chat) || chat.length === 0) return [];
+
+        const end = Math.max(0, chat.length - Math.max(0, skipLast));
+        const seenTexts = new Set();
+        const deletedTexts = new Set(chat[0]?.horae_meta?._deletedAgendaTexts || []);
+        const items = [];
+
+        const pushItem = (item) => {
+            const text = String(item?.text || '').trim();
+            if (!text || item?._deleted || item?.done || deletedTexts.has(text) || seenTexts.has(text)) return;
+            seenTexts.add(text);
+            items.push({ ...item, text });
+        };
+
+        for (const item of chat[0]?.horae_meta?.agenda || []) pushItem(item);
+        for (let i = 1; i < end; i++) {
+            for (const item of chat[i]?.horae_meta?.agenda || []) pushItem(item);
+        }
+
+        return items;
+    }
+
+    _sanitizeQueryRewriteStateSnapshot(text) {
+        const normalized = String(text || '')
+            .replace(/<think(?:ing)?(?:\s[^>]*)?>[\s\S]*?<\/think(?:ing)?>/gi, ' ')
+            .replace(/<!--[\s\S]*?-->/g, ' ')
+            .replace(/\r\n?/g, '\n')
+            .replace(/[ \t]+\n/g, '\n')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+        if (normalized.length <= QUERY_REWRITE_SNAPSHOT_MAX_CHARS) return normalized;
+        return `${normalized.slice(0, QUERY_REWRITE_SNAPSHOT_MAX_CHARS - 4).trimEnd()}\n...`;
+    }
+
+    _sanitizeQueryRewriteEventSummary(text) {
+        const normalized = String(text || '')
+            .replace(/<think(?:ing)?(?:\s[^>]*)?>[\s\S]*?<\/think(?:ing)?>/gi, ' ')
+            .replace(/<!--[\s\S]*?-->/g, ' ')
+            .replace(/\r\n?/g, '\n')
+            .replace(/[ \t]+\n/g, '\n')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+        if (normalized.length <= QUERY_REWRITE_EVENT_SUMMARY_MAX_CHARS) return normalized;
+        return `${normalized.slice(0, QUERY_REWRITE_EVENT_SUMMARY_MAX_CHARS - 4).trimEnd()}\n...`;
+    }
+
+    _truncateQueryRewriteSnapshotLine(text, maxLength = 220) {
+        const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+        if (normalized.length <= maxLength) return normalized;
+        return `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
     }
 
     /**
@@ -1018,108 +1493,35 @@ export class VectorManager {
      * 智能召回：结构化查询 + 向量搜索并行，合并结果
      */
     async generateRecallPrompt(horaeManager, skipLast, settings, extraExcludeIndices = new Set(), options = {}) {
-        const chat = horaeManager.getChat();
-        const state = horaeManager.getLatestState(skipLast);
-        const effectiveEnd = Math.max(0, chat.length - Math.max(0, skipLast));
-        const topK = settings.vectorTopK || 5;
-        const threshold = settings.vectorThreshold ?? 0.72;
-
-        // 关键词表随 AI 输出语言加载，中文作兜底
-        this._refreshKeywordTable(settings);
-
-        // 开启 rerank 时 embedding 走宽松召回（低阈值+大候选池），交给 rerank 精排
-        const useRerank = !!(settings.vectorRerankEnabled && settings.vectorRerankModel);
-        const recallTopK = useRerank
-            ? Math.max(topK, settings.vectorRerankCandidates || topK * 5)
-            : topK;
-        // 非 rerank 路径下，索引规模越大相应上调阈值
-        const recallThreshold = useRerank
-            ? (settings.vectorRerankRecallThreshold ?? 0.3)
-            : this._dynamicThreshold(threshold);
-
-        let rawUserMsg = '';
-        for (let i = chat.length - 1; i >= 0; i--) {
-            if (chat[i].is_user) { rawUserMsg = chat[i].mes || ''; break; }
-        }
-        const userQuery = this.cleanUserMessage(rawUserMsg);
-
-        // 构建统一查询：使用最近一条 AI 元数据补充“当前情境”
-        let lastMetaForQuery = null;
-        for (let i = chat.length - 1 - skipLast; i >= 0; i--) {
-            if (!chat[i].is_user && chat[i].horae_meta && !chat[i].horae_meta._skipHorae) {
-                lastMetaForQuery = chat[i].horae_meta;
-                break;
-            }
-        }
-        const stateQueryForRecall = this.buildStateQuery(state, lastMetaForQuery);
-        const mergedRecallQuery = this.buildMergedRecallQuery(stateQueryForRecall, userQuery);
-
-        const EXCLUDE_RECENT = 5;
-        const excludeIndices = new Set();
-        const excludeReasonMap = new Map();
-        const addExcludeReason = (idx, reason) => {
-            if (!excludeReasonMap.has(idx)) excludeReasonMap.set(idx, new Set());
-            excludeReasonMap.get(idx).add(reason);
-        };
-        let visibleExcludedCount = 0;
-        for (let i = 0; i < effectiveEnd; i++) {
-            const msg = chat[i];
-            if (!msg || msg.is_user || msg.is_hidden) continue;
-            if (!msg.horae_meta || msg.horae_meta._skipHorae) continue;
-            excludeIndices.add(i);
-            addExcludeReason(i, 'visible-message');
-            visibleExcludedCount++;
-        }
-        for (let i = Math.max(0, effectiveEnd - EXCLUDE_RECENT); i < effectiveEnd; i++) {
-            excludeIndices.add(i);
-            addExcludeReason(i, 'recent-window');
-        }
-        if (extraExcludeIndices && typeof extraExcludeIndices[Symbol.iterator] === 'function') {
-            for (const idx of extraExcludeIndices) {
-                if (Number.isInteger(idx) && idx >= 0 && idx < effectiveEnd) {
-                    excludeIndices.add(idx);
-                    addExcludeReason(idx, 'already-in-prompt');
-                }
-            }
-        }
-        const promptExcludedCount = [...excludeReasonMap.values()]
-            .reduce((count, reasons) => count + (reasons.has('already-in-prompt') ? 1 : 0), 0);
-        if (visibleExcludedCount > 0) {
-            console.log(`[Horae Vector] 排除未隐藏楼层: ${visibleExcludedCount} 条`);
-        }
-        if (promptExcludedCount > 0) {
-            console.log(`[Horae Vector] 额外排除已在Prompt中的楼层: ${promptExcludedCount} 条`);
-        }
-        if (excludeIndices.size > 0) {
-            const sortedExcluded = [...excludeIndices].sort((a, b) => a - b);
-            console.log(`[Horae Vector] 本次检索排除楼层明细: ${sortedExcluded.length} 条`);
-            for (const idx of sortedExcluded) {
-                const reasons = [...(excludeReasonMap.get(idx) || ['unknown'])];
-                console.log(`  #${idx} | reason=${reasons.join('+')}`);
-            }
-        }
-
-        const cacheKey = this._buildRecallCacheKey(
-            chat,
-            state,
+        const recallContext = this._buildRecallContext(
+            horaeManager,
             skipLast,
             settings,
-            excludeIndices,
-            {
-                userQuery,
-                stateQuery: stateQueryForRecall,
-                mergedQuery: mergedRecallQuery,
-            }
+            extraExcludeIndices,
+            options
         );
-        const cacheKeySig = this._hashString(cacheKey);
-        const cachedRecall = this._getRecallCache(cacheKey);
+        const {
+            chat,
+            state,
+            topK,
+            threshold,
+            useRerank,
+            recallTopK,
+            recallThreshold,
+            userQuery,
+            stateQueryForRecall,
+            mergedRecallQuery,
+            rewriteStateSnapshot,
+            rewriteEventSummary,
+            excludeIndices,
+            excludeReasonMap,
+            cacheKey,
+            cacheKeySig,
+        } = recallContext;
+
+        const cachedRecall = this._readCachedRecallPrompt(cacheKey, cacheKeySig);
         if (cachedRecall) {
-            console.log(`[Horae Vector] 召回缓存命中: key=${cacheKeySig} / size=${this._recallCache.size}`);
-            this._applyCachedRecallDebugInfo({
-                ...cachedRecall,
-                keySig: cachedRecall.keySig || cacheKeySig,
-            });
-            return cachedRecall.recallText || '';
+            return cachedRecall.recallText;
         }
         console.log(`[Horae Vector] 召回缓存未命中: key=${cacheKeySig}`);
 
@@ -1363,6 +1765,8 @@ export class VectorManager {
                 user: userQuery,
                 state: stateQueryForRecall,
                 merged: mergedRecallQuery,
+                rewriteStateSnapshot,
+                rewriteEventSummary,
                 rewriteIntent,
                 rewriteQueries,
             },
@@ -1406,13 +1810,22 @@ export class VectorManager {
             },
         };
 
-        this._setRecallCache(cacheKey, {
-            keySig: cacheKeySig,
-            recallText,
-            debugInfo: this._lastDebugInfo,
-        });
-        if (this._lastDebugInfo?.cache) {
-            this._lastDebugInfo.cache.size = this._recallCache.size;
+        const shouldCacheRecall = this._shouldCacheRecallResult(rewriteInfo);
+        if (shouldCacheRecall) {
+            this._setRecallCache(cacheKey, {
+                keySig: cacheKeySig,
+                recallText,
+                debugInfo: this._lastDebugInfo,
+            });
+            if (this._lastDebugInfo?.cache) {
+                this._lastDebugInfo.cache.size = this._recallCache.size;
+            }
+        } else {
+            console.log('[Horae Vector] Query Rewrite 失败，本次 fallback 召回不写入缓存');
+            if (this._lastDebugInfo?.cache) {
+                this._lastDebugInfo.cache.skipped = true;
+                this._lastDebugInfo.cache.skipReason = 'query-rewrite-failed';
+            }
         }
 
         return recallText;
@@ -2391,7 +2804,7 @@ export class VectorManager {
         }
     }
 
-    async rewriteQuery(chat, settings) {
+    async rewriteQuery(chat, settings, options = {}) {
         const config = this._resolveQueryRewriteConfig(settings);
         if (!config.endpoint) throw new Error('Query Rewrite API 地址未配置');
         if (!config.apiKey) throw new Error('Query Rewrite API 密钥未配置，且无法复用 Embedding API 密钥');
@@ -2402,7 +2815,13 @@ export class VectorManager {
         if (!latestUserMessage || latestUserMessage.role !== 'user') {
             throw new Error('未找到可用于 Query Rewrite 的最新用户消息');
         }
-        const messages = this._buildQueryRewriteMessages(chat, settings, conversationMessages);
+        const stateSnapshot = this._sanitizeQueryRewriteStateSnapshot(
+            options?.stateSnapshot || options?.stateSnapshotText || options?.rewriteStateSnapshot || ''
+        );
+        const eventSummary = this._sanitizeQueryRewriteEventSummary(
+            options?.eventSummary || options?.eventSummaryText || options?.rewriteEventSummary || ''
+        );
+        const messages = this._buildQueryRewriteMessages(chat, settings, conversationMessages, { stateSnapshot, eventSummary });
 
         const body = {
             model: config.model,
@@ -2463,13 +2882,15 @@ export class VectorManager {
             rawText,
             intent: parsed.intent,
             queries: parsed.queries,
+            stateSnapshot,
+            eventSummary,
             usage: json?.usage || null,
             response: json,
         };
     }
 
-    prepareRecallRewrite(chat, settings) {
-        return this._tryRewriteRecallQuery(chat, settings);
+    prepareRecallRewrite(chat, settings, options = {}) {
+        return this._tryRewriteRecallQuery(chat, settings, options);
     }
 
     async _resolveRecallRewriteInfo(chat, settings, options = {}) {
@@ -2514,10 +2935,12 @@ export class VectorManager {
             ...merged,
             intent: this._sanitizeQueryRewriteText(merged.intent || ''),
             queries: this._normalizeQueryRewriteQueries(merged.queries || []),
+            stateSnapshot: this._sanitizeQueryRewriteStateSnapshot(merged.stateSnapshot || ''),
+            eventSummary: this._sanitizeQueryRewriteEventSummary(merged.eventSummary || ''),
         };
     }
 
-    async _tryRewriteRecallQuery(chat, settings) {
+    async _tryRewriteRecallQuery(chat, settings, options = {}) {
         const config = this._resolveQueryRewriteConfig(settings);
         const baseInfo = this._buildQueryRewriteBaseInfo(settings);
 
@@ -2534,7 +2957,7 @@ export class VectorManager {
         }
 
         try {
-            const rewritten = await this.rewriteQuery(chat, settings);
+            const rewritten = await this.rewriteQuery(chat, settings, options);
             const queries = this._normalizeQueryRewriteQueries(rewritten.queries);
             console.log(`[Horae Vector] Query Rewrite 完成: intent=${rewritten.intent ? 'yes' : 'no'} / queries=${queries.length}`);
             for (let i = 0; i < queries.length; i++) {
@@ -2547,6 +2970,8 @@ export class VectorManager {
                 enabled: true,
                 intent: rewritten.intent || '',
                 queries,
+                stateSnapshot: rewritten.stateSnapshot || '',
+                eventSummary: rewritten.eventSummary || '',
                 rawText: rewritten.rawText || '',
                 usage: rewritten.usage || null,
             };
@@ -2584,7 +3009,7 @@ export class VectorManager {
         return base ? `${base}/chat/completions` : '';
     }
 
-    _buildQueryRewriteMessages(chat, settings, conversationMessages = null) {
+    _buildQueryRewriteMessages(chat, settings, conversationMessages = null, options = {}) {
         const systemPrompt = this._getQueryRewriteSystemPrompt(settings);
         const tailPrompt = this._getQueryRewriteTailPrompt(settings);
         const messages = [];
@@ -2594,11 +3019,62 @@ export class VectorManager {
         const conversation = Array.isArray(conversationMessages)
             ? conversationMessages
             : this._collectQueryRewriteConversation(chat, settings, QUERY_REWRITE_CONTEXT_LIMIT);
-        messages.push(...conversation);
+        const stateSnapshot = this._sanitizeQueryRewriteStateSnapshot(
+            options?.stateSnapshot || options?.stateSnapshotText || options?.rewriteStateSnapshot || ''
+        );
+        const eventSummary = this._sanitizeQueryRewriteEventSummary(
+            options?.eventSummary || options?.eventSummaryText || options?.rewriteEventSummary || ''
+        );
+        const conversationWithSnapshot = conversation.map(msg => ({ ...msg }));
+        if (stateSnapshot || eventSummary) {
+            const snapshotPos = this._resolveQueryRewriteSnapshotConversationPosition(conversationWithSnapshot);
+            if (snapshotPos >= 0) {
+                conversationWithSnapshot[snapshotPos].content = [
+                    eventSummary,
+                    conversationWithSnapshot[snapshotPos].content || '',
+                    stateSnapshot,
+                ].filter(Boolean).join('\n\n').trim();
+            } else {
+                const fallbackUserPos = (() => {
+                    for (let i = conversationWithSnapshot.length - 1; i >= 0; i--) {
+                        if (conversationWithSnapshot[i]?.role === 'user') return i;
+                    }
+                    return -1;
+                })();
+                const fallbackPrefix = [eventSummary, stateSnapshot].filter(Boolean).join('\n\n');
+                if (fallbackUserPos >= 0) {
+                    conversationWithSnapshot[fallbackUserPos].content = `${fallbackPrefix}\n\n${conversationWithSnapshot[fallbackUserPos].content || ''}`.trim();
+                } else {
+                    conversationWithSnapshot.push({ role: 'user', content: fallbackPrefix });
+                }
+            }
+        }
+        messages.push(...conversationWithSnapshot.map(({ role, content }) => ({ role, content })));
         if (tailPrompt) {
             messages.push({ role: 'user', content: tailPrompt });
         }
         return messages;
+    }
+
+    _resolveQueryRewriteSnapshotConversationPosition(conversationMessages) {
+        if (!Array.isArray(conversationMessages) || conversationMessages.length === 0) return -1;
+        let latestUserPos = -1;
+        for (let i = conversationMessages.length - 1; i >= 0; i--) {
+            if (conversationMessages[i]?.role === 'user') {
+                latestUserPos = i;
+                break;
+            }
+        }
+        if (latestUserPos <= 0) return -1;
+
+        const assistantPositions = [];
+        for (let i = 0; i < latestUserPos; i++) {
+            if (conversationMessages[i]?.role === 'assistant') assistantPositions.push(i);
+        }
+
+        // 需要 A旧 → U上次 → A最新 → U最新 这类上下文；取倒数第二个 assistant。
+        if (assistantPositions.length < 2) return -1;
+        return assistantPositions[assistantPositions.length - 2];
     }
 
     _getQueryRewriteSystemPrompt(settings) {
@@ -2636,7 +3112,7 @@ export class VectorManager {
             expectUser = !expectUser;
         }
 
-        return collected.reverse().map(({ role, content }) => ({ role, content }));
+        return collected.reverse().map(({ index, role, content }) => ({ index, role, content }));
     }
 
     _extractConversationText(mes, stripTags) {

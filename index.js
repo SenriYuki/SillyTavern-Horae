@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki，柏柏
- * 版本: 1.13.7B
+ * 版本: 1.13.8B
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -24,7 +24,7 @@ import { installSaveRequestGzipFetchHook } from './utils/saveRequestGzip.js';
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.13.7B';
+const VERSION = '1.13.8B';
 const DEFAULT_VECTOR_STRIP_TAGS = 'dream_status,Episode,details,think,thinking,Thinking';
 
 // 配套正则规则（自动注入ST原生正则系统）
@@ -13870,6 +13870,19 @@ function _scheduleDeferredVectorMessageIndex(messageIndex, chatId) {
     }, 0);
 }
 
+function _hasVectorUntrackableEntries(chat) {
+    if (!Array.isArray(chat) || vectorManager.vectors.size === 0) return false;
+
+    for (const [idx] of vectorManager.vectors) {
+        const msg = chat[idx];
+        const meta = msg?.horae_meta;
+        const doc = (!msg || msg.is_user || !meta || meta._skipHorae) ? '' : vectorManager.buildVectorDocument(meta);
+        if (!doc) return true;
+    }
+
+    return false;
+}
+
 /** 清理向量索引中的不可追踪楼层（user/无meta/番外/无可索引文档） */
 async function _pruneVectorUntrackableEntries(chat) {
     if (!Array.isArray(chat) || vectorManager.vectors.size === 0) return 0;
@@ -19016,8 +19029,46 @@ async function _runVectorRecallBeforePromptReady(chat, promptChat, skipLast, pro
             return '';
         }
 
+        const rewriteStateSnapshot = settings.vectorQueryRewriteEnabled === true
+            ? vectorManager.buildQueryRewriteHistoricalStateSnapshot(horaeManager, skipLast, settings)
+            : '';
+        const rewriteEventSummary = settings.vectorQueryRewriteEnabled === true
+            ? vectorManager.buildQueryRewriteHistoricalEventSummary(horaeManager, skipLast, settings)
+            : '';
+        if (rewriteEventSummary) {
+            console.log(`[Horae Vector] Query Rewrite 此前事件线索: ${rewriteEventSummary.length} 字符`);
+        }
+        if (rewriteStateSnapshot) {
+            console.log(`[Horae Vector] Query Rewrite 历史状态快照: ${rewriteStateSnapshot.length} 字符`);
+        }
+        const currentChatId = _deriveChatId(getContext());
+        const indexGap = _countVectorIndexGap(chat);
+        const canUseEarlyRecallCache = currentChatId
+            && currentChatId !== 'unknown'
+            && vectorManager.chatId === currentChatId
+            && !_vectorEnsureIndexPromise
+            && indexGap.missing <= 0
+            && !_hasVectorUntrackableEntries(chat);
+        if (canUseEarlyRecallCache) {
+            const cachedRecall = vectorManager.getCachedRecallPrompt(
+                horaeManager,
+                skipLast,
+                settings,
+                promptCoveredChatIndices,
+                { rewriteStateSnapshot, rewriteEventSummary }
+            );
+            if (cachedRecall?.hit) {
+                const recallPrompt = cachedRecall.recallText || '';
+                console.log(`[Horae] 向量召回结果: ${recallPrompt ? recallPrompt.length + ' 字符' : '空'}`);
+                return recallPrompt;
+            }
+        }
+
         const recallRewritePromise = settings.vectorQueryRewriteEnabled === true
-            ? vectorManager.prepareRecallRewrite(chat, settings)
+            ? vectorManager.prepareRecallRewrite(chat, settings, {
+                stateSnapshot: rewriteStateSnapshot,
+                eventSummary: rewriteEventSummary,
+            })
             : null;
 
         deferredVectorIndex = await _ensureVectorIndexBeforeRecall();
@@ -19027,7 +19078,7 @@ async function _runVectorRecallBeforePromptReady(chat, promptChat, skipLast, pro
             skipLast,
             settings,
             promptCoveredChatIndices,
-            { rewritePromise: recallRewritePromise }
+            { rewritePromise: recallRewritePromise, rewriteStateSnapshot, rewriteEventSummary }
         );
         console.log(`[Horae] 向量召回结果: ${recallPrompt ? recallPrompt.length + ' 字符' : '空'}`);
         return recallPrompt || '';
