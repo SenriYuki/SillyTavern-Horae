@@ -174,3 +174,4 @@ event:重要程度|事件描述
   內容爲本樓最主要的客觀動作。
 
 {{analysis_table_rules}}
+{{analysis_rpg_rules}}

@@ -164,3 +164,4 @@ event:critical|사건 요약
 - 기록할 만한 진행이 정말 없는 경우(매우 드묾)에도 event 1개는 반드시 출력하고, 중요도는 normal 로 하며 가장 핵심적인 객관 동작을 적는다.
 
 {{analysis_table_rules}}
+{{analysis_rpg_rules}}

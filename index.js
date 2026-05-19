@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki，柏柏
- * 版本: 1.13.8B
+ * 版本: 1.13.9B
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -24,7 +24,7 @@ import { installSaveRequestGzipFetchHook } from './utils/saveRequestGzip.js';
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.13.8B';
+const VERSION = '1.13.9B';
 const DEFAULT_VECTOR_STRIP_TAGS = 'dream_status,Episode,details,think,thinking,Thinking';
 
 // 配套正则规则（自动注入ST原生正则系统）
@@ -18058,12 +18058,13 @@ async function analyzeMessageWithAI(messageContent, opts = {}) {
 
     let contextText = '';
     let previousUserMessage = '';
+    let analysisSkipLast = 0;
 
     if (typeof messageIndex === 'number' && messageIndex >= 0) {
         const chat = horaeManager.getChat();
         if (chat?.length) {
-            const skipLast = Math.max(0, chat.length - messageIndex);
-            const stateBeforeTarget = horaeManager.getLatestState(skipLast);
+            analysisSkipLast = Math.max(0, chat.length - messageIndex);
+            const stateBeforeTarget = horaeManager.getLatestState(analysisSkipLast);
             contextText = _buildAnalysisContext(stateBeforeTarget, messageIndex, userName);
 
             for (let i = messageIndex - 1; i >= Math.max(0, messageIndex - 3); i--) {
@@ -18091,6 +18092,8 @@ async function analyzeMessageWithAI(messageContent, opts = {}) {
     const analysisRelationshipRules = settings.sendRelationships ? (horaeManager.generateRelationshipPrompt() || '') : '';
     const analysisEmotionRules = settings.sendMood ? (horaeManager.generateMoodPrompt() || '') : '';
     const analysisTableRules = horaeManager.generateCustomTablesPrompt() || '';
+    const analysisRpgRules = settings.rpgMode ? (horaeManager.generateAnalysisRpgPrompt({ skipLast: analysisSkipLast }) || '') : '';
+    const hasAnalysisRpgPlaceholder = /\{\{analysis_rpg_rules\}\}/i.test(template);
     let analysisPrompt = template
         .replace(/\{\{user\}\}/gi, userName)
         .replace(/\{\{context\}\}/gi, contextText)
@@ -18099,7 +18102,12 @@ async function analyzeMessageWithAI(messageContent, opts = {}) {
         .replace(/\{\{analysis_location_rules\}\}/gi, analysisLocationRules)
         .replace(/\{\{analysis_relationship_rules\}\}/gi, analysisRelationshipRules)
         .replace(/\{\{analysis_emotion_rules\}\}/gi, analysisEmotionRules)
-        .replace(/\{\{analysis_table_rules\}\}/gi, analysisTableRules);
+        .replace(/\{\{analysis_table_rules\}\}/gi, analysisTableRules)
+        .replace(/\{\{analysis_rpg_rules\}\}/gi, analysisRpgRules);
+
+    if (analysisRpgRules && !hasAnalysisRpgPlaceholder) {
+        analysisPrompt += `\n\n${analysisRpgRules}`;
+    }
 
     // 去除无用内容
     analysisPrompt = analysisPrompt
@@ -18187,8 +18195,34 @@ function _buildAnalysisContext(state, targetIndex, userName) {
     return lines.join('\n');
 }
 
+function _isRpgOutputActive() {
+    return !!(
+        settings.rpgMode &&
+        (settings.sendRpgBars !== false || settings.sendRpgSkills !== false ||
+            settings.sendRpgAttributes !== false || !!settings.sendRpgReputation ||
+            !!settings.sendRpgEquipment || !!settings.sendRpgLevel || !!settings.sendRpgCurrency ||
+            !!settings.sendRpgStronghold)
+    );
+}
+
+function _rpgPayloadHasContent(rpg) {
+    if (!rpg) return false;
+    return Object.keys(rpg.bars || {}).length > 0
+        || Object.keys(rpg.status || {}).length > 0
+        || (rpg.skills || []).length > 0
+        || (rpg.removedSkills || []).length > 0
+        || Object.keys(rpg.attributes || {}).length > 0
+        || Object.keys(rpg.reputation || {}).length > 0
+        || (rpg.equipment || []).length > 0
+        || (rpg.unequip || []).length > 0
+        || Object.keys(rpg.levels || {}).length > 0
+        || Object.keys(rpg.xp || {}).length > 0
+        || (rpg.currency || []).length > 0
+        || (rpg.baseChanges || []).length > 0;
+}
+
 /**
- * 发送前补齐上一条AI楼层：缺 horae/horaeevent 时触发。
+ * 发送前补齐上一条AI楼层：缺 horae/horaeevent，或 RPG 模式下缺 horaerpg 时触发。
  * 使用上下文增强的 analyzeMessageWithAI 进行完整分析（含轻量状态 + 上一条 USER 行动 + 角色身份），
  * 并通过 mergeParsedToMeta 写回所有已提取字段。
  * 只在「最后一条是USER消息」时触发，避免干扰 regenerate/swipe。
@@ -18219,7 +18253,9 @@ async function _autoFillPreviousAiTimelineBeforeInjection(chat) {
         ? existingMeta.events
         : (existingMeta.event ? [existingMeta.event] : []);
     const hasTimeline = existingEvents.some(evt => evt?.summary && String(evt.summary).trim());
-    if (hasTimeline) return;
+    const rpgOutputActive = _isRpgOutputActive();
+    const hasRpgChanges = _rpgPayloadHasContent(existingMeta?._rpgChanges);
+    if (hasTimeline && (!rpgOutputActive || hasRpgChanges)) return;
 
     const sourceText = typeof targetMsg?.mes === 'string' ? targetMsg.mes.trim() : '';
     if (!sourceText) return;
@@ -18230,7 +18266,7 @@ async function _autoFillPreviousAiTimelineBeforeInjection(chat) {
         .trim();
     const targetTextForAnalysis = cleanedTargetText || sourceText;
 
-    console.log(`[Horae] 前置补全：检测到上一条AI楼层 #${targetIndex} 缺少时间线，尝试上下文增强分析`);
+    console.log(`[Horae] 前置补全：检测到上一条AI楼层 #${targetIndex} 缺少时间线或RPG数据，尝试上下文增强分析`);
     showToast(t('toast.autoFillPrevTimelineStart', { id: targetIndex }), 'info');
     const autoFillFailedToast = '补全失败,请手动重试';
 
@@ -18241,7 +18277,8 @@ async function _autoFillPreviousAiTimelineBeforeInjection(chat) {
     const parsedEvents = Array.isArray(parsed?.events)
         ? parsed.events.filter(evt => evt?.summary && String(evt.summary).trim())
         : [];
-    if (!parsed || parsedEvents.length === 0) {
+    const parsedHasRpg = _rpgPayloadHasContent(parsed?.rpg);
+    if (!parsed || parsedEvents.length === 0 || (rpgOutputActive && !parsedHasRpg)) {
         try {
             parsed = await analyzeMessageWithAI(targetTextForAnalysis, {
                 messageIndex: targetIndex,

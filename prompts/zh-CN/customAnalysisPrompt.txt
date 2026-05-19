@@ -174,3 +174,4 @@ event:重要程度|事件描述
   内容为本楼最主要的客观动作。
 
 {{analysis_table_rules}}
+{{analysis_rpg_rules}}

@@ -164,3 +164,4 @@ event:critical|出来事の要約
 - 記録すべき進展が本当にない場合（極めて稀）でも、event を1件出力し、重要度は normal とし、最も主要な客観動作を書く。
 
 {{analysis_table_rules}}
+{{analysis_rpg_rules}}

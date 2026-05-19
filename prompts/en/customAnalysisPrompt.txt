@@ -168,3 +168,4 @@ event:importance level|event description
 - If this message truly has no recordable progression (extremely rare), still output one event, set importance to "General", and describe the main objective action of this message.
 
 {{analysis_table_rules}}
+{{analysis_rpg_rules}}

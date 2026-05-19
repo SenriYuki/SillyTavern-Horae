@@ -3799,25 +3799,63 @@ class HoraeManager {
     }
 
     /** RPG 提示词（rpgMode 开启才注入） */
-    generateRpgPrompt() {
+    generateRpgPrompt(options = {}) {
         if (!this.settings?.rpgMode) return '';
         const customPrompt = this.settings?.customRpgPrompt || '';
-        if (customPrompt.trim()) return '\n' + this._resolveRpgPromptTemplate(customPrompt);
-        return '\n' + this.getDefaultRpgPromptResolved();
+        if (customPrompt.trim()) return '\n' + this._resolveRpgPromptTemplate(customPrompt, options);
+        return '\n' + this.getDefaultRpgPromptResolved(options);
+    }
+
+    /** AI 分析用 RPG 提示词（复用 RPG 配置，并补充分析场景约束） */
+    generateAnalysisRpgPrompt(options = {}) {
+        if (!this.settings?.rpgMode) return '';
+        const rules = this.generateRpgPrompt(options).trim();
+        if (!rules) return '';
+        const lang = this._getAiOutputLang();
+        const L = (zh, en, ja, ko, ru) => {
+            if (lang === 'zh-CN' || lang === 'zh-TW') return zh;
+            if (lang === 'ja') return ja;
+            if (lang === 'ko') return ko;
+            if (lang === 'ru') return ru;
+            return en;
+        };
+        const header = L(
+            `═══ 【RPG 分析补全】 ═══
+当 RPG 模式开启时，最终输出必须扩展为三个标签：先输出 <horae>...</horae>，再输出 <horaeevent>...</horaeevent>，最后输出 <horaerpg>...</horaerpg>。
+只分析【待分析文本】，不要续写剧情；参考状态只用于推算当前 RPG 数值，不视为本楼新增事实。
+如果某个 RPG 子模块要求每回合必写（例如属性条），即使文本未描写变化，也要结合参考状态写出当前值；其他子模块仅在【待分析文本】明确触发变化时输出。`,
+            `═══ [RPG Analysis Completion] ═══
+When RPG Mode is enabled, the final output MUST contain three tags: first <horae>...</horae>, then <horaeevent>...</horaeevent>, and finally <horaerpg>...</horaerpg>.
+Analyze only the [Text to Analyze]. Do not continue the story. Use reference state only to infer current RPG values; do not treat it as new facts for this message.
+If an RPG submodule requires output every turn (for example status bars), write current values even when the text shows no change; output other submodules only when the [Text to Analyze] clearly triggers changes.`,
+            `═══ 【RPG分析補完】 ═══
+RPGモードが有効な場合、最終出力は必ず3つのタグに拡張してください：まず <horae>...</horae>、次に <horaeevent>...</horaeevent>、最後に <horaerpg>...</horaerpg>。
+【分析対象テキスト】のみを分析し、物語を続けないでください。参照状態は現在のRPG値を推定するためだけに使い、この階層の新事実とは見なさないでください。
+毎ターン必須のRPGサブモジュール（例：ステータスバー）は、本文に変化がなくても参照状態に基づいて現在値を書いてください。それ以外は【分析対象テキスト】が明確に変化を発生させた場合のみ出力してください。`,
+            `═══ 【RPG 분석 보완】 ═══
+RPG 모드가 켜져 있으면 최종 출력은 반드시 세 개의 태그로 확장되어야 합니다: 먼저 <horae>...</horae>, 그다음 <horaeevent>...</horaeevent>, 마지막에 <horaerpg>...</horaerpg>.
+【분석할 텍스트】만 분석하고 이야기를 이어 쓰지 마세요. 참고 상태는 현재 RPG 값을 추론하는 데만 사용하며, 이번 메시지의 신규 사실로 간주하지 마세요.
+매 턴 필수 출력인 RPG 하위 모듈(예: 상태 바)은 텍스트에 변화가 없어도 참고 상태를 바탕으로 현재 값을 작성하세요. 그 외 하위 모듈은 【분석할 텍스트】에서 명확히 변화가 발생했을 때만 출력하세요.`,
+            `═══ [Дополнение RPG-анализа] ═══
+Когда включён RPG Mode, итоговый вывод ДОЛЖЕН содержать три тега: сначала <horae>...</horae>, затем <horaeevent>...</horaeevent>, и в конце <horaerpg>...</horaerpg>.
+Анализируйте только [текст для анализа] и не продолжайте сюжет. Используйте справочное состояние только для вычисления текущих RPG-значений; не считайте его новыми фактами этого сообщения.
+Если RPG-подмодуль требует вывод каждый ход (например, шкалы статуса), записывайте текущие значения даже без изменений в тексте; остальные подмодули выводите только при явном изменении в [тексте для анализа].`
+        );
+        return `\n${header}\n\n${rules}`;
     }
 
     /** RPG 默认提示词（资源优先，支持分段占位符） */
-    getDefaultRpgPromptResolved() {
+    getDefaultRpgPromptResolved(options = {}) {
         const fromResource = this._getPromptDefaultFromResource('customRpgPrompt');
-        if (!fromResource || !fromResource.trim()) return this.getDefaultRpgPrompt();
-        return this._resolveRpgPromptTemplate(fromResource);
+        if (!fromResource || !fromResource.trim()) return this.getDefaultRpgPrompt(options);
+        return this._resolveRpgPromptTemplate(fromResource, options);
     }
 
-    _resolveRpgPromptTemplate(template) {
+    _resolveRpgPromptTemplate(template, options = {}) {
         let out = String(template || '');
         if (/\[\[\s*rpg\./i.test(out)) {
             const lang = this._getAiOutputLang();
-            const sections = this._extractRpgPromptSections(this.getDefaultRpgPrompt(), lang);
+            const sections = this._extractRpgPromptSections(this.getDefaultRpgPrompt(options), lang);
             out = this._renderRpgPromptSectionTemplate(out, sections);
         }
         const [userName, charName] = this._getDefaultNames();
@@ -3945,7 +3983,7 @@ class HoraeManager {
     }
 
     /** RPG 默认提示词 */
-    getDefaultRpgPrompt() {
+    getDefaultRpgPrompt(options = {}) {
         const sendBars = this.settings?.sendRpgBars !== false;
         const sendSkills = this.settings?.sendRpgSkills !== false;
         const sendAttrs = this.settings?.sendRpgAttributes !== false;
@@ -4179,7 +4217,7 @@ class HoraeManager {
         if (sendEq) {
             const eqCfg = this._getRpgEquipmentConfig();
             const perChar = eqCfg.perChar || {};
-            const present = new Set(this.getLatestState()?.scene?.characters_present || []);
+            const present = new Set(this.getLatestState(options?.skipLast || 0)?.scene?.characters_present || []);
             const hasAnySlots = Object.values(perChar).some(c => c.slots?.length > 0);
             if (hasAnySlots) {
                 p += L(
