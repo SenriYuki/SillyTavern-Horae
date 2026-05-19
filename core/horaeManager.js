@@ -2764,7 +2764,7 @@ class HoraeManager {
         snapshot.reputationConfig = repConfig;
         // 装备：按角色过滤已删除格位
         for (const [owner, slots] of Object.entries(snapshot.equipment)) {
-            ownerCfg = _eqPerChar[owner];
+            const ownerCfg = _eqPerChar[owner];
             if (!ownerCfg || !Array.isArray(ownerCfg.slots)) continue;
             const validEqSlots = new Set(ownerCfg.slots.map(s => s.name));
             const deletedEqSlots = new Set(ownerCfg._deletedSlots || []);
