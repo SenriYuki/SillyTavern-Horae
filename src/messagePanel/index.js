@@ -59,7 +59,11 @@ function createShadowMount(hostEl) {
   shadowRoot.append(panelContainer);
 
   const syncPanelContainer = () => {
-    panelContainer.className = hostEl.className;
+    const classes = ['horae-message-panel', 'horae-message-panel-vue'];
+    if (hostEl.classList.contains('horae-sideplay')) {
+      classes.push('horae-sideplay');
+    }
+    panelContainer.className = classes.join(' ');
     panelContainer.dataset.messageId = hostEl.dataset.messageId || '';
   };
   syncPanelContainer();
