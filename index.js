@@ -44,6 +44,12 @@ const MESSAGE_PANEL_BUILTIN_THEMES = [
         path: 'src/messagePanel/theme/夜间.css',
         format: 'css',
     },
+    // {
+    //     id: '粉色主题',
+    //     nameKey: '粉色主题',
+    //     path: 'src/messagePanel/theme/粉色.css',
+    //     format: 'css',
+    // },
 ];
 const messagePanelBuiltinThemeCssCache = new Map();
 
@@ -144,7 +150,7 @@ const DEFAULT_SETTINGS = {
     injectCustomPrompts: true, // 是否在摘要/总结后台任务中注入自定义头尾提示词
     showMessagePanel: true,
     useNewMessagePanel: false,      // 使用新的 Vue 楼层面板；关闭后回退旧版 index.js 面板
-    gzipSaveRequests: true, // 对消息保存接口请求体进行 Gzip 压缩
+    gzipSaveRequests: false, // 对消息保存接口请求体进行 Gzip 压缩
     injectionDepthSource: 'system', // 注入深度来源: system(原逻辑) / preset(按完整提示词末尾偏移)
     injectionPosition: 0,
     timelineInjectionMode: 'separate', // inline(原逻辑合并注入) / separate(剧情轨迹独立前置)
