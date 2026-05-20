@@ -31,6 +31,15 @@
       </div>
     </div>
 
+    <Transition
+      :css="false"
+      @before-enter="beforePanelEnter"
+      @enter="panelEnter"
+      @after-enter="afterPanelEnter"
+      @before-leave="beforePanelLeave"
+      @leave="panelLeave"
+      @after-leave="afterPanelLeave"
+    >
     <div v-show="!collapsed" class="horae-panel-content">
       <div class="neo-dashboard">
         <div class="neo-tags">
@@ -251,13 +260,14 @@
             <button class="neo-btn-text" @click="collapsed = true">
               <i class="fa-solid fa-chevron-up"></i> {{ labels.collapse }}
             </button>
-            <button class="neo-btn-text btn-drawer" :title="labels.openDrawer" @click="adapter.openDrawer?.()">
+            <button style="display: none;" class="neo-btn-text btn-drawer" :title="labels.openDrawer" @click="adapter.openDrawer?.()">
               <i class="fa-solid fa-clock-rotate-left"></i>
             </button>
           </div>
         </div>
       </div>
     </div>
+    </Transition>
   </div>
 </template>
 
@@ -333,6 +343,10 @@ const collapsed = ref(true);
 const dirty = ref(false);
 const activeActionKey = ref(null);
 const busy = reactive({ save: false, scan: false, ai: false, sideplay: false });
+const PANEL_ENTER_MS = 240;
+const PANEL_LEAVE_MS = 200;
+const PANEL_EASE_OUT = 'cubic-bezier(0.22, 1, 0.36, 1)';
+const PANEL_EASE_IN = 'cubic-bezier(0.4, 0, 1, 1)';
 
 const charactersText = ref((draft.scene.characters_present || []).join(', '));
 
@@ -378,6 +392,101 @@ function markDirty() {
 function onHeaderClick(event) {
   if (event.target.closest('button, input, textarea, select')) return;
   collapsed.value = !collapsed.value;
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+}
+
+function clearPanelMotion(el) {
+  el._horaePanelCleanup?.();
+  el._horaePanelCleanup = null;
+  el.style.height = '';
+  el.style.opacity = '';
+  el.style.transform = '';
+  el.style.transition = '';
+  el.style.overflow = '';
+  el.style.willChange = '';
+}
+
+function waitPanelMotion(el, done, duration) {
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    cleanup();
+    el._horaePanelCleanup = null;
+    done();
+  };
+  const onEnd = (event) => {
+    if (event.target === el && event.propertyName === 'height') finish();
+  };
+  const cleanup = () => {
+    el.removeEventListener('transitionend', onEnd);
+    if (el._horaePanelTimer) window.clearTimeout(el._horaePanelTimer);
+    el._horaePanelTimer = null;
+  };
+  el.addEventListener('transitionend', onEnd);
+  el._horaePanelTimer = window.setTimeout(finish, duration + 80);
+  el._horaePanelCleanup = cleanup;
+}
+
+function beforePanelEnter(el) {
+  clearPanelMotion(el);
+  if (prefersReducedMotion()) return;
+  el.style.height = '0px';
+  el.style.opacity = '0';
+  el.style.transform = 'translateY(-6px)';
+  el.style.overflow = 'hidden';
+  el.style.willChange = 'height, opacity, transform';
+}
+
+function panelEnter(el, done) {
+  if (prefersReducedMotion()) {
+    done();
+    return;
+  }
+  el.style.transition = `height ${PANEL_ENTER_MS}ms ${PANEL_EASE_OUT}, opacity 180ms ease-out, transform ${PANEL_ENTER_MS}ms ${PANEL_EASE_OUT}`;
+  requestAnimationFrame(() => {
+    el.style.height = `${el.scrollHeight}px`;
+    el.style.opacity = '1';
+    el.style.transform = 'translateY(0)';
+  });
+  waitPanelMotion(el, done, PANEL_ENTER_MS);
+}
+
+function afterPanelEnter(el) {
+  clearPanelMotion(el);
+  nextTick(resizeTextareas);
+}
+
+function beforePanelLeave(el) {
+  clearPanelMotion(el);
+  if (prefersReducedMotion()) return;
+  el.style.height = `${el.scrollHeight}px`;
+  el.style.opacity = '1';
+  el.style.transform = 'translateY(0)';
+  el.style.overflow = 'hidden';
+  el.style.willChange = 'height, opacity, transform';
+}
+
+function panelLeave(el, done) {
+  if (prefersReducedMotion()) {
+    done();
+    return;
+  }
+  void el.offsetHeight;
+  el.style.transition = `height ${PANEL_LEAVE_MS}ms ${PANEL_EASE_IN}, opacity 140ms ease-in, transform ${PANEL_LEAVE_MS}ms ${PANEL_EASE_IN}`;
+  requestAnimationFrame(() => {
+    el.style.height = '0px';
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(-4px)';
+  });
+  waitPanelMotion(el, done, PANEL_LEAVE_MS);
+}
+
+function afterPanelLeave(el) {
+  clearPanelMotion(el);
 }
 
 function onCharactersInput() {

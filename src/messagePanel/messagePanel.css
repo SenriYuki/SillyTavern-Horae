@@ -162,6 +162,8 @@
   padding: 16px 24px 24px;
   background: transparent !important;
   border-top: 0 !important;
+  box-sizing: border-box;
+  transform-origin: top;
 }
 
 .horae-message-panel-vue .neo-dashboard {
@@ -888,6 +890,13 @@
 
   .horae-message-panel-vue .btn-drawer {
     grid-column: 1 / -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .horae-message-panel-vue .horae-panel-content {
+    transition: none !important;
+    transform: none !important;
   }
 }
 
