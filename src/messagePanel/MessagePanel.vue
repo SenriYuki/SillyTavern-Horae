@@ -181,10 +181,12 @@
               @click="toggleActionControls('itemRows', row)"
             >
               <div class="view-mode">
-                <div class="item-emoji">{{ row.icon || '📦' }}</div>
                 <div class="item-info">
                   <div class="item-line-top">
-                    <span>{{ row.name || labels.itemName }}</span>
+                    <span class="item-title">
+                      <span class="item-emoji">{{ row.icon || '📦' }}</span>
+                      <span class="item-name">{{ row.name || labels.itemName }}</span>
+                    </span>
                     <span v-if="row.holder" class="item-holder-badge">{{ row.holder }}</span>
                   </div>
                   <div v-if="row.location" class="item-meta">

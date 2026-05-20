@@ -691,9 +691,11 @@
 }
 
 .horae-message-panel-vue .item-emoji {
-  font-size: 1.6rem;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  font-size: 1.25rem;
   line-height: 1;
-  margin-top: 2px;
 }
 
 .horae-message-panel-vue .item-info {
@@ -713,6 +715,19 @@
   font-weight: 600;
   color: var(--mp-text-title);
   font-size: 1rem;
+}
+
+.horae-message-panel-vue .item-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.horae-message-panel-vue .item-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .horae-message-panel-vue .item-holder-badge {
@@ -824,7 +839,6 @@
   padding-top: 2px;
   font-family: monospace;
   width: 80px;
-  flex: 0 0 80px;
 }
 
 .horae-message-panel-vue .agenda-content {

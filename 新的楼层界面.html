@@ -599,9 +599,11 @@
         }
 
         .item-emoji {
-            font-size: 1.6rem;
+            display: inline-flex;
+            align-items: center;
+            flex: 0 0 auto;
+            font-size: 1.25rem;
             line-height: 1;
-            margin-top: 2px;
         }
 
         .item-info {
@@ -621,6 +623,19 @@
             font-weight: 600;
             color: var(--text-title);
             font-size: 1rem;
+        }
+
+        .item-title {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+            max-width: 100%;
+        }
+
+        .item-name {
+            min-width: 0;
+            overflow-wrap: anywhere;
         }
 
         .item-holder-badge {
@@ -993,9 +1008,8 @@
                         <div class="neo-item-list list-container">
                             <div class="neo-item-card editable-block">
                                 <div class="view-mode">
-                                    <div class="item-emoji t-emoji">✉️</div>
                                     <div class="item-info">
-                                        <div class="item-line-top"><span class="t-name">银边信</span> <span
+                                        <div class="item-line-top"><span class="item-title"><span class="item-emoji t-emoji">✉️</span><span class="item-name t-name">银边信</span></span> <span
                                                 class="item-holder-badge t-holder">林风</span></div>
                                         <div class="item-meta"><i class="fa-solid fa-location-dot"></i> <span
                                                 class="t-loc">灰鸦旅馆二楼客房</span></div>
@@ -1214,9 +1228,8 @@
                         newHtml = `
                             <div class="neo-item-card editable-block is-editing">
                                 <div class="view-mode">
-                                    <div class="item-emoji t-emoji">📦</div>
                                     <div class="item-info">
-                                        <div class="item-line-top"><span class="t-name">新物品</span> <span class="item-holder-badge t-holder">持有者</span></div>
+                                        <div class="item-line-top"><span class="item-title"><span class="item-emoji t-emoji">📦</span><span class="item-name t-name">新物品</span></span> <span class="item-holder-badge t-holder">持有者</span></div>
                                         <div class="item-meta"><i class="fa-solid fa-location-dot"></i> <span class="t-loc">未知</span></div>
                                         <div class="item-desc t-desc">未知物品描述。</div>
                                     </div>
