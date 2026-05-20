@@ -168,6 +168,7 @@
         "injectCustomPrompts": "注入自定义提示词",
         "injectCustomPromptsHint": "摘要，总结时如果因破不开甲而失败，可以在下方自定义提示词里面加上破甲词",
         "showPanel": "显示消息元数据面板",
+        "useNewMessagePanel": "使用新楼层界面",
         "showTopIcon": "显示顶部导航栏图标",
         "showTopIconHint": "关闭后顶部图标完全隐藏，不留空位。可通过扩展面板（积木图标）中的「Horae 时光记忆」栏位重新开启。",
         "panelWidth": "面板宽度",

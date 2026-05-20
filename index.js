@@ -124,6 +124,7 @@ const DEFAULT_SETTINGS = {
     injectContext: true,
     injectCustomPrompts: true, // 是否在摘要/总结后台任务中注入自定义头尾提示词
     showMessagePanel: true,
+    useNewMessagePanel: false,      // 使用新的 Vue 楼层面板；关闭后回退旧版 index.js 面板
     gzipSaveRequests: true, // 对消息保存接口请求体进行 Gzip 压缩
     injectionDepthSource: 'system', // 注入深度来源: system(原逻辑) / preset(按完整提示词末尾偏移)
     injectionPosition: 0,
@@ -10491,11 +10492,28 @@ function addMessagePanel(messageEl, messageIndex) {
         const mesTextEl = messageEl.querySelector('.mes_text');
         if (!mesTextEl) return;
 
-        if (_mountVueMessagePanel(messageEl, messageIndex, meta, mesTextEl)) return;
+        if (settings.useNewMessagePanel !== false && _mountVueMessagePanel(messageEl, messageIndex, meta, mesTextEl)) return;
     } catch (err) {
         console.warn(`[Horae] Vue 面板初始化失败 #${messageIndex}，回退旧面板:`, err);
     }
     addLegacyMessagePanel(messageEl, messageIndex);
+}
+
+function rebuildCurrentMessagePanels() {
+    document.querySelectorAll('.horae-message-panel').forEach(panel => {
+        try { panel._horaeVueUnmount?.(); } catch (err) { console.warn('[Horae] Vue 面板卸载失败:', err); }
+        panel.remove();
+    });
+    document.querySelectorAll('.horae-rpg-hud').forEach(hud => hud.remove());
+
+    document.querySelectorAll('.mes').forEach(messageEl => {
+        const messageId = parseInt(messageEl.getAttribute('mesid'));
+        if (isNaN(messageId)) return;
+        const msg = horaeManager.getChat()?.[messageId];
+        if (msg && !msg.is_user && msg.horae_meta) {
+            addMessagePanel(messageEl, messageId);
+        }
+    });
 }
 
 /**
@@ -11999,6 +12017,12 @@ function initSettingsEvents() {
         });
     });
 
+    $('#horae-setting-use-new-message-panel').on('change', function () {
+        settings.useNewMessagePanel = this.checked;
+        saveSettings();
+        rebuildCurrentMessagePanels();
+    });
+
     $('#horae-setting-show-top-icon').on('change', function () {
         settings.showTopIcon = this.checked;
         saveSettings();
@@ -12656,6 +12680,7 @@ function initSettingsEvents() {
     // ── Horae 全局配置 导出/导入/重置 ──
     const _SETTINGS_EXPORT_KEYS = [
         'enabled', 'autoParse', 'gzipSaveRequests', 'autoFillPrevTimelineOnSend', 'injectContext', 'injectCustomPrompts', 'showMessagePanel', 'showTopIcon',
+        'useNewMessagePanel',
         'injectionDepthSource', 'injectionPosition', 'timelineInjectionMode',
         'sendTimeline', 'contextDepth', 'sendCharacters', 'sendCharacterAffection', 'sendMainCharacterPersonality', 'sendItems',
         'sendLocationMemory', 'sendRelationships', 'sendMood',
@@ -13927,6 +13952,7 @@ function syncSettingsToUI() {
     $('#horae-setting-inject-context').prop('checked', settings.injectContext);
     $('#horae-setting-inject-custom-prompts').prop('checked', !!settings.injectCustomPrompts);
     $('#horae-setting-show-panel').prop('checked', settings.showMessagePanel);
+    $('#horae-setting-use-new-message-panel').prop('checked', settings.useNewMessagePanel !== false);
     $('#horae-setting-show-top-icon').prop('checked', settings.showTopIcon !== false);
     $('#horae-ext-show-top-icon').prop('checked', settings.showTopIcon !== false);
     $('#horae-setting-injection-depth-source').val(settings.injectionDepthSource === 'preset' ? 'preset' : 'system');

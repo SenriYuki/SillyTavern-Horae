@@ -168,6 +168,7 @@
         "injectCustomPrompts": "Inject Custom Prompts",
         "injectCustomPromptsHint": "If brief or summary tasks fail because jailbreak does not pass, add jailbreak terms in the custom prompts below.",
         "showPanel": "Show message metadata panel",
+        "useNewMessagePanel": "Use new floor panel",
         "showTopIcon": "Show top navigation icon",
         "showTopIconHint": "When off, the top icon is completely hidden. Re-enable via Extensions panel → Horae Memory.",
         "panelWidth": "Panel Width",
