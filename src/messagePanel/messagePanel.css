@@ -307,6 +307,7 @@
   transition: all 0.2s ease;
   margin-left: auto;
   flex: 0 0 auto;
+  pointer-events: none;
 }
 
 .horae-message-panel-vue .action-hover-btn {
@@ -343,6 +344,7 @@
 .horae-message-panel-vue .action-group-hover:hover {
   opacity: 1;
   transform: translateX(0);
+  pointer-events: auto;
 }
 
 .horae-message-panel-vue .is-editing .btn-edit {
@@ -845,9 +847,22 @@
     content: '';
   }
 
-  .horae-message-panel-vue .action-group-hover {
-    opacity: 0.75;
-    transform: none;
+  .horae-message-panel-vue .action-group-hover,
+  .horae-message-panel-vue .neo-event-card .action-group-hover,
+  .horae-message-panel-vue :hover > .action-group-hover,
+  .horae-message-panel-vue .action-group-hover:hover {
+    opacity: 0;
+    transform: translateX(6px);
+    pointer-events: none;
+  }
+
+  .horae-message-panel-vue .editable-block.is-action-open > .action-group-hover,
+  .horae-message-panel-vue .editable-block.is-action-open .event-header > .action-group-hover,
+  .horae-message-panel-vue .editable-block.is-editing > .action-group-hover,
+  .horae-message-panel-vue .editable-block.is-editing .event-header > .action-group-hover {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
   }
 
   .horae-message-panel-vue .neo-footer-actions {

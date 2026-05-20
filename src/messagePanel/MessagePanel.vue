@@ -48,14 +48,18 @@
           </span>
         </div>
 
-        <div class="neo-event-card editable-block" :class="{ 'is-editing': draft.event.editing }">
+        <div
+          class="neo-event-card editable-block"
+          :class="{ 'is-editing': draft.event.editing, 'is-action-open': isActionOpen('event', draft.event) }"
+          @click="toggleActionControls('event', draft.event)"
+        >
           <div class="event-header">
             <span class="event-badge">
               <i class="fa-solid fa-bolt"></i>
               {{ eventLevelLabel }}
             </span>
             <div class="action-group-hover">
-              <button class="action-hover-btn btn-edit" @click="toggleRowEdit(draft.event)">
+              <button class="action-hover-btn btn-edit" @click.stop="toggleRowEdit(draft.event)">
                 <i class="fa-solid fa-pen"></i>
               </button>
             </div>
@@ -63,7 +67,7 @@
           <div class="view-mode">
             <div class="event-body-text">{{ draft.event.summary || labels.noSpecialEvents }}</div>
           </div>
-          <div class="edit-mode">
+          <div class="edit-mode" @click.stop>
             <select v-model="draft.event.level" class="neo-input event-level-select" @change="markDirty">
               <option value="">{{ labels.levelNone }}</option>
               <option value="一般">{{ labels.levelNormal }}</option>
@@ -89,12 +93,18 @@
             </button>
           </div>
           <div class="aff-grid list-container">
-            <div v-for="row in draft.affectionRows" :key="row.id" class="aff-chip editable-block" :class="{ 'is-editing': row.editing }">
+            <div
+              v-for="row in draft.affectionRows"
+              :key="row.id"
+              class="aff-chip editable-block"
+              :class="{ 'is-editing': row.editing, 'is-action-open': isActionOpen('affectionRows', row) }"
+              @click="toggleActionControls('affectionRows', row)"
+            >
               <div class="view-mode">
                 <span class="t-title">{{ row.name || labels.role }}</span>
                 <span class="t-val">{{ row.value || 0 }}</span>
               </div>
-              <div class="edit-mode">
+              <div class="edit-mode" @click.stop>
                 <input v-model="row.name" class="neo-input no-enter aff-name" :placeholder="labels.role" @input="markDirty" @keydown.enter.prevent="toggleRowEdit(row)">
                 <input v-model="row.value" class="neo-input no-enter aff-value" :placeholder="labels.value" @input="markDirty" @keydown.enter.prevent="toggleRowEdit(row)">
               </div>
@@ -111,14 +121,20 @@
             </button>
           </div>
           <div class="rel-list list-container">
-            <div v-for="row in draft.relationshipRows" :key="row.id" class="rel-row editable-block" :class="{ 'is-editing': row.editing }">
+            <div
+              v-for="row in draft.relationshipRows"
+              :key="row.id"
+              class="rel-row editable-block"
+              :class="{ 'is-editing': row.editing, 'is-action-open': isActionOpen('relationshipRows', row) }"
+              @click="toggleActionControls('relationshipRows', row)"
+            >
               <div class="view-mode">
                 <span class="rel-node">{{ row.from || labels.role }}</span>
                 <i class="fa-solid fa-arrow-right-long rel-arrow"></i>
                 <span class="rel-node">{{ row.to || labels.role }}</span>
                 <span class="rel-label">{{ row.type || labels.relationshipHint }}</span>
               </div>
-              <div class="edit-mode">
+              <div class="edit-mode" @click.stop>
                 <input v-model="row.from" class="neo-input no-enter rel-person" :placeholder="labels.relFrom" @input="markDirty" @keydown.enter.prevent="toggleRowEdit(row)">
                 <i class="fa-solid fa-arrow-right-long"></i>
                 <input v-model="row.to" class="neo-input no-enter rel-person" :placeholder="labels.relTo" @input="markDirty" @keydown.enter.prevent="toggleRowEdit(row)">
@@ -148,7 +164,13 @@
             </button>
           </div>
           <div class="neo-item-list list-container">
-            <div v-for="row in draft.itemRows" :key="row.id" class="neo-item-card editable-block" :class="{ 'is-editing': row.editing }">
+            <div
+              v-for="row in draft.itemRows"
+              :key="row.id"
+              class="neo-item-card editable-block"
+              :class="{ 'is-editing': row.editing, 'is-action-open': isActionOpen('itemRows', row) }"
+              @click="toggleActionControls('itemRows', row)"
+            >
               <div class="view-mode">
                 <div class="item-emoji">{{ row.icon || '📦' }}</div>
                 <div class="item-info">
@@ -162,7 +184,7 @@
                   <div class="item-desc">{{ row.description || labels.itemDesc }}</div>
                 </div>
               </div>
-              <div class="edit-mode item-edit-mode">
+              <div class="edit-mode item-edit-mode" @click.stop>
                 <div class="item-edit-line">
                   <input v-model="row.icon" class="neo-input no-enter item-icon-input" maxlength="2" placeholder="📦" @input="markDirty" @keydown.enter.prevent="toggleRowEdit(row)">
                   <input v-model="row.name" class="neo-input no-enter" :placeholder="labels.itemName" @input="markDirty" @keydown.enter.prevent="toggleRowEdit(row)">
@@ -188,7 +210,8 @@
               v-for="row in draft.agendaRows"
               :key="row.id"
               class="agenda-card editable-block"
-              :class="[agendaTypeClass(row.type), { 'is-editing': row.editing }]"
+              :class="[agendaTypeClass(row.type), { 'is-editing': row.editing, 'is-action-open': isActionOpen('agendaRows', row) }]"
+              @click="toggleActionControls('agendaRows', row)"
             >
               <div class="view-mode">
                 <div class="agenda-date">{{ row.date || labels.unscheduled }}</div>
@@ -197,7 +220,7 @@
                   <span class="agenda-text">{{ row.text || labels.agendaText }}</span>
                 </div>
               </div>
-              <div class="edit-mode agenda-edit-mode">
+              <div class="edit-mode agenda-edit-mode" @click.stop>
                 <div class="agenda-edit-line">
                   <input v-model="row.date" class="neo-input no-enter agenda-date-input" :placeholder="labels.date" @input="markDirty" @keydown.enter.prevent="toggleRowEdit(row)">
                   <select v-model="row.type" class="neo-input no-enter" @change="markDirty" @keydown.enter.prevent="toggleRowEdit(row)">
@@ -308,6 +331,7 @@ const panelRoot = ref(null);
 const draft = reactive(metaToDraft(props.initialMeta));
 const collapsed = ref(false);
 const dirty = ref(false);
+const activeActionKey = ref(null);
 const busy = reactive({ save: false, scan: false, ai: false, sideplay: false });
 
 const charactersText = ref((draft.scene.characters_present || []).join(', '));
@@ -361,14 +385,30 @@ function onCharactersInput() {
   markDirty();
 }
 
+function actionKey(listName, row) {
+  return `${listName}:${row?.id || 'single'}`;
+}
+
+function isActionOpen(listName, row) {
+  return activeActionKey.value === actionKey(listName, row);
+}
+
+function toggleActionControls(listName, row) {
+  if (row?.editing) return;
+  const key = actionKey(listName, row);
+  activeActionKey.value = activeActionKey.value === key ? null : key;
+}
+
 function toggleRowEdit(row) {
   row.editing = !row.editing;
+  activeActionKey.value = null;
   if (!row.editing) markDirty();
   nextTick(resizeTextareas);
 }
 
 function addRow(listName, kind) {
   draft[listName].push(createEmptyDraftRow(kind));
+  activeActionKey.value = null;
   markDirty();
   nextTick(resizeTextareas);
 }
@@ -378,6 +418,7 @@ function deleteRow(listName, id) {
   const index = list.findIndex((row) => row.id === id);
   if (index >= 0) {
     list.splice(index, 1);
+    activeActionKey.value = null;
     markDirty();
   }
 }
@@ -385,6 +426,7 @@ function deleteRow(listName, id) {
 function resetFromMeta(meta) {
   replaceDraft(draft, meta || {});
   charactersText.value = (draft.scene.characters_present || []).join(', ');
+  activeActionKey.value = null;
   dirty.value = false;
   nextTick(resizeTextareas);
 }
@@ -456,10 +498,22 @@ const RowActions = defineComponent({
   emits: ['edit', 'delete'],
   setup(rowProps, { emit }) {
     return () => h('div', { class: 'action-group-hover' }, [
-      h('button', { class: 'action-hover-btn btn-edit', onClick: () => emit('edit') }, [
+      h('button', {
+        class: 'action-hover-btn btn-edit',
+        onClick: (event) => {
+          event.stopPropagation();
+          emit('edit');
+        },
+      }, [
         h('i', { class: 'fa-solid fa-pen' }),
       ]),
-      h('button', { class: 'action-hover-btn btn-del', onClick: () => emit('delete') }, [
+      h('button', {
+        class: 'action-hover-btn btn-del',
+        onClick: (event) => {
+          event.stopPropagation();
+          emit('delete');
+        },
+      }, [
         h('i', { class: `fa-solid ${rowProps.deleteIcon}` }),
       ]),
     ]);
@@ -487,12 +541,22 @@ const DictSection = defineComponent({
         ]),
       ]),
       h('div', { class: 'neo-dict-list list-container' }, sectionProps.rows.map((row) => (
-        h('div', { key: row.id, class: ['neo-dict-row editable-block', { 'is-editing': row.editing }] }, [
+        h('div', {
+          key: row.id,
+          class: ['neo-dict-row editable-block', {
+            'is-editing': row.editing,
+            'is-action-open': isActionOpen('costumeRows', row),
+          }],
+          onClick: () => toggleActionControls('costumeRows', row),
+        }, [
           h('div', { class: 'view-mode dict-view' }, [
             h('div', { class: 'dict-key' }, row.name || sectionProps.labels.role),
             h('div', { class: 'dict-value' }, row.desc || sectionProps.labels.itemDesc),
           ]),
-          h('div', { class: 'edit-mode dict-edit-mode' }, [
+          h('div', {
+            class: 'edit-mode dict-edit-mode',
+            onClick: (event) => event.stopPropagation(),
+          }, [
             h('input', {
               class: 'neo-input short-key no-enter',
               value: row.name,
