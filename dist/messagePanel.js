@@ -295,10 +295,10 @@ function Bo(e, t = !1) {
   }
   e.next = Zt, Zt = e;
 }
-function Is() {
+function ks() {
   Uo++;
 }
-function ks() {
+function Is() {
   if (--Uo > 0)
     return;
   if (Qt) {
@@ -419,12 +419,12 @@ class Ps {
     this.version++, rn++, this.notify(t);
   }
   notify(t) {
-    Is();
+    ks();
     try {
       for (let n = this.subs; n; n = n.prevSub)
         n.sub.notify() && n.sub.dep.notify();
     } finally {
-      ks();
+      Is();
     }
   }
 }
@@ -464,7 +464,7 @@ function lt(e, t, n, s, o, i) {
   const c = (u) => {
     u && u.trigger();
   };
-  if (Is(), t === "clear")
+  if (ks(), t === "clear")
     a.forEach(c);
   else {
     const u = O(e), d = u && As(n);
@@ -486,7 +486,7 @@ function lt(e, t, n, s, o, i) {
           break;
       }
   }
-  ks();
+  Is();
 }
 function Rt(e) {
   const t = /* @__PURE__ */ B(e);
@@ -496,7 +496,7 @@ function Un(e) {
   return ye(e = /* @__PURE__ */ B(e), "iterate", an), e;
 }
 function Ye(e, t) {
-  return /* @__PURE__ */ pt(e) ? jt(/* @__PURE__ */ It(e) ? Ke(t) : t) : Ke(t);
+  return /* @__PURE__ */ pt(e) ? jt(/* @__PURE__ */ kt(e) ? Ke(t) : t) : Ke(t);
 }
 const pr = {
   __proto__: null,
@@ -649,9 +649,9 @@ function ns(e, t, n) {
   return (o === -1 || o === !1) && /* @__PURE__ */ $s(n[0]) ? (n[0] = /* @__PURE__ */ B(n[0]), s[t](...n)) : o;
 }
 function Vt(e, t, n = []) {
-  ut(), Is();
+  ut(), ks();
   const s = (/* @__PURE__ */ B(e))[t].apply(e, n);
-  return ks(), ft(), s;
+  return Is(), ft(), s;
 }
 const hr = /* @__PURE__ */ Cs("__proto__,__v_isRef,__isVue"), Yo = new Set(
   /* @__PURE__ */ Object.getOwnPropertyNames(Symbol).filter((e) => e !== "arguments" && e !== "caller").map((e) => Symbol[e]).filter(et)
@@ -897,7 +897,7 @@ function Dt(e) {
   );
 }
 // @__NO_SIDE_EFFECTS__
-function Ir(e) {
+function kr(e) {
   return Os(
     e,
     !1,
@@ -932,8 +932,8 @@ function Os(e, t, n, s, o) {
   return o.set(e, c), c;
 }
 // @__NO_SIDE_EFFECTS__
-function It(e) {
-  return /* @__PURE__ */ pt(e) ? /* @__PURE__ */ It(e.__v_raw) : !!(e && e.__v_isReactive);
+function kt(e) {
+  return /* @__PURE__ */ pt(e) ? /* @__PURE__ */ kt(e.__v_raw) : !!(e && e.__v_isReactive);
 }
 // @__NO_SIDE_EFFECTS__
 function pt(e) {
@@ -952,7 +952,7 @@ function B(e) {
   const t = e && e.__v_raw;
   return t ? /* @__PURE__ */ B(t) : e;
 }
-function kr(e) {
+function Ir(e) {
   return !q(e, "__v_skip") && Object.isExtensible(e) && No(e, "__v_skip", !0), e;
 }
 const Ke = (e) => G(e) ? /* @__PURE__ */ Dt(e) : e, jt = (e) => G(e) ? /* @__PURE__ */ gs(e) : e;
@@ -990,7 +990,7 @@ const Mr = {
   }
 };
 function ni(e) {
-  return /* @__PURE__ */ It(e) ? e : new Proxy(e, Mr);
+  return /* @__PURE__ */ kt(e) ? e : new Proxy(e, Mr);
 }
 class Or {
   constructor(t, n, s) {
@@ -1026,15 +1026,15 @@ function Dr(e, t = !1, n = Ct) {
   }
 }
 function Fr(e, t, n = Z) {
-  const { immediate: s, deep: o, once: i, scheduler: a, augmentJob: c, call: u } = n, d = (I) => o ? I : /* @__PURE__ */ je(I) || o === !1 || o === 0 ? ct(I, 1) : ct(I);
+  const { immediate: s, deep: o, once: i, scheduler: a, augmentJob: c, call: u } = n, d = (k) => o ? k : /* @__PURE__ */ je(k) || o === !1 || o === 0 ? ct(k, 1) : ct(k);
   let p, g, x, C, F = !1, P = !1;
-  if (/* @__PURE__ */ _e(e) ? (g = () => e.value, F = /* @__PURE__ */ je(e)) : /* @__PURE__ */ It(e) ? (g = () => d(e), F = !0) : O(e) ? (P = !0, F = e.some((I) => /* @__PURE__ */ It(I) || /* @__PURE__ */ je(I)), g = () => e.map((I) => {
-    if (/* @__PURE__ */ _e(I))
-      return I.value;
-    if (/* @__PURE__ */ It(I))
-      return d(I);
-    if (D(I))
-      return u ? u(I, 2) : I();
+  if (/* @__PURE__ */ _e(e) ? (g = () => e.value, F = /* @__PURE__ */ je(e)) : /* @__PURE__ */ kt(e) ? (g = () => d(e), F = !0) : O(e) ? (P = !0, F = e.some((k) => /* @__PURE__ */ kt(k) || /* @__PURE__ */ je(k)), g = () => e.map((k) => {
+    if (/* @__PURE__ */ _e(k))
+      return k.value;
+    if (/* @__PURE__ */ kt(k))
+      return d(k);
+    if (D(k))
+      return u ? u(k, 2) : k();
   })) : D(e) ? t ? g = u ? () => u(e, 2) : e : g = () => {
     if (x) {
       ut();
@@ -1044,29 +1044,29 @@ function Fr(e, t, n = Z) {
         ft();
       }
     }
-    const I = Ct;
+    const k = Ct;
     Ct = p;
     try {
       return u ? u(e, 3, [C]) : e(C);
     } finally {
-      Ct = I;
+      Ct = k;
     }
   } : g = Qe, t && o) {
-    const I = g, z = o === !0 ? 1 / 0 : o;
-    g = () => ct(I(), z);
+    const k = g, z = o === !0 ? 1 / 0 : o;
+    g = () => ct(k(), z);
   }
-  const Q = cr(), k = () => {
+  const Q = cr(), I = () => {
     p.stop(), Q && Q.active && Ts(Q.effects, p);
   };
   if (i && t) {
-    const I = t;
+    const k = t;
     t = (...z) => {
-      I(...z), k();
+      k(...z), I();
     };
   }
   let N = P ? new Array(e.length).fill(wn) : wn;
-  const V = (I) => {
-    if (!(!(p.flags & 1) || !p.dirty && !I))
+  const V = (k) => {
+    if (!(!(p.flags & 1) || !p.dirty && !k))
       if (t) {
         const z = p.run();
         if (o || F || (P ? z.some((ae, pe) => Ze(ae, N[pe])) : Ze(z, N))) {
@@ -1091,16 +1091,16 @@ function Fr(e, t, n = Z) {
       } else
         p.run();
   };
-  return c && c(V), p = new Ko(g), p.scheduler = a ? () => a(V, !1) : V, C = (I) => Dr(I, !1, p), x = p.onStop = () => {
-    const I = An.get(p);
-    if (I) {
+  return c && c(V), p = new Ko(g), p.scheduler = a ? () => a(V, !1) : V, C = (k) => Dr(k, !1, p), x = p.onStop = () => {
+    const k = An.get(p);
+    if (k) {
       if (u)
-        u(I, 4);
+        u(k, 4);
       else
-        for (const z of I) z();
+        for (const z of k) z();
       An.delete(p);
     }
-  }, t ? s ? V(!0) : N = p.run() : a ? a(V.bind(null, !0), !0) : p.run(), k.pause = p.pause.bind(p), k.resume = p.resume.bind(p), k.stop = k, k;
+  }, t ? s ? V(!0) : N = p.run() : a ? a(V.bind(null, !0), !0) : p.run(), I.pause = p.pause.bind(p), I.resume = p.resume.bind(p), I.stop = I, I;
 }
 function ct(e, t = 1 / 0, n) {
   if (t <= 0 || !G(e) || e.__v_skip || (n = n || /* @__PURE__ */ new Map(), (n.get(e) || 0) >= t))
@@ -1255,7 +1255,7 @@ function ri(e) {
   }
 }
 let Ne = null, ai = null;
-function In(e) {
+function kn(e) {
   const t = Ne;
   return Ne = e, ai = e && e.type.__scopeId || null, t;
 }
@@ -1264,12 +1264,12 @@ function li(e, t = Ne, n) {
     return e;
   const s = (...o) => {
     s._d && Pn(-1);
-    const i = In(t);
+    const i = kn(t);
     let a;
     try {
       a = e(...o);
     } finally {
-      In(i), s._d && Pn(1);
+      kn(i), s._d && Pn(1);
     }
     return a;
   };
@@ -1495,10 +1495,10 @@ function vs(e, t, n, s, o) {
     onAfterLeave: F,
     onLeaveCancelled: P,
     onBeforeAppear: Q,
-    onAppear: k,
+    onAppear: I,
     onAfterAppear: N,
     onAppearCancelled: V
-  } = t, I = String(e.key), z = mi(n, e), ae = (L, W) => {
+  } = t, k = String(e.key), z = mi(n, e), ae = (L, W) => {
     L && Ue(
       L,
       s,
@@ -1522,15 +1522,15 @@ function vs(e, t, n, s, o) {
         !0
         /* cancelled */
       );
-      const ne = z[I];
+      const ne = z[k];
       ne && Tt(e, ne) && ne.el[Je] && ne.el[Je](), ae(W, [L]);
     },
     enter(L) {
-      if (z[I] === e) return;
+      if (z[k] === e) return;
       let W = d, ne = p, A = g;
       if (!n.isMounted)
         if (i)
-          W = k || d, ne = N || p, A = V || g;
+          W = I || d, ne = N || p, A = V || g;
         else
           return;
       let Y = !1;
@@ -1617,7 +1617,7 @@ function Ys(e, t) {
   let n;
   return !!((n = Object.getOwnPropertyDescriptor(e, t)) && !n.configurable);
 }
-const kn = /* @__PURE__ */ new WeakMap();
+const In = /* @__PURE__ */ new WeakMap();
 function tn(e, t, n, s, o = !1) {
   if (O(e)) {
     e.forEach(
@@ -1649,7 +1649,7 @@ function tn(e, t, n, s, o = !1) {
   else {
     const P = ie(u), Q = /* @__PURE__ */ _e(u);
     if (P || Q) {
-      const k = () => {
+      const I = () => {
         if (e.f) {
           const N = P ? C(u) ? g[u] : p[u] : F() || !e.k ? u.value : p[e.k];
           if (o)
@@ -1666,17 +1666,17 @@ function tn(e, t, n, s, o = !1) {
       };
       if (a) {
         const N = () => {
-          k(), kn.delete(e);
+          I(), In.delete(e);
         };
-        N.id = -1, kn.set(e, N), Re(N, n);
+        N.id = -1, In.set(e, N), Re(N, n);
       } else
-        Xs(e), k();
+        Xs(e), I();
     }
   }
 }
 function Xs(e) {
-  const t = kn.get(e);
-  t && (t.flags |= 8, kn.delete(e));
+  const t = In.get(e);
+  t && (t.flags |= 8, In.delete(e));
 }
 Kn().requestIdleCallback;
 Kn().cancelIdleCallback;
@@ -1742,7 +1742,7 @@ function Bt(e, t, n, s) {
   let o;
   const i = n, a = O(e);
   if (a || ie(e)) {
-    const c = a && /* @__PURE__ */ It(e);
+    const c = a && /* @__PURE__ */ kt(e);
     let u = !1, d = !1;
     c && (u = !/* @__PURE__ */ je(e), d = /* @__PURE__ */ pt(e), e = Un(e)), o = new Array(e.length);
     for (let p = 0, g = e.length; p < g; p++)
@@ -1883,10 +1883,10 @@ function ra(e) {
     updated: F,
     activated: P,
     deactivated: Q,
-    beforeDestroy: k,
+    beforeDestroy: I,
     beforeUnmount: N,
     destroyed: V,
-    unmounted: I,
+    unmounted: k,
     render: z,
     renderTracked: ae,
     renderTriggered: pe,
@@ -1911,15 +1911,15 @@ function ra(e) {
   }
   if (xs = !0, i)
     for (const J in i) {
-      const U = i[J], tt = D(U) ? U.bind(n, n) : D(U.get) ? U.get.bind(n, n) : Qe, kt = !D(U) && D(U.set) ? U.set.bind(n) : Qe, Ie = Jt({
+      const U = i[J], tt = D(U) ? U.bind(n, n) : D(U.get) ? U.get.bind(n, n) : Qe, It = !D(U) && D(U.set) ? U.set.bind(n) : Qe, ke = Jt({
         get: tt,
-        set: kt
+        set: It
       });
       Object.defineProperty(s, J, {
         enumerable: !0,
         configurable: !0,
-        get: () => Ie.value,
-        set: (De) => Ie.value = De
+        get: () => ke.value,
+        set: (De) => ke.value = De
       });
     }
   if (c)
@@ -1935,7 +1935,7 @@ function ra(e) {
   function j(J, U) {
     O(U) ? U.forEach((tt) => J(tt.bind(n))) : U && J(U.bind(n));
   }
-  if (j(Xr, g), j(xi, x), j(Zr, C), j(Qr, F), j(Gr, P), j(Jr, Q), j(sa, me), j(na, ae), j(ta, pe), j(yi, N), j(_i, I), j(ea, L), O(W))
+  if (j(Xr, g), j(xi, x), j(Zr, C), j(Qr, F), j(Gr, P), j(Jr, Q), j(sa, me), j(na, ae), j(ta, pe), j(yi, N), j(_i, k), j(ea, L), O(W))
     if (W.length) {
       const J = e.exposed || (e.exposed = {});
       W.forEach((U) => {
@@ -2232,15 +2232,15 @@ function no(e) {
     setupState: C,
     ctx: F,
     inheritAttrs: P
-  } = e, Q = In(e);
-  let k, N;
+  } = e, Q = kn(e);
+  let I, N;
   try {
     if (n.shapeFlag & 4) {
-      const I = o || s, z = I;
-      k = Xe(
+      const k = o || s, z = k;
+      I = Xe(
         d.call(
           z,
-          I,
+          k,
           p,
           g,
           C,
@@ -2249,29 +2249,29 @@ function no(e) {
         )
       ), N = c;
     } else {
-      const I = t;
-      k = Xe(
-        I.length > 1 ? I(
+      const k = t;
+      I = Xe(
+        k.length > 1 ? k(
           g,
           { attrs: c, slots: a, emit: u }
-        ) : I(
+        ) : k(
           g,
           null
         )
       ), N = t.props ? c : ga(c);
     }
-  } catch (I) {
-    on.length = 0, Bn(I, e, 1), k = ue(Ae);
+  } catch (k) {
+    on.length = 0, Bn(k, e, 1), I = ue(Ae);
   }
-  let V = k;
+  let V = I;
   if (N && P !== !1) {
-    const I = Object.keys(N), { shapeFlag: z } = V;
-    I.length && z & 7 && (i && I.some(Nn) && (N = va(
+    const k = Object.keys(N), { shapeFlag: z } = V;
+    k.length && z & 7 && (i && k.some(Nn) && (N = va(
       N,
       i
     )), V = gt(V, N, !1, !0));
   }
-  return n.dirs && (V = gt(V, null, !1, !0), V.dirs = V.dirs ? V.dirs.concat(n.dirs) : n.dirs), n.transition && cn(V, n.transition), k = V, In(Q), k;
+  return n.dirs && (V = gt(V, null, !1, !0), V.dirs = V.dirs ? V.dirs.concat(n.dirs) : n.dirs), n.transition && cn(V, n.transition), I = V, kn(Q), I;
 }
 const ga = (e) => {
   let t;
@@ -2330,13 +2330,13 @@ function xa({ vnode: e, parent: t, suspense: n }, s) {
   }
   n && n.activeBranch === e && (n.vnode.el = s);
 }
-const Ei = {}, Ii = () => Object.create(Ei), ki = (e) => Object.getPrototypeOf(e) === Ei;
+const Ei = {}, ki = () => Object.create(Ei), Ii = (e) => Object.getPrototypeOf(e) === Ei;
 function ya(e, t, n, s = !1) {
-  const o = {}, i = Ii();
+  const o = {}, i = ki();
   e.propsDefaults = /* @__PURE__ */ Object.create(null), Ri(e, t, o, i);
   for (const a in e.propsOptions[0])
     a in o || (o[a] = void 0);
-  n ? e.props = s ? o : /* @__PURE__ */ Ir(o) : e.type.props ? e.props = o : e.props = i, e.attrs = i;
+  n ? e.props = s ? o : /* @__PURE__ */ kr(o) : e.type.props ? e.props = o : e.props = i, e.attrs = i;
 }
 function _a(e, t, n, s) {
   const {
@@ -2486,8 +2486,8 @@ function Pi(e, t, n = !1) {
         const x = i[p], C = a[g] = O(x) || D(x) ? { type: x } : fe({}, x), F = C.type;
         let P = !1, Q = !0;
         if (O(F))
-          for (let k = 0; k < F.length; ++k) {
-            const N = F[k], V = D(N) && N.name;
+          for (let I = 0; I < F.length; ++I) {
+            const N = F[I], V = D(N) && N.name;
             if (V === "Boolean") {
               P = !0;
               break;
@@ -2534,7 +2534,7 @@ const Fs = (e) => e === "_" || e === "_ctx" || e === "$stable", Ls = (e) => O(e)
   for (const s in t)
     (n || !Fs(s)) && (e[s] = t[s]);
 }, Ca = (e, t, n) => {
-  const s = e.slots = Ii();
+  const s = e.slots = ki();
   if (e.vnode.shapeFlag & 32) {
     const o = t._;
     o ? ($i(s, t, n), n && No(s, "_", o, !0)) : Mi(t, s);
@@ -2579,7 +2579,7 @@ function Ea(e, t) {
         Q(r, l, h, f);
         break;
       case Ae:
-        k(r, l, h, f);
+        I(r, l, h, f);
         break;
       case rs:
         r == null && N(l, h, f, S);
@@ -2643,7 +2643,7 @@ function Ea(e, t) {
       const m = l.el = r.el;
       l.children !== r.children && d(m, l.children);
     }
-  }, k = (r, l, h, f) => {
+  }, I = (r, l, h, f) => {
     r == null ? s(
       l.el = u(l.children || ""),
       h,
@@ -2663,7 +2663,7 @@ function Ea(e, t) {
     for (; r && r !== l; )
       m = x(r), s(r, h, f), r = m;
     s(l, h, f);
-  }, I = ({ el: r, anchor: l }) => {
+  }, k = ({ el: r, anchor: l }) => {
     let h;
     for (; r && r !== l; )
       h = x(r), o(r), r = h;
@@ -2719,7 +2719,7 @@ function Ea(e, t) {
       "value" in M && i(_, "value", null, M.value, b), (y = M.onVnodeBeforeMount) && qe(y, f, r);
     }
     $ && yt(r, null, f, "beforeMount");
-    const K = Ia(m, R);
+    const K = ka(m, R);
     K && R.beforeEnter(_), s(_, l, h), ((y = M && M.onVnodeMounted) || K || $) && Re(() => {
       try {
         y && qe(y, f, r), K && R.enter(_), $ && yt(r, null, f, "mounted");
@@ -2915,7 +2915,7 @@ function Ea(e, t) {
     if (zn(r) && (w.ctx.renderer = xt), ja(w, !1, S), w.asyncDep) {
       if (m && m.registerDep(w, j, S), !r.el) {
         const _ = w.subTree = ue(Ae);
-        k(null, _, l, h), r.placeholder = _.el;
+        I(null, _, l, h), r.placeholder = _.el;
       }
     } else
       j(
@@ -3012,7 +3012,7 @@ function Ea(e, t) {
     const y = r && r.children, M = r ? r.shapeFlag : 0, T = l.children, { patchFlag: R, shapeFlag: $ } = l;
     if (R > 0) {
       if (R & 128) {
-        kt(
+        It(
           y,
           T,
           h,
@@ -3039,7 +3039,7 @@ function Ea(e, t) {
         return;
       }
     }
-    $ & 8 ? (M & 16 && bt(y, m, b), T !== y && p(h, T)) : M & 16 ? $ & 16 ? kt(
+    $ & 8 ? (M & 16 && bt(y, m, b), T !== y && p(h, T)) : M & 16 ? $ & 16 ? It(
       y,
       T,
       h,
@@ -3095,7 +3095,7 @@ function Ea(e, t) {
       _,
       T
     );
-  }, kt = (r, l, h, f, m, b, S, w, _) => {
+  }, It = (r, l, h, f, m, b, S, w, _) => {
     let y = 0;
     const M = l.length;
     let T = r.length - 1, R = M - 1;
@@ -3192,7 +3192,7 @@ function Ea(e, t) {
           _
         ), le++);
       }
-      const Hs = Be ? ka(Ht) : Ot;
+      const Hs = Be ? Ia(Ht) : Ot;
       for (ee = Hs.length - 1, y = de - 1; y >= 0; y--) {
         const Me = K + y, We = l[Me], Vs = l[Me + 1], Ks = Me + 1 < M ? (
           // #13559, #14173 fallback to el placeholder for unresolved async component
@@ -3208,13 +3208,13 @@ function Ea(e, t) {
           S,
           w,
           _
-        ) : Be && (ee < 0 || y !== Hs[ee] ? Ie(We, h, Ks, 2) : ee--);
+        ) : Be && (ee < 0 || y !== Hs[ee] ? ke(We, h, Ks, 2) : ee--);
       }
     }
-  }, Ie = (r, l, h, f, m = null) => {
+  }, ke = (r, l, h, f, m = null) => {
     const { el: b, type: S, transition: w, children: _, shapeFlag: y } = r;
     if (y & 6) {
-      Ie(r.component.subTree, l, h, f);
+      ke(r.component.subTree, l, h, f);
       return;
     }
     if (y & 128) {
@@ -3228,7 +3228,7 @@ function Ea(e, t) {
     if (S === Te) {
       s(b, l, h);
       for (let T = 0; T < _.length; T++)
-        Ie(_[T], l, h, f);
+        ke(_[T], l, h, f);
       s(r.anchor, l, h);
       return;
     }
@@ -3311,7 +3311,7 @@ function Ea(e, t) {
       return;
     }
     if (l === rs) {
-      I(r);
+      k(r);
       return;
     }
     const b = () => {
@@ -3358,7 +3358,7 @@ function Ea(e, t) {
   }, xt = {
     p: P,
     um: De,
-    m: Ie,
+    m: ke,
     r: vn,
     mt: oe,
     mc: me,
@@ -3379,7 +3379,7 @@ function is({ type: e, props: t }, n) {
 function _t({ effect: e, job: t }, n) {
   n ? (e.flags |= 32, t.flags |= 4) : (e.flags &= -33, t.flags &= -5);
 }
-function Ia(e, t) {
+function ka(e, t) {
   return (!e || e && !e.pendingBranch) && t && !t.persisted;
 }
 function Di(e, t, n = !1) {
@@ -3391,7 +3391,7 @@ function Di(e, t, n = !1) {
       c.shapeFlag & 1 && !c.dynamicChildren && ((c.patchFlag <= 0 || c.patchFlag === 32) && (c = o[i] = at(o[i]), c.el = a.el), !n && c.patchFlag !== -2 && Di(a, c)), c.type === Gn && (c.patchFlag === -1 && (c = o[i] = at(c)), c.el = a.el), c.type === Ae && !c.el && (c.el = a.el);
     }
 }
-function ka(e) {
+function Ia(e) {
   const t = e.slice(), n = [0];
   let s, o, i, a, c;
   const u = e.length;
@@ -3551,7 +3551,7 @@ function Oa(e, t = null, n = null, s = 0, o = null, i = !1) {
   );
 }
 function $a(e) {
-  return e ? /* @__PURE__ */ $s(e) || ki(e) ? fe({}, e) : e : null;
+  return e ? /* @__PURE__ */ $s(e) || Ii(e) ? fe({}, e) : e : null;
 }
 function gt(e, t, n = !1, s = !1) {
   const { props: o, ref: i, patchFlag: a, children: c, transition: u } = e, d = t ? Da(o || {}, t) : o, p = {
@@ -3635,7 +3635,7 @@ function Ns(e, t) {
     } else {
       n = 32;
       const o = t._;
-      !o && !ki(t) ? t._ctx = Ne : o === 3 && Ne && (Ne.slots._ === 1 ? t._ = 1 : (t._ = 2, e.patchFlag |= 1024));
+      !o && !Ii(t) ? t._ctx = Ne : o === 3 && Ne && (Ne.slots._ === 1 ? t._ = 1 : (t._ = 2, e.patchFlag |= 1024));
     }
   else D(t) ? (t = { default: t, _ctx: Ne }, n = 32) : (t = String(t), s & 64 ? (n = 16, t = [xe(t)]) : n = 8);
   e.children = t, e.shapeFlag |= n;
@@ -3843,7 +3843,7 @@ function Ka(e) {
   };
 }
 function Jn(e) {
-  return e.exposed ? e.exposeProxy || (e.exposeProxy = new Proxy(ni(kr(e.exposed)), {
+  return e.exposed ? e.exposeProxy || (e.exposeProxy = new Proxy(ni(Ir(e.exposed)), {
     get(t, n) {
       if (n in t)
         return t[n];
@@ -3984,12 +3984,12 @@ function Xa(e) {
     leaveActiveClass: x = `${n}-leave-active`,
     leaveToClass: C = `${n}-leave-to`
   } = e, F = Za(o), P = F && F[0], Q = F && F[1], {
-    onBeforeEnter: k,
+    onBeforeEnter: I,
     onEnter: N,
     onEnterCancelled: V,
-    onLeave: I,
+    onLeave: k,
     onLeaveCancelled: z,
-    onBeforeAppear: ae = k,
+    onBeforeAppear: ae = I,
     onAppear: pe = N,
     onAppearCancelled: me = V
   } = t, L = (A, Y, oe, ge) => {
@@ -4004,7 +4004,7 @@ function Xa(e) {
   };
   return fe(t, {
     onBeforeEnter(A) {
-      wt(k, [A]), it(A, i), it(A, a);
+      wt(I, [A]), it(A, i), it(A, a);
     },
     onBeforeAppear(A) {
       wt(ae, [A]), it(A, u), it(A, d);
@@ -4015,8 +4015,8 @@ function Xa(e) {
       A._isLeaving = !0;
       const oe = () => W(A, Y);
       it(A, g), A._enterCancelled ? (it(A, x), go(A)) : (go(A), it(A, x)), fo(() => {
-        A._isLeaving && (St(A, g), it(A, C), uo(I) || po(A, s, Q, oe));
-      }), wt(I, [A, oe]);
+        A._isLeaving && (St(A, g), it(A, C), uo(k) || po(A, s, Q, oe));
+      }), wt(k, [A, oe]);
     },
     onEnterCancelled(A) {
       L(A, !1, void 0, !0), wt(V, [A]);
@@ -4353,7 +4353,7 @@ const ve = {
     const d = e.getRootNode();
     (d instanceof Document || d instanceof ShadowRoot) && d.activeElement === e && e.type !== "range" && (s && t === n || o && e.value.trim() === u) || (e.value = u);
   }
-}, Io = {
+}, ko = {
   // <select multiple> value need to be deep traversed
   deep: !0,
   created(e, { value: t, modifiers: { number: n } }, s) {
@@ -4372,16 +4372,16 @@ const ve = {
   // set value in mounted & updated because <select> relies on its children
   // <option>s.
   mounted(e, { value: t }) {
-    ko(e, t);
+    Io(e, t);
   },
   beforeUpdate(e, t, n) {
     e[Nt] = Dn(n);
   },
   updated(e, { value: t }) {
-    e._assigning || ko(e, t);
+    e._assigning || Io(e, t);
   }
 };
-function ko(e, t) {
+function Io(e, t) {
   const n = e.multiple, s = O(t);
   if (!(n && !s && !jn(t))) {
     for (let o = 0, i = e.options.length; o < i; o++) {
@@ -4433,7 +4433,7 @@ const bl = ["ctrl", "shift", "alt", "meta"], xl = {
   right: "arrow-right",
   down: "arrow-down",
   delete: "backspace"
-}, ke = (e, t) => {
+}, Ie = (e, t) => {
   const n = e._withKeys || (e._withKeys = {}), s = t.join(".");
   return n[s] || (n[s] = ((o) => {
     if (!("key" in o))
@@ -4506,10 +4506,10 @@ function Yn(e) {
   const t = String(e || "").trim();
   return t === "悬念" || t === "未解悬念" || t.toLowerCase() === "mystery" ? "悬念" : "计划";
 }
-function Il(e) {
+function kl(e) {
   return Yn(e) === "悬念" ? "未解悬念" : "行动计划";
 }
-function kl(e) {
+function Il(e) {
   return Yn(e) === "悬念" ? "type-suspense" : "type-plan";
 }
 function Rl(e) {
@@ -4681,7 +4681,7 @@ function Ol(e) {
 const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class: "toggle-info" }, Ll = { class: "toggle-time" }, Nl = {
   key: 0,
   class: "horae-sideplay-badge"
-}, jl = { class: "toggle-summary" }, Hl = { class: "toggle-actions" }, Vl = ["title"], Kl = ["title"], Ul = ["title", "disabled"], Bl = { class: "horae-panel-content" }, zl = { class: "neo-dashboard" }, Wl = { class: "neo-tags" }, ql = { class: "neo-chip" }, Gl = ["placeholder"], Jl = { class: "neo-chip" }, Yl = ["placeholder"], Xl = { class: "neo-chip" }, Zl = ["placeholder"], Ql = { class: "event-header" }, ec = { class: "event-badge" }, tc = { class: "action-group-hover" }, nc = { class: "view-mode" }, sc = { class: "event-body-text" }, oc = { value: "" }, ic = { value: "一般" }, rc = { value: "重要" }, ac = { value: "关键" }, lc = ["placeholder"], cc = { class: "neo-inset-section" }, uc = { class: "neo-section-header compact" }, fc = { class: "section-title" }, pc = { class: "aff-grid list-container" }, dc = ["onClick"], hc = { class: "view-mode" }, mc = { class: "t-title" }, gc = { class: "t-val" }, vc = ["onUpdate:modelValue", "placeholder", "onKeydown"], bc = ["onUpdate:modelValue", "placeholder", "onKeydown"], xc = { class: "neo-inset-section" }, yc = { class: "neo-section-header compact" }, _c = { class: "section-title" }, wc = { class: "rel-list list-container" }, Sc = ["onClick"], Cc = { class: "view-mode" }, Tc = { class: "rel-node" }, Ac = { class: "rel-node" }, Ec = { class: "rel-label" }, Ic = ["onUpdate:modelValue", "placeholder", "onKeydown"], kc = ["onUpdate:modelValue", "placeholder", "onKeydown"], Rc = ["onUpdate:modelValue", "placeholder", "onKeydown"], Pc = { class: "neo-inset-section" }, Mc = { class: "neo-section-header" }, Oc = { class: "section-title" }, $c = { class: "neo-item-list list-container" }, Dc = ["onClick"], Fc = { class: "view-mode" }, Lc = { class: "item-emoji" }, Nc = { class: "item-info" }, jc = { class: "item-line-top" }, Hc = {
+}, jl = { class: "toggle-summary" }, Hl = { class: "toggle-actions" }, Vl = ["title"], Kl = ["title"], Ul = ["title", "disabled"], Bl = { class: "horae-panel-content" }, zl = { class: "neo-dashboard" }, Wl = { class: "neo-tags" }, ql = { class: "neo-chip" }, Gl = ["placeholder"], Jl = { class: "neo-chip" }, Yl = ["placeholder"], Xl = { class: "neo-chip" }, Zl = ["placeholder"], Ql = { class: "event-header" }, ec = { class: "event-badge" }, tc = { class: "action-group-hover" }, nc = { class: "view-mode" }, sc = { class: "event-body-text" }, oc = { value: "" }, ic = { value: "一般" }, rc = { value: "重要" }, ac = { value: "关键" }, lc = ["placeholder"], cc = { class: "neo-inset-section" }, uc = { class: "neo-section-header compact" }, fc = { class: "section-title" }, pc = { class: "aff-grid list-container" }, dc = ["onClick"], hc = { class: "view-mode" }, mc = { class: "t-title" }, gc = { class: "t-val" }, vc = ["onUpdate:modelValue", "placeholder", "onKeydown"], bc = ["onUpdate:modelValue", "placeholder", "onKeydown"], xc = { class: "neo-inset-section" }, yc = { class: "neo-section-header compact" }, _c = { class: "section-title" }, wc = { class: "rel-list list-container" }, Sc = ["onClick"], Cc = { class: "view-mode" }, Tc = { class: "rel-node" }, Ac = { class: "rel-node" }, Ec = { class: "rel-label" }, kc = ["onUpdate:modelValue", "placeholder", "onKeydown"], Ic = ["onUpdate:modelValue", "placeholder", "onKeydown"], Rc = ["onUpdate:modelValue", "placeholder", "onKeydown"], Pc = { class: "neo-inset-section" }, Mc = { class: "neo-section-header" }, Oc = { class: "section-title" }, $c = { class: "neo-item-list list-container" }, Dc = ["onClick"], Fc = { class: "view-mode" }, Lc = { class: "item-emoji" }, Nc = { class: "item-info" }, jc = { class: "item-line-top" }, Hc = {
   key: 0,
   class: "item-holder-badge"
 }, Vc = {
@@ -4765,7 +4765,7 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
       const r = u.event.summary || o.noSpecialEvents, l = ((h = u.scene.characters_present) == null ? void 0 : h.length) || 0;
       return l ? `${r} | ${l}${o.characters}` : r;
     }), Q = Jt(() => `${u.event.level || o.levelNormal}${o.event}`);
-    function k() {
+    function I() {
       p.value = !0;
     }
     function N(r) {
@@ -4775,7 +4775,7 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
       var r;
       return (r = window.matchMedia) == null ? void 0 : r.call(window, "(prefers-reduced-motion: reduce)").matches;
     }
-    function I(r) {
+    function k(r) {
       var l;
       (l = r._horaePanelCleanup) == null || l.call(r), r._horaePanelCleanup = null, r.style.height = "", r.style.opacity = "", r.style.transform = "", r.style.transition = "", r.style.overflow = "", r.style.willChange = "";
     }
@@ -4791,7 +4791,7 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
       r.addEventListener("transitionend", b), r._horaePanelTimer = window.setTimeout(m, h + 80), r._horaePanelCleanup = S;
     }
     function ae(r) {
-      I(r), !V() && (r.style.height = "0px", r.style.opacity = "0", r.style.transform = "translateY(-6px)", r.style.overflow = "hidden", r.style.willChange = "height, opacity, transform");
+      k(r), !V() && (r.style.height = "0px", r.style.opacity = "0", r.style.transform = "translateY(-6px)", r.style.overflow = "hidden", r.style.willChange = "height, opacity, transform");
     }
     function pe(r, l) {
       if (V()) {
@@ -4803,10 +4803,10 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
       }), z(r, l, us);
     }
     function me(r) {
-      I(r), Mt(nt);
+      k(r), Mt(nt);
     }
     function L(r) {
-      I(r), !V() && (r.style.height = `${r.scrollHeight}px`, r.style.opacity = "1", r.style.transform = "translateY(0)", r.style.overflow = "hidden", r.style.willChange = "height, opacity, transform");
+      k(r), !V() && (r.style.height = `${r.scrollHeight}px`, r.style.opacity = "1", r.style.transform = "translateY(0)", r.style.overflow = "hidden", r.style.willChange = "height, opacity, transform");
     }
     function W(r, l) {
       if (V()) {
@@ -4818,10 +4818,10 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
       }), z(r, l, fs);
     }
     function ne(r) {
-      I(r);
+      k(r);
     }
     function A() {
-      u.scene.characters_present = Ol(C.value), k();
+      u.scene.characters_present = Ol(C.value), I();
     }
     function Y(r, l) {
       return `${r}:${(l == null ? void 0 : l.id) || "single"}`;
@@ -4835,14 +4835,14 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
       g.value = g.value === h ? null : h;
     }
     function j(r) {
-      r.editing = !r.editing, g.value = null, r.editing || k(), Mt(nt);
+      r.editing = !r.editing, g.value = null, r.editing || I(), Mt(nt);
     }
     function J(r, l) {
-      u[r].push(Rl(l)), g.value = null, k(), Mt(nt);
+      u[r].push(Rl(l)), g.value = null, I(), Mt(nt);
     }
     function U(r, l) {
       const h = u[r], f = h.findIndex((m) => m.id === l);
-      f >= 0 && (h.splice(f, 1), g.value = null, k());
+      f >= 0 && (h.splice(f, 1), g.value = null, I());
     }
     function tt(r) {
       const l = u.itemRows.findIndex((m) => m.id === r);
@@ -4851,13 +4851,13 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
       f && (u.deletedItemRows.some((b) => String(b.name || "").trim() === f) || u.deletedItemRows.push({
         id: `deleted-${h.id}`,
         name: f
-      })), g.value = null, k();
+      })), g.value = null, I();
     }
-    function kt(r) {
+    function It(r) {
       const l = u.deletedItemRows.findIndex((h) => h.id === r);
-      l >= 0 && (u.deletedItemRows.splice(l, 1), g.value = null, k());
+      l >= 0 && (u.deletedItemRows.splice(l, 1), g.value = null, I());
     }
-    function Ie(r) {
+    function ke(r) {
       Ml(u, r || {}), C.value = (u.scene.characters_present || []).join(", "), g.value = null, p.value = !1, Mt(nt);
     }
     async function De() {
@@ -4865,7 +4865,7 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
       x.save = !0;
       try {
         const l = Pl(u), h = await ((r = a.save) == null ? void 0 : r.call(a, l));
-        h ? Ie(h) : p.value = !1;
+        h ? ke(h) : p.value = !1;
       } finally {
         x.save = !1;
       }
@@ -4875,7 +4875,7 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
       x.scan = !0;
       try {
         const l = await ((r = a.quickScan) == null ? void 0 : r.call(a));
-        l && Ie(l);
+        l && ke(l);
       } finally {
         x.scan = !1;
       }
@@ -4885,7 +4885,7 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
       x.scan = !0;
       try {
         const l = await ((r = a.rescan) == null ? void 0 : r.call(a));
-        l && Ie(l);
+        l && ke(l);
       } finally {
         x.scan = !1;
       }
@@ -4895,7 +4895,7 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
       x.ai = !0;
       try {
         const l = await ((r = a.aiAnalyze) == null ? void 0 : r.call(a));
-        l && Ie(l);
+        l && ke(l);
       } finally {
         x.ai = !1;
       }
@@ -4905,7 +4905,7 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
       x.sideplay = !0;
       try {
         const l = await ((r = a.toggleSideplay) == null ? void 0 : r.call(a));
-        l && Ie(l);
+        l && ke(l);
       } finally {
         x.sideplay = !1;
       }
@@ -5011,7 +5011,7 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
       }
     });
     function xt(r) {
-      Ie(r);
+      ke(r);
     }
     function js(r) {
       Object.assign(i, { sideplayMode: !1, showPanel: !0, ...r || {} });
@@ -5091,7 +5091,7 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
                       "onUpdate:modelValue": l[0] || (l[0] = (f) => u.scene.location = f),
                       class: "neo-chip-input",
                       placeholder: E(o).location,
-                      onInput: k
+                      onInput: I
                     }, null, 40, Gl), [
                       [ve, u.scene.location]
                     ])
@@ -5102,7 +5102,7 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
                       "onUpdate:modelValue": l[1] || (l[1] = (f) => u.scene.atmosphere = f),
                       class: "neo-chip-input",
                       placeholder: E(o).atmosphere,
-                      onInput: k
+                      onInput: I
                     }, null, 40, Yl), [
                       [ve, u.scene.atmosphere]
                     ])
@@ -5148,22 +5148,22 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
                     ce(v("select", {
                       "onUpdate:modelValue": l[4] || (l[4] = (f) => u.event.level = f),
                       class: "neo-input event-level-select",
-                      onChange: k
+                      onChange: I
                     }, [
                       v("option", oc, H(E(o).levelNone), 1),
                       v("option", ic, H(E(o).levelNormal), 1),
                       v("option", rc, H(E(o).levelImportant), 1),
                       v("option", ac, H(E(o).levelCritical), 1)
                     ], 544), [
-                      [Io, u.event.level]
+                      [ko, u.event.level]
                     ]),
                     ce(v("textarea", {
                       "onUpdate:modelValue": l[5] || (l[5] = (f) => u.event.summary = f),
                       class: "neo-textarea lg no-enter",
                       rows: "2",
                       placeholder: E(o).eventPlaceholder,
-                      onInput: k,
-                      onKeydown: l[6] || (l[6] = ke(se((f) => j(u.event), ["prevent"]), ["enter"]))
+                      onInput: I,
+                      onKeydown: l[6] || (l[6] = Ie(se((f) => j(u.event), ["prevent"]), ["enter"]))
                     }, null, 40, lc), [
                       [ve, u.event.summary]
                     ])
@@ -5202,8 +5202,8 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
                           "onUpdate:modelValue": (m) => f.name = m,
                           class: "neo-input no-enter aff-name",
                           placeholder: E(o).role,
-                          onInput: k,
-                          onKeydown: ke(se((m) => j(f), ["prevent"]), ["enter"])
+                          onInput: I,
+                          onKeydown: Ie(se((m) => j(f), ["prevent"]), ["enter"])
                         }, null, 40, vc), [
                           [ve, f.name]
                         ]),
@@ -5211,8 +5211,8 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
                           "onUpdate:modelValue": (m) => f.value = m,
                           class: "neo-input no-enter aff-value",
                           placeholder: E(o).value,
-                          onInput: k,
-                          onKeydown: ke(se((m) => j(f), ["prevent"]), ["enter"])
+                          onInput: I,
+                          onKeydown: Ie(se((m) => j(f), ["prevent"]), ["enter"])
                         }, null, 40, bc), [
                           [ve, f.value]
                         ])
@@ -5260,9 +5260,9 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
                           "onUpdate:modelValue": (m) => f.from = m,
                           class: "neo-input no-enter rel-person",
                           placeholder: E(o).relFrom,
-                          onInput: k,
-                          onKeydown: ke(se((m) => j(f), ["prevent"]), ["enter"])
-                        }, null, 40, Ic), [
+                          onInput: I,
+                          onKeydown: Ie(se((m) => j(f), ["prevent"]), ["enter"])
+                        }, null, 40, kc), [
                           [ve, f.from]
                         ]),
                         l[32] || (l[32] = v("i", { class: "fa-solid fa-arrow-right-long" }, null, -1)),
@@ -5270,17 +5270,17 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
                           "onUpdate:modelValue": (m) => f.to = m,
                           class: "neo-input no-enter rel-person",
                           placeholder: E(o).relTo,
-                          onInput: k,
-                          onKeydown: ke(se((m) => j(f), ["prevent"]), ["enter"])
-                        }, null, 40, kc), [
+                          onInput: I,
+                          onKeydown: Ie(se((m) => j(f), ["prevent"]), ["enter"])
+                        }, null, 40, Ic), [
                           [ve, f.to]
                         ]),
                         ce(v("input", {
                           "onUpdate:modelValue": (m) => f.type = m,
                           class: "neo-input no-enter",
                           placeholder: E(o).relType,
-                          onInput: k,
-                          onKeydown: ke(se((m) => j(f), ["prevent"]), ["enter"])
+                          onInput: I,
+                          onKeydown: Ie(se((m) => j(f), ["prevent"]), ["enter"])
                         }, null, 40, Rc), [
                           [ve, f.type]
                         ])
@@ -5301,7 +5301,7 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
                   onAdd: l[13] || (l[13] = (f) => J("costumeRows", "costume")),
                   onEdit: j,
                   onDelete: l[14] || (l[14] = (f) => U("costumeRows", f)),
-                  onDirty: k
+                  onDirty: I
                 }, null, 8, ["title", "rows", "labels"]),
                 v("section", Pc, [
                   v("div", Mc, [
@@ -5348,8 +5348,8 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
                             class: "neo-input no-enter item-icon-input",
                             maxlength: "2",
                             placeholder: "📦",
-                            onInput: k,
-                            onKeydown: ke(se((m) => j(f), ["prevent"]), ["enter"])
+                            onInput: I,
+                            onKeydown: Ie(se((m) => j(f), ["prevent"]), ["enter"])
                           }, null, 40, Bc), [
                             [ve, f.icon]
                           ]),
@@ -5357,8 +5357,8 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
                             "onUpdate:modelValue": (m) => f.name = m,
                             class: "neo-input no-enter",
                             placeholder: E(o).itemName,
-                            onInput: k,
-                            onKeydown: ke(se((m) => j(f), ["prevent"]), ["enter"])
+                            onInput: I,
+                            onKeydown: Ie(se((m) => j(f), ["prevent"]), ["enter"])
                           }, null, 40, zc), [
                             [ve, f.name]
                           ]),
@@ -5366,8 +5366,8 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
                             "onUpdate:modelValue": (m) => f.holder = m,
                             class: "neo-input no-enter item-holder-input",
                             placeholder: E(o).holder,
-                            onInput: k,
-                            onKeydown: ke(se((m) => j(f), ["prevent"]), ["enter"])
+                            onInput: I,
+                            onKeydown: Ie(se((m) => j(f), ["prevent"]), ["enter"])
                           }, null, 40, Wc), [
                             [ve, f.holder]
                           ])
@@ -5376,8 +5376,8 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
                           "onUpdate:modelValue": (m) => f.location = m,
                           class: "neo-input no-enter",
                           placeholder: E(o).location,
-                          onInput: k,
-                          onKeydown: ke(se((m) => j(f), ["prevent"]), ["enter"])
+                          onInput: I,
+                          onKeydown: Ie(se((m) => j(f), ["prevent"]), ["enter"])
                         }, null, 40, qc), [
                           [ve, f.location]
                         ]),
@@ -5385,8 +5385,8 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
                           "onUpdate:modelValue": (m) => f.description = m,
                           class: "neo-textarea no-enter",
                           placeholder: E(o).itemDesc,
-                          onInput: k,
-                          onKeydown: ke(se((m) => j(f), ["prevent"]), ["enter"])
+                          onInput: I,
+                          onKeydown: Ie(se((m) => j(f), ["prevent"]), ["enter"])
                         }, null, 40, Gc), [
                           [ve, f.description]
                         ])
@@ -5413,7 +5413,7 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
                         type: "button",
                         class: "action-hover-btn btn-del",
                         title: E(o).deleteForever,
-                        onClick: se((m) => kt(f.id), ["stop"])
+                        onClick: se((m) => It(f.id), ["stop"])
                       }, [...l[36] || (l[36] = [
                         v("i", { class: "fa-solid fa-xmark" }, null, -1)
                       ])], 8, Yc)
@@ -5437,13 +5437,13 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
                   v("div", eu, [
                     (be(!0), we(Te, null, Bt(u.agendaRows, (f) => (be(), we("div", {
                       key: f.id,
-                      class: Pe(["agenda-card editable-block", [E(kl)(f.type), { "is-editing": f.editing, "is-action-open": oe("agendaRows", f) }]]),
+                      class: Pe(["agenda-card editable-block", [E(Il)(f.type), { "is-editing": f.editing, "is-action-open": oe("agendaRows", f) }]]),
                       onClick: (m) => ge("agendaRows", f)
                     }, [
                       v("div", nu, [
                         v("div", su, H(f.date || E(o).unscheduled), 1),
                         v("div", ou, [
-                          v("span", iu, H(E(Il)(f.type)), 1),
+                          v("span", iu, H(E(kl)(f.type)), 1),
                           v("span", ru, H(f.text || E(o).agendaText), 1)
                         ])
                       ]),
@@ -5457,29 +5457,29 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
                             "onUpdate:modelValue": (m) => f.date = m,
                             class: "neo-input no-enter agenda-date-input",
                             placeholder: E(o).date,
-                            onInput: k,
-                            onKeydown: ke(se((m) => j(f), ["prevent"]), ["enter"])
+                            onInput: I,
+                            onKeydown: Ie(se((m) => j(f), ["prevent"]), ["enter"])
                           }, null, 40, lu), [
                             [ve, f.date]
                           ]),
                           ce(v("select", {
                             "onUpdate:modelValue": (m) => f.type = m,
                             class: "neo-input no-enter",
-                            onChange: k,
-                            onKeydown: ke(se((m) => j(f), ["prevent"]), ["enter"])
+                            onChange: I,
+                            onKeydown: Ie(se((m) => j(f), ["prevent"]), ["enter"])
                           }, [
                             v("option", uu, H(E(o).agendaMystery), 1),
                             v("option", fu, H(E(o).agendaPlan), 1)
                           ], 40, cu), [
-                            [Io, f.type]
+                            [ko, f.type]
                           ])
                         ]),
                         ce(v("textarea", {
                           "onUpdate:modelValue": (m) => f.text = m,
                           class: "neo-textarea no-enter",
                           placeholder: E(o).agendaText,
-                          onInput: k,
-                          onKeydown: ke(se((m) => j(f), ["prevent"]), ["enter"])
+                          onInput: I,
+                          onKeydown: Ie(se((m) => j(f), ["prevent"]), ["enter"])
                         }, null, 40, pu), [
                           [ve, f.text]
                         ])
@@ -5556,7 +5556,7 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
       })
     ], 512));
   }
-}, _u = '.horae-message-panel.horae-message-panel-vue{background:#2b2d31!important;border:0!important;border-radius:20px!important;box-shadow:6px 6px 12px #0006,-4px -4px 10px #ffffff0d!important;color:#b5bac1!important;margin-top:10px!important;margin-bottom:18px!important;overflow:hidden!important;--mp-bg-base: #2b2d31;--mp-text-title: #e3e5e8;--mp-text-main: #b5bac1;--mp-text-muted: #80848e;--mp-accent: #a78bfa;--mp-danger: #fb7185;--mp-success: #34d399;--mp-warning: #fbbf24;--mp-info: #38bdf8;--mp-pink: #f472b6;--mp-light-shadow: rgba(255, 255, 255, .05);--mp-dark-shadow: rgba(0, 0, 0, .4);--mp-neo-drop: 6px 6px 12px var(--mp-dark-shadow), -4px -4px 10px var(--mp-light-shadow);--mp-neo-drop-sm: 4px 4px 8px var(--mp-dark-shadow), -2px -2px 6px var(--mp-light-shadow);--mp-neo-inset: inset 4px 4px 8px var(--mp-dark-shadow), inset -4px -4px 8px var(--mp-light-shadow);--mp-neo-inset-sm: inset 2px 2px 4px var(--mp-dark-shadow), inset -2px -2px 4px var(--mp-light-shadow);--mp-radius-md: 12px;--mp-radius-sm: 8px;--mp-radius-round: 50px;--mp-dashboard-height: 700px}.horae-message-panel.horae-message-panel-vue.horae-light{--mp-bg-base: #eef0f4;--mp-text-title: #20242c;--mp-text-main: #4a5160;--mp-text-muted: #767d8c;--mp-light-shadow: rgba(255, 255, 255, .95);--mp-dark-shadow: rgba(122, 132, 150, .28);color:var(--mp-text-main)!important}.horae-message-panel.horae-message-panel-vue.horae-sideplay{opacity:.72}.horae-message-panel-vue *,.horae-message-panel-vue *:before,.horae-message-panel-vue *:after{box-sizing:border-box}.horae-message-panel-vue button{-webkit-appearance:none!important;-moz-appearance:none!important;appearance:none!important;background-image:none!important;box-shadow:none;text-shadow:none!important;font:inherit!important}.horae-message-panel-vue .horae-panel-top{padding:18px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:2px solid rgba(255,255,255,.02);cursor:pointer;transition:background .2s;-webkit-user-select:none;user-select:none}.horae-message-panel-vue .horae-panel-top:hover{background:#ffffff05}.horae-message-panel-vue .toggle-left{flex:1;min-width:0;display:flex;align-items:center;gap:16px}.horae-message-panel-vue .toggle-icon{flex:0 0 auto;font-size:1.1rem;color:var(--mp-accent);display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;box-shadow:var(--mp-neo-drop)}.horae-message-panel-vue .toggle-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}.horae-message-panel-vue .toggle-time{color:var(--mp-text-title);font-size:1.05rem;font-weight:600;display:flex;align-items:center;gap:8px}.horae-message-panel-vue .toggle-summary{color:var(--mp-text-muted);font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%}.horae-message-panel-vue .toggle-actions{flex:0 0 auto;display:flex;gap:12px}.horae-message-panel-vue .neo-btn-icon{background:var(--mp-bg-base)!important;border:none!important;color:var(--mp-text-main)!important;width:38px;height:38px;border-radius:50%!important;box-shadow:var(--mp-neo-drop)!important;cursor:pointer;transition:all .2s ease;display:inline-flex;align-items:center;justify-content:center;outline:none;padding:0!important}.horae-message-panel-vue .neo-btn-icon:hover{color:var(--mp-accent)!important;box-shadow:var(--mp-neo-drop-sm)!important}.horae-message-panel-vue .neo-btn-icon:active{box-shadow:var(--mp-neo-inset)!important}.horae-message-panel-vue .neo-btn-icon:disabled,.horae-message-panel-vue .neo-btn-text:disabled{cursor:wait;opacity:.7}.horae-message-panel-vue .horae-panel-content{padding:16px 24px 24px;background:transparent!important;border-top:0!important;box-sizing:border-box;transform-origin:top;display:flex;flex-direction:column}.horae-message-panel-vue .neo-dashboard{display:flex;flex-direction:column;gap:24px;height:var(--mp-dashboard-height);flex:0 0 var(--mp-dashboard-height);min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-right:4px;padding-bottom:16px}.horae-message-panel-vue .neo-tags{display:flex;flex-wrap:wrap;gap:12px}.horae-message-panel-vue .neo-chip{background:var(--mp-bg-base);box-shadow:var(--mp-neo-inset);padding:8px 16px;border-radius:var(--mp-radius-round);font-size:.9rem;display:inline-flex;align-items:center;gap:8px;min-width:min(100%,180px)}.horae-message-panel-vue .neo-chip i{color:var(--mp-accent);opacity:.85}.horae-message-panel-vue .neo-chip-input{width:100%;min-width:80px;background:transparent!important;border:none!important;box-shadow:none!important;color:var(--mp-text-main)!important;padding:0!important;font-size:.9rem!important;outline:none!important}.horae-message-panel-vue .neo-input,.horae-message-panel-vue .neo-textarea{width:100%;background:var(--mp-bg-base)!important;border:none!important;color:var(--mp-text-title)!important;font-size:.95rem!important;box-shadow:var(--mp-neo-inset)!important;outline:none!important;border-radius:var(--mp-radius-sm)!important;font-family:inherit;transition:box-shadow .2s;line-height:1.5}.horae-message-panel-vue .neo-input{padding:8px 12px!important;height:36px}.horae-message-panel-vue .neo-textarea{padding:10px 14px!important;resize:vertical;min-height:42px;overflow:hidden}.horae-message-panel-vue .neo-textarea.lg{padding:14px 18px!important;font-size:1.02rem!important}.horae-message-panel-vue .neo-input:focus,.horae-message-panel-vue .neo-textarea:focus{box-shadow:var(--mp-neo-inset),0 0 0 1px var(--mp-warning)!important}.horae-message-panel-vue .neo-text-btn{background:transparent!important;border:none!important;color:var(--mp-text-muted)!important;cursor:pointer;font-size:.85rem!important;display:flex;align-items:center;gap:6px;font-weight:500;transition:color .2s;outline:none;padding:0!important}.horae-message-panel-vue .neo-text-btn:hover{color:var(--mp-text-title)!important}.horae-message-panel-vue .neo-text-btn.add:hover{color:var(--mp-accent)!important}.horae-message-panel-vue .neo-inset-section{background:var(--mp-bg-base);box-shadow:var(--mp-neo-inset);border-radius:var(--mp-radius-md);padding:16px 20px}.horae-message-panel-vue .neo-section-header{margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px}.horae-message-panel-vue .neo-section-header.compact{margin-bottom:12px}.horae-message-panel-vue .section-title{font-size:.85rem;color:var(--mp-text-title);display:flex;align-items:center;gap:8px;font-weight:600;text-transform:uppercase}.horae-message-panel-vue .section-title i{color:var(--mp-accent);opacity:.9}.horae-message-panel-vue .action-group-hover{display:flex;gap:4px;opacity:0;transform:translate(6px);transition:all .2s ease;margin-left:auto;flex:0 0 auto;pointer-events:none}.horae-message-panel-vue .action-hover-btn{width:28px;height:28px;border-radius:50%!important;border:none!important;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.8rem!important;color:var(--mp-text-muted)!important;background:transparent!important;transition:all .2s ease;outline:none;padding:0!important}.horae-message-panel-vue .action-hover-btn.btn-edit:hover{background:#38bdf81a!important;color:var(--mp-info)!important;box-shadow:var(--mp-neo-drop-sm)!important}.horae-message-panel-vue .action-hover-btn.btn-del:hover{background:#fb71851a!important;color:var(--mp-danger)!important;box-shadow:var(--mp-neo-drop-sm)!important}.horae-message-panel-vue .is-editing .action-group-hover,.horae-message-panel-vue :hover>.action-group-hover,.horae-message-panel-vue .action-group-hover:hover{opacity:1;transform:translate(0);pointer-events:auto}.horae-message-panel-vue .is-editing .btn-edit{color:var(--mp-success)!important}.horae-message-panel-vue .is-editing .btn-edit i:before{content:""}.horae-message-panel-vue .view-mode{display:flex;gap:10px;flex:1;min-width:0;align-items:flex-start}.horae-message-panel-vue .edit-mode{display:none;gap:10px;flex:1;min-width:0;align-items:flex-start;flex-wrap:wrap}.horae-message-panel-vue .is-editing .view-mode{display:none!important}.horae-message-panel-vue .is-editing .edit-mode{display:flex!important}.horae-message-panel-vue .neo-event-card{background:var(--mp-bg-base);box-shadow:var(--mp-neo-drop);border-radius:var(--mp-radius-md);padding:18px 20px;border-left:4px solid var(--mp-warning);position:relative}.horae-message-panel-vue .event-header{margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}.horae-message-panel-vue .event-badge{font-size:.85rem;color:var(--mp-warning);font-weight:600;display:flex;align-items:center;gap:6px}.horae-message-panel-vue .event-body-text{font-size:1.02rem;color:var(--mp-text-title);line-height:1.6;word-break:break-word}.horae-message-panel-vue .neo-event-card .action-group-hover{position:absolute;right:20px;top:16px;opacity:1}.horae-message-panel-vue .event-level-select{flex:0 0 110px}.horae-message-panel-vue .aff-grid{display:flex;flex-wrap:wrap;gap:12px}.horae-message-panel-vue .aff-chip{background:#ffffff05;border-radius:var(--mp-radius-sm);padding:6px 12px;display:inline-flex;align-items:center;transition:all .2s ease;position:relative;border:1px solid rgba(255,255,255,.03);min-height:38px}.horae-message-panel-vue .aff-chip:hover{background:#ffffff0a}.horae-message-panel-vue .aff-chip .view-mode{align-items:center;margin:0;gap:10px}.horae-message-panel-vue .aff-chip .t-title{font-weight:600;font-size:.9rem;color:var(--mp-text-title);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.horae-message-panel-vue .aff-chip .t-val{font-weight:700;font-size:.95rem;color:var(--mp-pink);font-family:monospace}.horae-message-panel-vue .aff-chip .edit-mode{align-items:center;gap:6px}.horae-message-panel-vue .aff-name{width:76px!important;min-width:76px}.horae-message-panel-vue .aff-value{width:58px!important;min-width:58px}.horae-message-panel-vue .aff-chip .action-group-hover{position:absolute;right:-8px;top:-14px;background:var(--mp-bg-base);border-radius:20px;box-shadow:var(--mp-neo-drop-sm);padding:2px 4px;z-index:10;margin:0}.horae-message-panel-vue .aff-chip.is-editing .action-group-hover{position:static;background:transparent;box-shadow:none;padding:0;margin-left:2px}.horae-message-panel-vue .rel-list,.horae-message-panel-vue .neo-dict-list,.horae-message-panel-vue .neo-item-list,.horae-message-panel-vue .neo-agenda-list{display:flex;flex-direction:column}.horae-message-panel-vue .rel-list{gap:4px}.horae-message-panel-vue .neo-dict-list{gap:6px}.horae-message-panel-vue .neo-item-list{gap:14px}.horae-message-panel-vue .neo-agenda-list{gap:12px}.horae-message-panel-vue .rel-row,.horae-message-panel-vue .neo-dict-row{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;margin:0 -10px;border-radius:var(--mp-radius-sm);transition:background .2s;position:relative}.horae-message-panel-vue .rel-row{align-items:center;padding-top:6px;padding-bottom:6px}.horae-message-panel-vue .rel-row:hover,.horae-message-panel-vue .neo-dict-row:hover{background:#ffffff05}.horae-message-panel-vue .rel-row .view-mode{align-items:center;gap:10px;font-size:.9rem;flex-wrap:wrap}.horae-message-panel-vue .rel-node{font-weight:600;color:var(--mp-text-title);background:#0003;padding:2px 8px;border-radius:4px}.horae-message-panel-vue .rel-arrow{color:var(--mp-accent);opacity:.7;font-size:.8rem}.horae-message-panel-vue .rel-label{color:var(--mp-text-main);font-style:italic}.horae-message-panel-vue .rel-person{width:82px!important;flex:0 0 82px!important}.horae-message-panel-vue .dict-view{align-items:flex-start}.horae-message-panel-vue .dict-key{color:var(--mp-accent);font-weight:600;white-space:nowrap;flex:0 0 auto;line-height:1.5}.horae-message-panel-vue .dict-key:after{content:":";color:var(--mp-text-muted);margin-left:2px}.horae-message-panel-vue .dict-value{color:var(--mp-text-main);line-height:1.5;word-break:break-word}.horae-message-panel-vue .dict-edit-mode{align-items:flex-start}.horae-message-panel-vue .short-key{width:100px!important;flex:0 0 100px!important}.horae-message-panel-vue .neo-item-card,.horae-message-panel-vue .agenda-card{background:var(--mp-bg-base);box-shadow:var(--mp-neo-drop-sm);border-radius:var(--mp-radius-sm);padding:12px 14px;display:flex;align-items:flex-start;gap:10px;position:relative}.horae-message-panel-vue .item-emoji{font-size:1.6rem;line-height:1;margin-top:2px}.horae-message-panel-vue .item-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;padding-right:2px}.horae-message-panel-vue .item-line-top{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-weight:600;color:var(--mp-text-title);font-size:1rem}.horae-message-panel-vue .item-holder-badge{background:var(--mp-bg-base);box-shadow:var(--mp-neo-inset-sm);color:var(--mp-accent);font-size:.75rem;padding:2px 8px;border-radius:4px;font-weight:400}.horae-message-panel-vue .item-meta{font-size:.8rem;color:var(--mp-text-muted)}.horae-message-panel-vue .item-desc{font-size:.9rem;color:var(--mp-text-main);line-height:1.4;word-break:break-word}.horae-message-panel-vue .item-edit-mode{flex-direction:column}.horae-message-panel-vue .item-edit-line{display:flex;gap:8px;width:100%}.horae-message-panel-vue .item-icon-input{width:52px!important;flex:0 0 52px!important;text-align:center}.horae-message-panel-vue .item-holder-input{width:90px!important;flex:0 0 90px!important}.horae-message-panel-vue .deleted-items-zone{margin-top:10px;padding-top:12px;border-top:1px dashed rgba(255,255,255,.05);display:flex;flex-wrap:wrap;gap:10px;align-items:center}.horae-message-panel-vue .deleted-chip{background:#00000026;box-shadow:var(--mp-neo-inset-sm);padding:2px 4px 2px 14px;border-radius:var(--mp-radius-round);font-size:.85rem;display:flex;align-items:center;gap:8px;transition:background .2s ease}.horae-message-panel-vue .deleted-chip:hover{background:#0000004d}.horae-message-panel-vue .deleted-chip span{color:var(--mp-text-muted);text-decoration:line-through;padding-bottom:2px;word-break:break-word}.horae-message-panel-vue .deleted-chip .action-hover-btn{width:24px;height:24px;flex:0 0 24px}.horae-message-panel-vue .agenda-card{border-left:3px solid var(--mp-text-muted)}.horae-message-panel-vue .agenda-card.type-suspense{border-left-color:var(--mp-accent)}.horae-message-panel-vue .agenda-card.type-suspense .agenda-type{color:var(--mp-accent)}.horae-message-panel-vue .agenda-card.type-plan{border-left-color:var(--mp-info)}.horae-message-panel-vue .agenda-card.type-plan .agenda-type{color:var(--mp-info)}.horae-message-panel-vue .agenda-date{font-size:.8rem;color:var(--mp-text-muted);white-space:nowrap;padding-top:2px;font-family:monospace;width:80px;flex:0 0 80px}.horae-message-panel-vue .agenda-content{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}.horae-message-panel-vue .agenda-type{font-size:.75rem;font-weight:600}.horae-message-panel-vue .agenda-text{font-size:.95rem;color:var(--mp-text-title);word-break:break-word}.horae-message-panel-vue .agenda-edit-mode{flex-direction:column}.horae-message-panel-vue .agenda-edit-line{display:flex;gap:8px;width:100%}.horae-message-panel-vue .agenda-date-input{width:110px!important;flex:0 0 110px!important}.horae-message-panel-vue .neo-footer-actions{display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:12px;flex:0 0 auto}.horae-message-panel-vue .action-group{display:flex;gap:12px;align-items:center}.horae-message-panel-vue .neo-btn-text{background:var(--mp-bg-base)!important;border:none!important;color:var(--mp-text-main)!important;padding:10px 20px!important;border-radius:var(--mp-radius-round)!important;box-shadow:var(--mp-neo-drop)!important;cursor:pointer;font-size:.9rem!important;font-weight:500;display:flex;align-items:center;gap:8px;transition:all .2s ease;outline:none;white-space:nowrap}.horae-message-panel-vue .neo-btn-text:hover{color:var(--mp-text-title)!important;box-shadow:var(--mp-neo-drop-sm)!important}.horae-message-panel-vue .neo-btn-text:active{box-shadow:var(--mp-neo-inset)!important}.horae-message-panel-vue .btn-ai-text{color:var(--mp-accent)!important}.horae-message-panel-vue .btn-save-apply{color:var(--mp-success)!important}.horae-message-panel-vue .btn-drawer{padding-left:13px!important;padding-right:13px!important}.horae-message-panel-vue .horae-sideplay-badge{background:var(--mp-text-muted);color:var(--mp-bg-base);font-size:10px;padding:1px 6px;border-radius:3px;font-weight:700}@media(max-width:768px){.horae-message-panel-vue .horae-panel-top{padding:10px 12px;gap:10px}.horae-message-panel-vue .horae-panel-content{padding:16px}.horae-message-panel-vue .toggle-left{gap:10px}.horae-message-panel-vue .toggle-icon{width:30px;height:30px;font-size:.92rem}.horae-message-panel-vue .toggle-info{gap:0;overflow:hidden}.horae-message-panel-vue .toggle-time{font-size:.92rem;line-height:1.2;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.horae-message-panel-vue .toggle-summary{display:none}.horae-message-panel-vue .toggle-actions{gap:6px}.horae-message-panel-vue .neo-btn-icon{width:30px;height:30px;font-size:.82rem!important}.horae-message-panel-vue .horae-sideplay-badge{font-size:9px;padding:1px 5px}.horae-message-panel-vue .dict-view,.horae-message-panel-vue .agenda-card .view-mode,.horae-message-panel-vue .agenda-card .edit-mode{flex-direction:column;gap:8px}.horae-message-panel-vue .dict-key:after{content:""}.horae-message-panel-vue .action-group-hover,.horae-message-panel-vue .neo-event-card .action-group-hover,.horae-message-panel-vue :hover>.action-group-hover,.horae-message-panel-vue .action-group-hover:hover{opacity:0;transform:translate(6px);pointer-events:none}.horae-message-panel-vue .editable-block.is-action-open>.action-group-hover,.horae-message-panel-vue .editable-block.is-action-open .event-header>.action-group-hover,.horae-message-panel-vue .editable-block.is-editing>.action-group-hover,.horae-message-panel-vue .editable-block.is-editing .event-header>.action-group-hover{opacity:1;transform:translate(0);pointer-events:auto}.horae-message-panel-vue .neo-footer-actions{flex-direction:column;align-items:stretch;gap:12px;margin-top:6px}.horae-message-panel-vue .action-group{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%}.horae-message-panel-vue .neo-btn-text{width:100%;justify-content:center;padding:12px 10px!important;font-size:.85rem!important}.horae-message-panel-vue .btn-drawer{grid-column:1 / -1}}@media(prefers-reduced-motion:reduce){.horae-message-panel-vue .horae-panel-content{transition:none!important;transform:none!important}}#chat .mes .horae-message-panel.horae-message-panel-vue input.neo-input,#chat .mes .horae-message-panel.horae-message-panel-vue select.neo-input,#chat .mes .horae-message-panel.horae-message-panel-vue textarea.neo-textarea{-webkit-appearance:none!important;-moz-appearance:none!important;appearance:none!important;width:100%!important;max-width:none!important;margin:0!important;border:none!important;border-radius:var(--mp-radius-sm)!important;background:var(--mp-bg-base)!important;color:var(--mp-text-title)!important;font-family:inherit!important;font-size:.95rem!important;font-weight:400!important;line-height:1.5!important;letter-spacing:0!important;box-shadow:var(--mp-neo-inset)!important;text-shadow:none!important;outline:none!important}#chat .mes .horae-message-panel.horae-message-panel-vue input.neo-input,#chat .mes .horae-message-panel.horae-message-panel-vue select.neo-input{height:36px!important;min-height:36px!important;padding:8px 12px!important}#chat .mes .horae-message-panel.horae-message-panel-vue textarea.neo-textarea{min-height:42px!important;padding:10px 14px!important;resize:vertical!important;overflow:hidden!important}#chat .mes .horae-message-panel.horae-message-panel-vue textarea.neo-textarea.lg{padding:14px 18px!important;font-size:1.02rem!important}#chat .mes .horae-message-panel.horae-message-panel-vue input.neo-chip-input{-webkit-appearance:none!important;-moz-appearance:none!important;appearance:none!important;width:100%!important;min-width:80px!important;margin:0!important;padding:0!important;border:none!important;border-radius:0!important;background:transparent!important;color:var(--mp-text-main)!important;font-family:inherit!important;font-size:.9rem!important;font-weight:400!important;line-height:1.5!important;letter-spacing:0!important;box-shadow:none!important;text-shadow:none!important;outline:none!important}.horae-message-panel.horae-message-panel-vue .toggle-icon,#chat .mes .horae-message-panel.horae-message-panel-vue .toggle-icon{color:var(--mp-accent)!important}.horae-message-panel.horae-message-panel-vue .toggle-icon i:before,.horae-message-panel.horae-message-panel-vue .toggle-icon .fa-regular:before,.horae-message-panel.horae-message-panel-vue .toggle-icon .fa-solid:before,#chat .mes .horae-message-panel.horae-message-panel-vue .toggle-icon i:before,#chat .mes .horae-message-panel.horae-message-panel-vue .toggle-icon .fa-regular:before,#chat .mes .horae-message-panel.horae-message-panel-vue .toggle-icon .fa-solid:before{color:var(--mp-accent)!important;text-shadow:none!important}.horae-message-panel.horae-message-panel-vue .section-title i:before,.horae-message-panel.horae-message-panel-vue .neo-chip i:before,#chat .mes .horae-message-panel.horae-message-panel-vue .section-title i:before,#chat .mes .horae-message-panel.horae-message-panel-vue .neo-chip i:before{color:var(--mp-accent)!important;text-shadow:none!important}', wu = /(?:fontawesome|font-awesome|\/css\/all(?:\.min)?\.css|\/css\/fontawesome(?:\.min)?\.css)/i, Su = "/css/fontawesome.min.css";
+}, _u = '.horae-message-panel.horae-message-panel-vue{background:#2b2d31!important;border:0!important;border-radius:20px!important;box-shadow:6px 6px 12px #0006,-4px -4px 10px #ffffff0d!important;color:#b5bac1!important;margin-top:10px!important;margin-bottom:18px!important;overflow:hidden!important;--mp-bg-base: #2b2d31;--mp-text-title: #e3e5e8;--mp-text-main: #b5bac1;--mp-text-muted: #80848e;--mp-accent: #a78bfa;--mp-danger: #fb7185;--mp-success: #34d399;--mp-warning: #fbbf24;--mp-info: #38bdf8;--mp-pink: #f472b6;--mp-light-shadow: rgba(255, 255, 255, .05);--mp-dark-shadow: rgba(0, 0, 0, .4);--mp-neo-drop: 6px 6px 12px var(--mp-dark-shadow), -4px -4px 10px var(--mp-light-shadow);--mp-neo-drop-sm: 4px 4px 8px var(--mp-dark-shadow), -2px -2px 6px var(--mp-light-shadow);--mp-neo-inset: inset 4px 4px 8px var(--mp-dark-shadow), inset -4px -4px 8px var(--mp-light-shadow);--mp-neo-inset-sm: inset 2px 2px 4px var(--mp-dark-shadow), inset -2px -2px 4px var(--mp-light-shadow);--mp-radius-md: 12px;--mp-radius-sm: 8px;--mp-radius-round: 50px;--mp-dashboard-height: 500px}.horae-message-panel.horae-message-panel-vue.horae-light{--mp-bg-base: #eef0f4;--mp-text-title: #20242c;--mp-text-main: #4a5160;--mp-text-muted: #767d8c;--mp-light-shadow: rgba(255, 255, 255, .95);--mp-dark-shadow: rgba(122, 132, 150, .28);color:var(--mp-text-main)!important}.horae-message-panel.horae-message-panel-vue.horae-sideplay{opacity:.72}.horae-message-panel-vue *,.horae-message-panel-vue *:before,.horae-message-panel-vue *:after{box-sizing:border-box}.horae-message-panel-vue button{-webkit-appearance:none!important;-moz-appearance:none!important;appearance:none!important;background-image:none!important;box-shadow:none;text-shadow:none!important;font:inherit!important}.horae-message-panel-vue .horae-panel-top{padding:18px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:2px solid rgba(255,255,255,.02);cursor:pointer;transition:background .2s;-webkit-user-select:none;user-select:none}.horae-message-panel-vue .horae-panel-top:hover{background:#ffffff05}.horae-message-panel-vue .toggle-left{flex:1;min-width:0;display:flex;align-items:center;gap:16px}.horae-message-panel-vue .toggle-icon{flex:0 0 auto;font-size:1.1rem;color:var(--mp-accent);display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;box-shadow:var(--mp-neo-drop)}.horae-message-panel-vue .toggle-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}.horae-message-panel-vue .toggle-time{color:var(--mp-text-title);font-size:1.05rem;font-weight:600;display:flex;align-items:center;gap:8px}.horae-message-panel-vue .toggle-summary{color:var(--mp-text-muted);font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%}.horae-message-panel-vue .toggle-actions{flex:0 0 auto;display:flex;gap:12px}.horae-message-panel-vue .neo-btn-icon{background:var(--mp-bg-base)!important;border:none!important;color:var(--mp-text-main)!important;width:38px;height:38px;border-radius:50%!important;box-shadow:var(--mp-neo-drop)!important;cursor:pointer;transition:all .2s ease;display:inline-flex;align-items:center;justify-content:center;outline:none;padding:0!important}.horae-message-panel-vue .neo-btn-icon:hover{color:var(--mp-accent)!important;box-shadow:var(--mp-neo-drop-sm)!important}.horae-message-panel-vue .neo-btn-icon:active{box-shadow:var(--mp-neo-inset)!important}.horae-message-panel-vue .neo-btn-icon:disabled,.horae-message-panel-vue .neo-btn-text:disabled{cursor:wait;opacity:.7}.horae-message-panel-vue .horae-panel-content{padding:16px 24px 24px;background:transparent!important;border-top:0!important;box-sizing:border-box;transform-origin:top;display:flex;flex-direction:column}.horae-message-panel-vue .neo-dashboard{display:flex;flex-direction:column;gap:24px;height:var(--mp-dashboard-height);flex:0 0 var(--mp-dashboard-height);min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-right:4px;padding-bottom:16px}@media(min-width:769px){.horae-message-panel-vue .neo-dashboard{padding-right:10px;scrollbar-width:thin;scrollbar-color:#4A4D55 rgba(0,0,0,.16)}.horae-message-panel-vue .neo-dashboard::-webkit-scrollbar{width:12px}.horae-message-panel-vue .neo-dashboard::-webkit-scrollbar-track{background:#00000029;border-radius:999px;box-shadow:var(--mp-neo-inset-sm)}.horae-message-panel-vue .neo-dashboard::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#a78bfab8,#38bdf875);border:3px solid var(--mp-bg-base);border-radius:999px;box-shadow:0 0 0 1px #ffffff0a}.horae-message-panel-vue .neo-dashboard::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#a78bfae6,#38bdf8a8)}.horae-message-panel-vue .neo-dashboard::-webkit-scrollbar-corner{background:transparent}.horae-message-panel.horae-message-panel-vue.horae-light .neo-dashboard{scrollbar-color:rgba(124,58,237,.52) rgba(122,132,150,.18)}.horae-message-panel.horae-message-panel-vue.horae-light .neo-dashboard::-webkit-scrollbar-track{background:#7a84962e}.horae-message-panel.horae-message-panel-vue.horae-light .neo-dashboard::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#7c3aed9e,#0ea5e97a);border-color:var(--mp-bg-base);box-shadow:0 0 0 1px #20242c0f}.horae-message-panel.horae-message-panel-vue.horae-light .neo-dashboard::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#7c3aedc7,#0ea5e99e)}}.horae-message-panel-vue .neo-tags{display:flex;flex-wrap:wrap;gap:12px}.horae-message-panel-vue .neo-chip{background:var(--mp-bg-base);box-shadow:var(--mp-neo-inset);padding:8px 16px;border-radius:var(--mp-radius-round);font-size:.9rem;display:inline-flex;align-items:center;gap:8px;min-width:min(100%,180px)}.horae-message-panel-vue .neo-chip i{color:var(--mp-accent);opacity:.85}.horae-message-panel-vue .neo-chip-input{width:100%;min-width:80px;background:transparent!important;border:none!important;box-shadow:none!important;color:var(--mp-text-main)!important;padding:0!important;font-size:.9rem!important;outline:none!important}.horae-message-panel-vue .neo-input,.horae-message-panel-vue .neo-textarea{width:100%;background:var(--mp-bg-base)!important;border:none!important;color:var(--mp-text-title)!important;font-size:.95rem!important;box-shadow:var(--mp-neo-inset)!important;outline:none!important;border-radius:var(--mp-radius-sm)!important;font-family:inherit;transition:box-shadow .2s;line-height:1.5}.horae-message-panel-vue .neo-input{padding:8px 12px!important;height:36px}.horae-message-panel-vue .neo-textarea{padding:10px 14px!important;resize:vertical;min-height:42px;overflow:hidden}.horae-message-panel-vue .neo-textarea.lg{padding:14px 18px!important;font-size:1.02rem!important}.horae-message-panel-vue .neo-input:focus,.horae-message-panel-vue .neo-textarea:focus{box-shadow:var(--mp-neo-inset),0 0 0 1px var(--mp-warning)!important}.horae-message-panel-vue .neo-text-btn{background:transparent!important;border:none!important;color:var(--mp-text-muted)!important;cursor:pointer;font-size:.85rem!important;display:flex;align-items:center;gap:6px;font-weight:500;transition:color .2s;outline:none;padding:0!important}.horae-message-panel-vue .neo-text-btn:hover{color:var(--mp-text-title)!important}.horae-message-panel-vue .neo-text-btn.add:hover{color:var(--mp-accent)!important}.horae-message-panel-vue .neo-inset-section{background:var(--mp-bg-base);box-shadow:var(--mp-neo-inset);border-radius:var(--mp-radius-md);padding:16px 20px}.horae-message-panel-vue .neo-section-header{margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px}.horae-message-panel-vue .neo-section-header.compact{margin-bottom:12px}.horae-message-panel-vue .section-title{font-size:.85rem;color:var(--mp-text-title);display:flex;align-items:center;gap:8px;font-weight:600;text-transform:uppercase}.horae-message-panel-vue .section-title i{color:var(--mp-accent);opacity:.9}.horae-message-panel-vue .action-group-hover{display:flex;gap:4px;opacity:0;transform:translate(6px);transition:all .2s ease;margin-left:auto;flex:0 0 auto;pointer-events:none}.horae-message-panel-vue .action-hover-btn{width:28px;height:28px;border-radius:50%!important;border:none!important;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.8rem!important;color:var(--mp-text-muted)!important;background:transparent!important;transition:all .2s ease;outline:none;padding:0!important}.horae-message-panel-vue .action-hover-btn.btn-edit:hover{background:#38bdf81a!important;color:var(--mp-info)!important;box-shadow:var(--mp-neo-drop-sm)!important}.horae-message-panel-vue .action-hover-btn.btn-del:hover{background:#fb71851a!important;color:var(--mp-danger)!important;box-shadow:var(--mp-neo-drop-sm)!important}.horae-message-panel-vue .is-editing .action-group-hover,.horae-message-panel-vue :hover>.action-group-hover,.horae-message-panel-vue .action-group-hover:hover{opacity:1;transform:translate(0);pointer-events:auto}.horae-message-panel-vue .is-editing .btn-edit{color:var(--mp-success)!important}.horae-message-panel-vue .is-editing .btn-edit i:before{content:""}.horae-message-panel-vue .view-mode{display:flex;gap:10px;flex:1;min-width:0;align-items:flex-start}.horae-message-panel-vue .edit-mode{display:none;gap:10px;flex:1;min-width:0;align-items:flex-start;flex-wrap:wrap}.horae-message-panel-vue .is-editing .view-mode{display:none!important}.horae-message-panel-vue .is-editing .edit-mode{display:flex!important}.horae-message-panel-vue .neo-event-card{background:var(--mp-bg-base);box-shadow:var(--mp-neo-drop);border-radius:var(--mp-radius-md);padding:18px 20px;border-left:4px solid var(--mp-warning);position:relative}.horae-message-panel-vue .event-header{margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}.horae-message-panel-vue .event-badge{font-size:.85rem;color:var(--mp-warning);font-weight:600;display:flex;align-items:center;gap:6px}.horae-message-panel-vue .event-body-text{font-size:1.02rem;color:var(--mp-text-title);line-height:1.6;word-break:break-word}.horae-message-panel-vue .neo-event-card .action-group-hover{position:absolute;right:20px;top:16px;opacity:1}.horae-message-panel-vue .event-level-select{flex:0 0 110px}.horae-message-panel-vue .aff-grid{display:flex;flex-wrap:wrap;gap:12px}.horae-message-panel-vue .aff-chip{background:#ffffff05;border-radius:var(--mp-radius-sm);padding:6px 12px;display:inline-flex;align-items:center;transition:all .2s ease;position:relative;border:1px solid rgba(255,255,255,.03);min-height:38px}.horae-message-panel-vue .aff-chip:hover{background:#ffffff0a}.horae-message-panel-vue .aff-chip .view-mode{align-items:center;margin:0;gap:10px}.horae-message-panel-vue .aff-chip .t-title{font-weight:600;font-size:.9rem;color:var(--mp-text-title);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.horae-message-panel-vue .aff-chip .t-val{font-weight:700;font-size:.95rem;color:var(--mp-pink);font-family:monospace}.horae-message-panel-vue .aff-chip .edit-mode{align-items:center;gap:6px}.horae-message-panel-vue .aff-name{width:76px!important;min-width:76px}.horae-message-panel-vue .aff-value{width:58px!important;min-width:58px}.horae-message-panel-vue .aff-chip .action-group-hover{position:absolute;right:-8px;top:-14px;background:var(--mp-bg-base);border-radius:20px;box-shadow:var(--mp-neo-drop-sm);padding:2px 4px;z-index:10;margin:0}.horae-message-panel-vue .aff-chip.is-editing .action-group-hover{position:static;background:transparent;box-shadow:none;padding:0;margin-left:2px}.horae-message-panel-vue .rel-list,.horae-message-panel-vue .neo-dict-list,.horae-message-panel-vue .neo-item-list,.horae-message-panel-vue .neo-agenda-list{display:flex;flex-direction:column}.horae-message-panel-vue .rel-list{gap:4px}.horae-message-panel-vue .neo-dict-list{gap:6px}.horae-message-panel-vue .neo-item-list{gap:14px}.horae-message-panel-vue .neo-agenda-list{gap:12px}.horae-message-panel-vue .rel-row,.horae-message-panel-vue .neo-dict-row{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;margin:0 -10px;border-radius:var(--mp-radius-sm);transition:background .2s;position:relative}.horae-message-panel-vue .rel-row{align-items:center;padding-top:6px;padding-bottom:6px}.horae-message-panel-vue .rel-row:hover,.horae-message-panel-vue .neo-dict-row:hover{background:#ffffff05}.horae-message-panel-vue .rel-row .view-mode{align-items:center;gap:10px;font-size:.9rem;flex-wrap:wrap}.horae-message-panel-vue .rel-node{font-weight:600;color:var(--mp-text-title);background:#0003;padding:2px 8px;border-radius:4px}.horae-message-panel-vue .rel-arrow{color:var(--mp-accent);opacity:.7;font-size:.8rem}.horae-message-panel-vue .rel-label{color:var(--mp-text-main);font-style:italic}.horae-message-panel-vue .rel-person{width:82px!important;flex:0 0 82px!important}.horae-message-panel-vue .dict-view{align-items:flex-start}.horae-message-panel-vue .dict-key{color:var(--mp-accent);font-weight:600;white-space:nowrap;flex:0 0 auto;line-height:1.5}.horae-message-panel-vue .dict-key:after{content:":";color:var(--mp-text-muted);margin-left:2px}.horae-message-panel-vue .dict-value{color:var(--mp-text-main);line-height:1.5;word-break:break-word}.horae-message-panel-vue .dict-edit-mode{align-items:flex-start}.horae-message-panel-vue .short-key{width:100px!important;flex:0 0 100px!important}.horae-message-panel-vue .neo-item-card,.horae-message-panel-vue .agenda-card{background:var(--mp-bg-base);box-shadow:var(--mp-neo-drop-sm);border-radius:var(--mp-radius-sm);padding:12px 14px;display:flex;align-items:flex-start;gap:10px;position:relative}.horae-message-panel-vue .item-emoji{font-size:1.6rem;line-height:1;margin-top:2px}.horae-message-panel-vue .item-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;padding-right:2px}.horae-message-panel-vue .item-line-top{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-weight:600;color:var(--mp-text-title);font-size:1rem}.horae-message-panel-vue .item-holder-badge{background:var(--mp-bg-base);box-shadow:var(--mp-neo-inset-sm);color:var(--mp-accent);font-size:.75rem;padding:2px 8px;border-radius:4px;font-weight:400}.horae-message-panel-vue .item-meta{font-size:.8rem;color:var(--mp-text-muted)}.horae-message-panel-vue .item-desc{font-size:.9rem;color:var(--mp-text-main);line-height:1.4;word-break:break-word}.horae-message-panel-vue .item-edit-mode{flex-direction:column}.horae-message-panel-vue .item-edit-line{display:flex;gap:8px;width:100%}.horae-message-panel-vue .item-icon-input{width:52px!important;flex:0 0 52px!important;text-align:center}.horae-message-panel-vue .item-holder-input{width:90px!important;flex:0 0 90px!important}.horae-message-panel-vue .deleted-items-zone{margin-top:10px;padding-top:12px;border-top:1px dashed rgba(255,255,255,.05);display:flex;flex-wrap:wrap;gap:10px;align-items:center}.horae-message-panel-vue .deleted-chip{background:#00000026;box-shadow:var(--mp-neo-inset-sm);padding:2px 4px 2px 14px;border-radius:var(--mp-radius-round);font-size:.85rem;display:flex;align-items:center;gap:8px;transition:background .2s ease}.horae-message-panel-vue .deleted-chip:hover{background:#0000004d}.horae-message-panel-vue .deleted-chip span{color:var(--mp-text-muted);text-decoration:line-through;padding-bottom:2px;word-break:break-word}.horae-message-panel-vue .deleted-chip .action-hover-btn{width:24px;height:24px;flex:0 0 24px}.horae-message-panel-vue .agenda-card{border-left:3px solid var(--mp-text-muted)}.horae-message-panel-vue .agenda-card.type-suspense{border-left-color:var(--mp-accent)}.horae-message-panel-vue .agenda-card.type-suspense .agenda-type{color:var(--mp-accent)}.horae-message-panel-vue .agenda-card.type-plan{border-left-color:var(--mp-info)}.horae-message-panel-vue .agenda-card.type-plan .agenda-type{color:var(--mp-info)}.horae-message-panel-vue .agenda-date{font-size:.8rem;color:var(--mp-text-muted);white-space:nowrap;padding-top:2px;font-family:monospace;width:80px;flex:0 0 80px}.horae-message-panel-vue .agenda-content{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}.horae-message-panel-vue .agenda-type{font-size:.75rem;font-weight:600}.horae-message-panel-vue .agenda-text{font-size:.95rem;color:var(--mp-text-title);word-break:break-word}.horae-message-panel-vue .agenda-edit-mode{flex-direction:column}.horae-message-panel-vue .agenda-edit-line{display:flex;gap:8px;width:100%}.horae-message-panel-vue .agenda-date-input{width:110px!important;flex:0 0 110px!important}.horae-message-panel-vue .neo-footer-actions{display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:12px;flex:0 0 auto}.horae-message-panel-vue .action-group{display:flex;gap:12px;align-items:center}.horae-message-panel-vue .neo-btn-text{background:var(--mp-bg-base)!important;border:none!important;color:var(--mp-text-main)!important;padding:10px 20px!important;border-radius:var(--mp-radius-round)!important;box-shadow:var(--mp-neo-drop)!important;cursor:pointer;font-size:.9rem!important;font-weight:500;display:flex;align-items:center;gap:8px;transition:all .2s ease;outline:none;white-space:nowrap}.horae-message-panel-vue .neo-btn-text:hover{color:var(--mp-text-title)!important;box-shadow:var(--mp-neo-drop-sm)!important}.horae-message-panel-vue .neo-btn-text:active{box-shadow:var(--mp-neo-inset)!important}.horae-message-panel-vue .btn-ai-text{color:var(--mp-accent)!important}.horae-message-panel-vue .btn-save-apply{color:var(--mp-success)!important}.horae-message-panel-vue .btn-drawer{padding-left:13px!important;padding-right:13px!important}.horae-message-panel-vue .horae-sideplay-badge{background:var(--mp-text-muted);color:var(--mp-bg-base);font-size:10px;padding:1px 6px;border-radius:3px;font-weight:700}@media(max-width:768px){.horae-message-panel-vue .horae-panel-top{padding:10px 12px;gap:10px}.horae-message-panel-vue .horae-panel-content{padding:16px}.horae-message-panel-vue .toggle-left{gap:10px}.horae-message-panel-vue .toggle-icon{width:30px;height:30px;font-size:.92rem}.horae-message-panel-vue .toggle-info{gap:0;overflow:hidden}.horae-message-panel-vue .toggle-time{font-size:.92rem;line-height:1.2;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.horae-message-panel-vue .toggle-summary{display:none}.horae-message-panel-vue .toggle-actions{gap:6px}.horae-message-panel-vue .neo-btn-icon{width:30px;height:30px;font-size:.82rem!important}.horae-message-panel-vue .horae-sideplay-badge{font-size:9px;padding:1px 5px}.horae-message-panel-vue .dict-view,.horae-message-panel-vue .agenda-card .view-mode,.horae-message-panel-vue .agenda-card .edit-mode{flex-direction:column;gap:8px}.horae-message-panel-vue .dict-key:after{content:""}.horae-message-panel-vue .action-group-hover,.horae-message-panel-vue .neo-event-card .action-group-hover,.horae-message-panel-vue :hover>.action-group-hover,.horae-message-panel-vue .action-group-hover:hover{opacity:0;transform:translate(6px);pointer-events:none}.horae-message-panel-vue .editable-block.is-action-open>.action-group-hover,.horae-message-panel-vue .editable-block.is-action-open .event-header>.action-group-hover,.horae-message-panel-vue .editable-block.is-editing>.action-group-hover,.horae-message-panel-vue .editable-block.is-editing .event-header>.action-group-hover{opacity:1;transform:translate(0);pointer-events:auto}.horae-message-panel-vue .neo-footer-actions{flex-direction:column;align-items:stretch;gap:12px;margin-top:6px}.horae-message-panel-vue .action-group{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%}.horae-message-panel-vue .neo-btn-text{width:100%;justify-content:center;padding:12px 10px!important;font-size:.85rem!important}.horae-message-panel-vue .btn-drawer{grid-column:1 / -1}}@media(prefers-reduced-motion:reduce){.horae-message-panel-vue .horae-panel-content{transition:none!important;transform:none!important}}#chat .mes .horae-message-panel.horae-message-panel-vue input.neo-input,#chat .mes .horae-message-panel.horae-message-panel-vue select.neo-input,#chat .mes .horae-message-panel.horae-message-panel-vue textarea.neo-textarea{-webkit-appearance:none!important;-moz-appearance:none!important;appearance:none!important;width:100%!important;max-width:none!important;margin:0!important;border:none!important;border-radius:var(--mp-radius-sm)!important;background:var(--mp-bg-base)!important;color:var(--mp-text-title)!important;font-family:inherit!important;font-size:.95rem!important;font-weight:400!important;line-height:1.5!important;letter-spacing:0!important;box-shadow:var(--mp-neo-inset)!important;text-shadow:none!important;outline:none!important}#chat .mes .horae-message-panel.horae-message-panel-vue input.neo-input,#chat .mes .horae-message-panel.horae-message-panel-vue select.neo-input{height:36px!important;min-height:36px!important;padding:8px 12px!important}#chat .mes .horae-message-panel.horae-message-panel-vue textarea.neo-textarea{min-height:42px!important;padding:10px 14px!important;resize:vertical!important;overflow:hidden!important}#chat .mes .horae-message-panel.horae-message-panel-vue textarea.neo-textarea.lg{padding:14px 18px!important;font-size:1.02rem!important}#chat .mes .horae-message-panel.horae-message-panel-vue input.neo-chip-input{-webkit-appearance:none!important;-moz-appearance:none!important;appearance:none!important;width:100%!important;min-width:80px!important;margin:0!important;padding:0!important;border:none!important;border-radius:0!important;background:transparent!important;color:var(--mp-text-main)!important;font-family:inherit!important;font-size:.9rem!important;font-weight:400!important;line-height:1.5!important;letter-spacing:0!important;box-shadow:none!important;text-shadow:none!important;outline:none!important}.horae-message-panel.horae-message-panel-vue .toggle-icon,#chat .mes .horae-message-panel.horae-message-panel-vue .toggle-icon{color:var(--mp-accent)!important}.horae-message-panel.horae-message-panel-vue .toggle-icon i:before,.horae-message-panel.horae-message-panel-vue .toggle-icon .fa-regular:before,.horae-message-panel.horae-message-panel-vue .toggle-icon .fa-solid:before,#chat .mes .horae-message-panel.horae-message-panel-vue .toggle-icon i:before,#chat .mes .horae-message-panel.horae-message-panel-vue .toggle-icon .fa-regular:before,#chat .mes .horae-message-panel.horae-message-panel-vue .toggle-icon .fa-solid:before{color:var(--mp-accent)!important;text-shadow:none!important}.horae-message-panel.horae-message-panel-vue .section-title i:before,.horae-message-panel.horae-message-panel-vue .neo-chip i:before,#chat .mes .horae-message-panel.horae-message-panel-vue .section-title i:before,#chat .mes .horae-message-panel.horae-message-panel-vue .neo-chip i:before{color:var(--mp-accent)!important;text-shadow:none!important}', wu = /(?:fontawesome|font-awesome|\/css\/all(?:\.min)?\.css|\/css\/fontawesome(?:\.min)?\.css)/i, Su = "/css/fontawesome.min.css";
 function Cu(e) {
   e.style.setProperty("margin-top", "10px", "important"), e.style.setProperty("margin-bottom", "18px", "important"), e.style.setProperty("padding", "0", "important"), e.style.setProperty("background", "transparent", "important"), e.style.setProperty("border", "0", "important"), e.style.setProperty("border-radius", "0", "important"), e.style.setProperty("box-shadow", "none", "important"), e.style.setProperty("overflow", "visible", "important"), e.style.setProperty("opacity", "1", "important"), e.style.setProperty("order", "9999", "important");
 }

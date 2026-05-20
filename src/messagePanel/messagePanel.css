@@ -26,7 +26,7 @@
   --mp-radius-md: 12px;
   --mp-radius-sm: 8px;
   --mp-radius-round: 50px;
-  --mp-dashboard-height: 700px;
+  --mp-dashboard-height: 500px;
 }
 
 .horae-message-panel.horae-message-panel-vue.horae-light {
@@ -182,6 +182,56 @@
   scrollbar-gutter: stable;
   padding-right: 4px;
   padding-bottom: 16px;
+}
+
+/* 滚动条部分 */
+.horae-message-panel-vue .neo-dashboard {
+  padding-right: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: #4A4D55 rgba(0, 0, 0, 0.16);
+}
+
+.horae-message-panel-vue .neo-dashboard::-webkit-scrollbar {
+  width: 12px;
+}
+
+.horae-message-panel-vue .neo-dashboard::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.16);
+  border-radius: 999px;
+  box-shadow: var(--mp-neo-inset-sm);
+}
+
+.horae-message-panel-vue .neo-dashboard::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(167, 139, 250, 0.72), rgba(56, 189, 248, 0.46));
+  border: 3px solid var(--mp-bg-base);
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.horae-message-panel-vue .neo-dashboard::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(167, 139, 250, 0.9), rgba(56, 189, 248, 0.66));
+}
+
+.horae-message-panel-vue .neo-dashboard::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.horae-message-panel.horae-message-panel-vue.horae-light .neo-dashboard {
+  scrollbar-color: rgba(124, 58, 237, 0.52) rgba(122, 132, 150, 0.18);
+}
+
+.horae-message-panel.horae-message-panel-vue.horae-light .neo-dashboard::-webkit-scrollbar-track {
+  background: rgba(122, 132, 150, 0.18);
+}
+
+.horae-message-panel.horae-message-panel-vue.horae-light .neo-dashboard::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(124, 58, 237, 0.62), rgba(14, 165, 233, 0.48));
+  border-color: var(--mp-bg-base);
+  box-shadow: 0 0 0 1px rgba(32, 36, 44, 0.06);
+}
+
+.horae-message-panel.horae-message-panel-vue.horae-light .neo-dashboard::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(124, 58, 237, 0.78), rgba(14, 165, 233, 0.62));
 }
 
 .horae-message-panel-vue .neo-tags {
