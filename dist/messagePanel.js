@@ -4845,13 +4845,8 @@ const $l = { class: "toggle-left" }, Dl = { class: "toggle-icon" }, Fl = { class
       f >= 0 && (h.splice(f, 1), g.value = null, I());
     }
     function tt(r) {
-      const l = u.itemRows.findIndex((m) => m.id === r);
-      if (l < 0) return;
-      const [h] = u.itemRows.splice(l, 1), f = String((h == null ? void 0 : h.name) || "").trim();
-      f && (u.deletedItemRows.some((b) => String(b.name || "").trim() === f) || u.deletedItemRows.push({
-        id: `deleted-${h.id}`,
-        name: f
-      })), g.value = null, I();
+      const l = u.itemRows.findIndex((h) => h.id === r);
+      l < 0 || (u.itemRows.splice(l, 1), g.value = null, I());
     }
     function It(r) {
       const l = u.deletedItemRows.findIndex((h) => h.id === r);

@@ -660,6 +660,45 @@
             word-break: break-word;
         }
 
+        .deleted-items-zone {
+            margin-top: 10px;
+            padding-top: 12px;
+            border-top: 1px dashed rgba(255, 255, 255, 0.05);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .deleted-chip {
+            background: rgba(0, 0, 0, 0.15);
+            box-shadow: var(--neo-inset-sm);
+            padding: 2px 4px 2px 14px;
+            border-radius: var(--radius-round);
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s ease;
+        }
+
+        .deleted-chip:hover {
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .deleted-chip span {
+            color: var(--text-muted);
+            text-decoration: line-through;
+            padding-bottom: 2px;
+            word-break: break-word;
+        }
+
+        .deleted-chip .action-hover-btn {
+            width: 24px;
+            height: 24px;
+            flex: 0 0 24px;
+        }
+
         .neo-agenda-list {
             display: flex;
             flex-direction: column;
@@ -1035,6 +1074,20 @@
                                             class="fa-solid fa-trash-can"></i></button></div>
                             </div>
                         </div>
+                        <div class="deleted-items-zone" aria-label="物品消耗/删除">
+                            <div class="deleted-chip">
+                                <span>浸水火柴</span>
+                                <button type="button" class="action-hover-btn btn-del" title="彻底删除">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                            <div class="deleted-chip">
+                                <span>空药瓶</span>
+                                <button type="button" class="action-hover-btn btn-del" title="彻底删除">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="neo-inset-section">
@@ -1172,9 +1225,15 @@
                     return;
                 }
 
-                // 2. 物理删除(直接挥发)
+                // 2. 删除当前条目
                 const delBtn = e.target.closest('.btn-del');
                 if (delBtn) {
+                    const chip = delBtn.closest('.deleted-chip');
+                    if (chip) {
+                        chip.remove();
+                        return;
+                    }
+
                     const block = delBtn.closest('.editable-block');
                     if (block) { block.remove(); }
                     return;

@@ -558,18 +558,7 @@ function deleteItemRow(id) {
   const index = draft.itemRows.findIndex((row) => row.id === id);
   if (index < 0) return;
 
-  const [row] = draft.itemRows.splice(index, 1);
-  const name = String(row?.name || '').trim();
-  if (name) {
-    const exists = draft.deletedItemRows.some((item) => String(item.name || '').trim() === name);
-    if (!exists) {
-      draft.deletedItemRows.push({
-        id: `deleted-${row.id}`,
-        name,
-      });
-    }
-  }
-
+  draft.itemRows.splice(index, 1);
   activeActionKey.value = null;
   markDirty();
 }
