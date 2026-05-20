@@ -136,6 +136,10 @@ export function metaToDraft(meta) {
       importance: info?.importance || '',
       editing: false,
     })),
+    deletedItemRows: (source.deletedItems || []).map((name) => ({
+      id: rowId('deleted-item'),
+      name: String(name || '').trim(),
+    })).filter((row) => row.name),
     agendaRows: (source.agenda || []).map((item) => ({
       id: rowId('agenda'),
       date: item.date || '',
@@ -234,7 +238,17 @@ export function draftToMeta(draft) {
     });
   }
 
-  meta.deletedItems = Array.isArray(base.deletedItems) ? [...base.deletedItems] : [];
+  const deletedItemsSource = Array.isArray(draft.deletedItemRows)
+    ? draft.deletedItemRows.map((row) => row?.name)
+    : base.deletedItems;
+  meta.deletedItems = [];
+  const deletedItemNames = new Set();
+  for (const value of deletedItemsSource || []) {
+    const name = String(value || '').trim();
+    if (!name || deletedItemNames.has(name)) continue;
+    deletedItemNames.add(name);
+    meta.deletedItems.push(name);
+  }
   meta.deletedAgenda = Array.isArray(base.deletedAgenda) ? [...base.deletedAgenda] : [];
   meta.npcs = cloneData(base.npcs || {});
   meta.mood = cloneData(base.mood || {});

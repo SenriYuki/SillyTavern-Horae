@@ -26,6 +26,7 @@
   --mp-radius-md: 12px;
   --mp-radius-sm: 8px;
   --mp-radius-round: 50px;
+  --mp-dashboard-height: 700px;
 }
 
 .horae-message-panel.horae-message-panel-vue.horae-light {
@@ -164,12 +165,23 @@
   border-top: 0 !important;
   box-sizing: border-box;
   transform-origin: top;
+  display: flex;
+  flex-direction: column;
 }
 
 .horae-message-panel-vue .neo-dashboard {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  height: var(--mp-dashboard-height);
+  flex: 0 0 var(--mp-dashboard-height);
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-right: 4px;
+  padding-bottom: 16px;
 }
 
 .horae-message-panel-vue .neo-tags {
@@ -342,7 +354,7 @@
 }
 
 .horae-message-panel-vue .is-editing .action-group-hover,
-.horae-message-panel-vue :hover > .action-group-hover,
+.horae-message-panel-vue :hover>.action-group-hover,
 .horae-message-panel-vue .action-group-hover:hover {
   opacity: 1;
   transform: translateX(0);
@@ -696,6 +708,45 @@
   flex: 0 0 90px !important;
 }
 
+.horae-message-panel-vue .deleted-items-zone {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.horae-message-panel-vue .deleted-chip {
+  background: rgba(0, 0, 0, 0.15);
+  box-shadow: var(--mp-neo-inset-sm);
+  padding: 2px 4px 2px 14px;
+  border-radius: var(--mp-radius-round);
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s ease;
+}
+
+.horae-message-panel-vue .deleted-chip:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.horae-message-panel-vue .deleted-chip span {
+  color: var(--mp-text-muted);
+  text-decoration: line-through;
+  padding-bottom: 2px;
+  word-break: break-word;
+}
+
+.horae-message-panel-vue .deleted-chip .action-hover-btn {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+}
+
 .horae-message-panel-vue .agenda-card {
   border-left: 3px solid var(--mp-text-muted);
 }
@@ -766,6 +817,7 @@
   align-items: center;
   margin-top: 12px;
   gap: 12px;
+  flex: 0 0 auto;
 }
 
 .horae-message-panel-vue .action-group {
@@ -889,17 +941,17 @@
 
   .horae-message-panel-vue .action-group-hover,
   .horae-message-panel-vue .neo-event-card .action-group-hover,
-  .horae-message-panel-vue :hover > .action-group-hover,
+  .horae-message-panel-vue :hover>.action-group-hover,
   .horae-message-panel-vue .action-group-hover:hover {
     opacity: 0;
     transform: translateX(6px);
     pointer-events: none;
   }
 
-  .horae-message-panel-vue .editable-block.is-action-open > .action-group-hover,
-  .horae-message-panel-vue .editable-block.is-action-open .event-header > .action-group-hover,
-  .horae-message-panel-vue .editable-block.is-editing > .action-group-hover,
-  .horae-message-panel-vue .editable-block.is-editing .event-header > .action-group-hover {
+  .horae-message-panel-vue .editable-block.is-action-open>.action-group-hover,
+  .horae-message-panel-vue .editable-block.is-action-open .event-header>.action-group-hover,
+  .horae-message-panel-vue .editable-block.is-editing>.action-group-hover,
+  .horae-message-panel-vue .editable-block.is-editing .event-header>.action-group-hover {
     opacity: 1;
     transform: translateX(0);
     pointer-events: auto;

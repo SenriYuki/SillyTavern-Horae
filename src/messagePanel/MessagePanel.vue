@@ -202,7 +202,24 @@
                 <input v-model="row.location" class="neo-input no-enter" :placeholder="labels.location" @input="markDirty" @keydown.enter.prevent="toggleRowEdit(row)">
                 <textarea v-model="row.description" class="neo-textarea no-enter" :placeholder="labels.itemDesc" @input="markDirty" @keydown.enter.prevent="toggleRowEdit(row)"></textarea>
               </div>
-              <RowActions :row="row" delete-icon="fa-trash-can" @edit="toggleRowEdit(row)" @delete="deleteRow('itemRows', row.id)" />
+              <RowActions :row="row" delete-icon="fa-trash-can" @edit="toggleRowEdit(row)" @delete="deleteItemRow(row.id)" />
+            </div>
+          </div>
+          <div v-if="draft.deletedItemRows?.length" class="deleted-items-zone" :aria-label="labels.deletedItems">
+            <div
+              v-for="row in draft.deletedItemRows"
+              :key="row.id"
+              class="deleted-chip"
+            >
+              <span>{{ row.name }}</span>
+              <button
+                type="button"
+                class="action-hover-btn btn-del"
+                :title="labels.deleteForever"
+                @click.stop="deleteDeletedItem(row.id)"
+              >
+                <i class="fa-solid fa-xmark"></i>
+              </button>
             </div>
           </div>
         </section>
@@ -244,26 +261,27 @@
           </div>
         </section>
 
-        <div class="neo-footer-actions">
-          <div class="action-group">
-            <button class="neo-btn-text" :disabled="busy.scan" @click="quickScan">
-              <i :class="['fa-solid', busy.scan ? 'fa-spinner fa-spin' : 'fa-arrows-rotate']"></i> {{ labels.quickScan }}
-            </button>
-            <button class="neo-btn-text btn-ai-text" :disabled="busy.ai" @click="aiAnalyze">
-              <i :class="['fa-solid', busy.ai ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles']"></i> {{ labels.aiAnalyze }}
-            </button>
-          </div>
-          <div class="action-group">
-            <button class="neo-btn-text btn-save-apply" :disabled="busy.save" @click="save">
-              <i :class="['fa-solid', busy.save ? 'fa-spinner fa-spin' : 'fa-check']"></i> {{ labels.apply }}
-            </button>
-            <button class="neo-btn-text" @click="collapsed = true">
-              <i class="fa-solid fa-chevron-up"></i> {{ labels.collapse }}
-            </button>
-            <button style="display: none;" class="neo-btn-text btn-drawer" :title="labels.openDrawer" @click="adapter.openDrawer?.()">
-              <i class="fa-solid fa-clock-rotate-left"></i>
-            </button>
-          </div>
+      </div>
+
+      <div class="neo-footer-actions">
+        <div class="action-group">
+          <button class="neo-btn-text" :disabled="busy.scan" @click="quickScan">
+            <i :class="['fa-solid', busy.scan ? 'fa-spinner fa-spin' : 'fa-arrows-rotate']"></i> {{ labels.quickScan }}
+          </button>
+          <button class="neo-btn-text btn-ai-text" :disabled="busy.ai" @click="aiAnalyze">
+            <i :class="['fa-solid', busy.ai ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles']"></i> {{ labels.aiAnalyze }}
+          </button>
+        </div>
+        <div class="action-group">
+          <button class="neo-btn-text btn-save-apply" :disabled="busy.save" @click="save">
+            <i :class="['fa-solid', busy.save ? 'fa-spinner fa-spin' : 'fa-check']"></i> {{ labels.apply }}
+          </button>
+          <button class="neo-btn-text" @click="collapsed = true">
+            <i class="fa-solid fa-chevron-up"></i> {{ labels.collapse }}
+          </button>
+          <button style="display: none;" class="neo-btn-text btn-drawer" :title="labels.openDrawer" @click="adapter.openDrawer?.()">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+          </button>
         </div>
       </div>
     </div>
@@ -325,6 +343,8 @@ const defaultLabels = {
   itemName: '物品名称',
   itemDesc: '物品描述',
   holder: '持有者',
+  deletedItems: '物品消耗/删除',
+  deleteForever: '彻底移除',
   agenda: '悬念与计划',
   agendaMystery: '未解悬念',
   agendaPlan: '行动计划',
@@ -527,6 +547,35 @@ function deleteRow(listName, id) {
   const index = list.findIndex((row) => row.id === id);
   if (index >= 0) {
     list.splice(index, 1);
+    activeActionKey.value = null;
+    markDirty();
+  }
+}
+
+function deleteItemRow(id) {
+  const index = draft.itemRows.findIndex((row) => row.id === id);
+  if (index < 0) return;
+
+  const [row] = draft.itemRows.splice(index, 1);
+  const name = String(row?.name || '').trim();
+  if (name) {
+    const exists = draft.deletedItemRows.some((item) => String(item.name || '').trim() === name);
+    if (!exists) {
+      draft.deletedItemRows.push({
+        id: `deleted-${row.id}`,
+        name,
+      });
+    }
+  }
+
+  activeActionKey.value = null;
+  markDirty();
+}
+
+function deleteDeletedItem(id) {
+  const index = draft.deletedItemRows.findIndex((row) => row.id === id);
+  if (index >= 0) {
+    draft.deletedItemRows.splice(index, 1);
     activeActionKey.value = null;
     markDirty();
   }

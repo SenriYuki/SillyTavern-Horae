@@ -17,7 +17,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 import { t, tForLang, initI18n, getLanguage, isZhLocale, setLanguage, detectEffectiveAiLangIsZh, detectEffectiveAiLang } from './core/i18n.js';
 import { initPromptDefaults, ensurePromptDefaults, getPromptDefaultSync } from './core/promptDefaults.js';
 import { installSaveRequestGzipFetchHook } from './utils/saveRequestGzip.js';
-import { mountMessagePanel as mountVueMessagePanel } from './dist/messagePanel.js?v=1.13.10C';
+import { mountMessagePanel as mountVueMessagePanel } from './dist/messagePanel.js?v=1.13.10D';
 
 // ============================================
 // 常量定义
@@ -10197,6 +10197,8 @@ function _getMessagePanelVueLabels() {
         itemName: t('placeholder.itemName'),
         itemDesc: t('placeholder.itemDesc'),
         holder: t('label.holder'),
+        deletedItems: t('items.deletedItems'),
+        deleteForever: t('common.delete'),
         agenda: t('timeline.agenda'),
         agendaMystery: t('timeline.mystery'),
         agendaPlan: t('timeline.plan'),
