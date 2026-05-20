@@ -325,11 +325,11 @@ const defaultLabels = {
 };
 
 const labels = computed(() => ({ ...defaultLabels, ...props.labels })).value;
-const config = computed(() => ({ sideplayMode: false, ...props.config })).value;
+const config = reactive({ sideplayMode: false, showPanel: true, ...props.config });
 const adapter = props.adapter || {};
 const panelRoot = ref(null);
 const draft = reactive(metaToDraft(props.initialMeta));
-const collapsed = ref(false);
+const collapsed = ref(true);
 const dirty = ref(false);
 const activeActionKey = ref(null);
 const busy = reactive({ save: false, scan: false, ai: false, sideplay: false });
@@ -345,9 +345,9 @@ watch(
 );
 
 watch(
-  () => draft.isSkipped,
-  (value) => {
-    props.setHostState?.({ isSkipped: !!value, visible: config.showPanel !== false });
+  () => [draft.isSkipped, config.showPanel],
+  ([isSkipped]) => {
+    props.setHostState?.({ isSkipped: !!isSkipped, visible: config.showPanel !== false });
   },
   { immediate: true },
 );
@@ -603,5 +603,9 @@ function replaceMeta(meta) {
   resetFromMeta(meta);
 }
 
-defineExpose({ replaceMeta });
+function replaceConfig(nextConfig) {
+  Object.assign(config, { sideplayMode: false, showPanel: true, ...(nextConfig || {}) });
+}
+
+defineExpose({ replaceMeta, replaceConfig });
 </script>

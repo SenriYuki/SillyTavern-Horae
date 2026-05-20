@@ -108,5 +108,8 @@ export function mountMessagePanel(hostEl, options = {}) {
     updateMeta(meta) {
       vm?.replaceMeta?.(meta);
     },
+    updateConfig(config) {
+      vm?.replaceConfig?.(config);
+    },
   };
 }

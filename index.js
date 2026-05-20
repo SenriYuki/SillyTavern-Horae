@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki，柏柏
- * 版本: 1.13.10B
+ * 版本: 1.13.10C
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -17,7 +17,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 import { t, tForLang, initI18n, getLanguage, isZhLocale, setLanguage, detectEffectiveAiLangIsZh, detectEffectiveAiLang } from './core/i18n.js';
 import { initPromptDefaults, ensurePromptDefaults, getPromptDefaultSync } from './core/promptDefaults.js';
 import { installSaveRequestGzipFetchHook } from './utils/saveRequestGzip.js';
-import { mountMessagePanel as mountVueMessagePanel } from './dist/messagePanel.js?v=1.13.10B';
+import { mountMessagePanel as mountVueMessagePanel } from './dist/messagePanel.js?v=1.13.10C';
 
 // ============================================
 // 常量定义
@@ -25,7 +25,7 @@ import { mountMessagePanel as mountVueMessagePanel } from './dist/messagePanel.j
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.13.10B';
+const VERSION = '1.13.10C';
 const DEFAULT_VECTOR_STRIP_TAGS = 'dream_status,Episode,details,think,thinking,Thinking';
 
 // 配套正则规则（自动注入ST原生正则系统）
@@ -10207,6 +10207,13 @@ function _getMessagePanelVueLabels() {
     };
 }
 
+function _getMessagePanelVueConfig() {
+    return {
+        sideplayMode: !!settings.sideplayMode,
+        showPanel: !!settings.showMessagePanel,
+    };
+}
+
 function _openHoraeDrawerFromMessagePanel() {
     const drawerIcon = $('#horae_drawer_icon');
     const drawerContent = $('#horae_drawer_content');
@@ -10446,10 +10453,7 @@ function _mountVueMessagePanel(messageEl, messageIndex, meta, mesTextEl) {
             messageId: messageIndex,
             initialMeta: _cloneMessagePanelData(meta),
             labels: _getMessagePanelVueLabels(),
-            config: {
-                sideplayMode: !!settings.sideplayMode,
-                showPanel: !!settings.showMessagePanel,
-            },
+            config: _getMessagePanelVueConfig(),
             adapter: {
                 save: (nextMeta) => _saveMessagePanelMetaFromVue(messageIndex, nextMeta),
                 quickScan: () => _quickScanMessagePanelMetaForVue(messageIndex),
@@ -10460,6 +10464,7 @@ function _mountVueMessagePanel(messageEl, messageIndex, meta, mesTextEl) {
             },
         });
         hostEl._horaeVueUnmount = mounted?.unmount;
+        hostEl._horaeVueUpdateConfig = mounted?.updateConfig;
         return true;
     } catch (err) {
         console.warn('[Horae] Vue 楼层面板挂载失败，回退到旧面板:', err);
@@ -11983,7 +11988,11 @@ function initSettingsEvents() {
     $('#horae-setting-show-panel').on('change', function () {
         settings.showMessagePanel = this.checked;
         saveSettings();
+        const vueConfig = _getMessagePanelVueConfig();
         document.querySelectorAll('.horae-message-panel').forEach(panel => {
+            if (panel.classList.contains('horae-message-panel-vue')) {
+                panel._horaeVueUpdateConfig?.(vueConfig);
+            }
             panel.style.display = this.checked ? '' : 'none';
         });
     });
@@ -12890,7 +12899,12 @@ function initSettingsEvents() {
     $('#horae-setting-sideplay-mode').on('change', function () {
         settings.sideplayMode = this.checked;
         saveSettings();
+        const vueConfig = _getMessagePanelVueConfig();
         document.querySelectorAll('.horae-message-panel').forEach(p => {
+            if (p.classList.contains('horae-message-panel-vue')) {
+                p._horaeVueUpdateConfig?.(vueConfig);
+                return;
+            }
             const btn = p.querySelector('.horae-btn-sideplay');
             if (btn) btn.style.display = settings.sideplayMode ? '' : 'none';
         });
