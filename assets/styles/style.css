@@ -4,6 +4,8 @@
  */
 
 /* === 变量定义 === */
+@import url('../../dist/messagePanel.css?v=1.13.10B');
+
 #horae_drawer,
 .horae-message-panel,
 .horae-modal,
@@ -17,14 +19,14 @@
     --horae-warning: #f59e0b;
     --horae-danger: #ef4444;
     --horae-info: #3b82f6;
-    
+
     --horae-bg: #1e1e28;
     --horae-bg-secondary: #2d2d3c;
     --horae-bg-hover: #3c3c50;
     --horae-border: rgba(255, 255, 255, 0.1);
     --horae-text: #e5e5e5;
     --horae-text-muted: #a0a0a0;
-    
+
     --horae-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     --horae-radius: 8px;
     --horae-radius-sm: 4px;
@@ -530,7 +532,7 @@
     color: var(--horae-text);
 }
 
-.horae-agenda-header > span {
+.horae-agenda-header>span {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -894,9 +896,17 @@
     transition: all 0.15s ease;
 }
 
-.horae-summary-edit-btn { color: var(--horae-text-muted); }
-.horae-summary-toggle-btn { color: var(--horae-info, #2563eb); }
-.horae-summary-delete-btn { color: var(--horae-danger); }
+.horae-summary-edit-btn {
+    color: var(--horae-text-muted);
+}
+
+.horae-summary-toggle-btn {
+    color: var(--horae-info, #2563eb);
+}
+
+.horae-summary-delete-btn {
+    color: var(--horae-danger);
+}
 
 .horae-btn-inline-toggle {
     flex-shrink: 0;
@@ -1023,12 +1033,14 @@
         flex-wrap: wrap;
         row-gap: 4px;
     }
+
     .horae-timeline-time {
         flex: 1 0 calc(100% - 48px);
         display: flex;
         align-items: baseline;
         gap: 6px;
     }
+
     .horae-timeline-content {
         flex: 1 0 100%;
     }
@@ -1330,7 +1342,7 @@
     width: 100%;
 }
 
-.horae-setting-control-row > span:first-child {
+.horae-setting-control-row>span:first-child {
     flex: 0 0 auto;
     white-space: nowrap;
 }
@@ -1375,6 +1387,7 @@
 }
 
 @media screen and (max-width: 768px) {
+
     #horae-vector-api-query-rewrite-section label[data-i18n="vector.queryRewriteUrl"],
     #horae-vector-api-query-rewrite-section label[data-i18n="vector.queryRewriteKey"] {
         align-items: stretch;
@@ -1430,7 +1443,8 @@
     overflow: hidden;
     background: var(--horae-bg);
     border: 1px solid var(--horae-border);
-    order: 9999;  /* 强制底部 */
+    order: 9999;
+    /* 强制底部 */
 }
 
 .horae-panel-toggle {
@@ -1503,13 +1517,13 @@
     opacity: 0.6;
     border-left: 3px solid var(--horae-text-muted);
 }
+
 .horae-message-panel.horae-sideplay .horae-panel-toggle {
-    background: repeating-linear-gradient(
-        -45deg,
-        transparent, transparent 8px,
-        rgba(128,128,128,0.06) 8px, rgba(128,128,128,0.06) 16px
-    );
+    background: repeating-linear-gradient(-45deg,
+            transparent, transparent 8px,
+            rgba(128, 128, 128, 0.06) 8px, rgba(128, 128, 128, 0.06) 16px);
 }
+
 .horae-sideplay-badge {
     background: var(--horae-text-muted);
     color: var(--horae-bg);
@@ -1519,6 +1533,7 @@
     margin-right: 4px;
     font-weight: bold;
 }
+
 .horae-btn-sideplay {
     font-size: 14px;
 }
@@ -1972,127 +1987,127 @@
         flex-wrap: nowrap;
         overflow-x: auto;
     }
-    
+
     .horae-tab span {
         display: none;
     }
-    
+
     .horae-tab {
         min-width: 50px;
     }
-    
+
     .horae-panel-summary {
         font-size: 11px;
     }
-    
+
     /* 待办删除常显 */
     .horae-agenda-delete {
         opacity: 1;
     }
-    
+
     /* 数据按钮网格 */
     .horae-data-buttons-grid {
         grid-template-columns: repeat(2, 1fr);
         gap: 8px;
     }
-    
+
     .horae-data-btn {
         padding: 12px 8px;
         min-height: 60px;
     }
-    
+
     .horae-data-btn i {
         font-size: 18px;
     }
-    
+
     .horae-data-btn span {
         font-size: 11px;
     }
-    
+
     .horae-data-btn.primary {
         grid-column: span 2;
     }
-    
+
     .horae-time-display {
         flex-direction: column;
         gap: 4px;
     }
-    
+
     #horae-current-date {
         font-size: 24px;
     }
-    
+
     #horae-current-time {
         font-size: 16px;
     }
-    
+
     /* 物品编辑器适配 */
     .horae-item-row {
         flex-wrap: wrap;
         gap: 6px;
     }
-    
+
     .horae-item-row .horae-item-icon {
         max-width: 36px;
         min-width: 36px;
         order: 1;
     }
-    
+
     .horae-item-row .horae-item-name {
         flex: 1;
         min-width: calc(100% - 80px);
         order: 2;
     }
-    
+
     .horae-item-row .horae-delete-btn {
         order: 3;
     }
-    
+
     .horae-item-row .horae-item-holder {
         flex: 1;
         min-width: 45%;
         order: 4;
     }
-    
+
     .horae-item-row .horae-item-location {
         flex: 1;
         min-width: 45%;
         order: 5;
     }
-    
+
     .horae-item-row .horae-item-importance {
         width: 60px;
         min-width: 60px;
         order: 6;
     }
-    
+
     /* 物品描述行 */
     .horae-item-desc-row {
         padding-left: 0;
         margin-left: 0;
     }
-    
+
     /* 服装编辑器适配 */
     .horae-costume-editor .horae-editor-row {
         flex-wrap: wrap;
     }
-    
+
     .horae-costume-editor .horae-editor-row .char-input {
         max-width: 80px;
         flex: 0 0 80px;
     }
-    
+
     .horae-costume-editor .horae-editor-row input:not(.char-input) {
         flex: 1;
         min-width: calc(100% - 120px);
     }
-    
+
     /* 面板内容可滚动 */
     .horae-panel-content {
         max-height: 60vh;
         overflow-y: auto;
     }
-    
+
     /* 底部按钮固定 */
     .horae-panel-footer {
         position: sticky;
@@ -2102,12 +2117,12 @@
         margin: 0 -12px -12px;
         padding: 10px 12px;
     }
-    
+
     /* 重扫描紧凑 */
     .horae-panel-rescan {
         padding: 10px;
     }
-    
+
     .horae-rescan-buttons {
         flex-direction: column;
         gap: 6px;
@@ -2120,6 +2135,7 @@
         opacity: 0;
         transform: translateY(-10px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -2445,7 +2461,8 @@
 }
 
 .horae-edit-field-compact {
-    min-width: 0; /* 防溢出 */
+    min-width: 0;
+    /* 防溢出 */
 }
 
 .horae-edit-field-compact label {
@@ -2468,7 +2485,7 @@
         grid-template-columns: 1fr 1fr;
         gap: 6px;
     }
-    
+
     .horae-edit-field-compact input,
     .horae-edit-field-compact select {
         padding: 6px 8px;
@@ -2776,7 +2793,7 @@
     gap: 8px;
 }
 
-.horae-timeline-injection-hint > i {
+.horae-timeline-injection-hint>i {
     flex: 0 0 auto;
     margin-top: 2px;
     margin-right: 0;
@@ -2849,6 +2866,7 @@
         opacity: 0;
         transform: translateY(-10px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -3103,31 +3121,31 @@
         padding: 16px;
         box-sizing: border-box;
     }
-    
+
     .horae-modal-content {
         width: 100%;
         max-width: none;
         max-height: 85vh;
         margin: auto;
     }
-    
+
     .horae-modal-body {
         max-height: 60vh;
         overflow-y: auto;
     }
-    
+
     .horae-modal-footer {
         flex-wrap: wrap;
         gap: 6px;
     }
-    
+
     .horae-modal-footer .horae-btn {
         flex: 1 1 calc(50% - 3px);
         min-width: calc(50% - 3px);
         padding: 10px 8px;
         font-size: 13px;
     }
-    
+
     /* iOS缩放修复 */
     .horae-modal input,
     .horae-modal textarea,
@@ -3138,6 +3156,7 @@
 
 /* === PC端编辑器 === */
 @media screen and (min-width: 769px) {
+
     /* 物品编辑行 */
     .horae-item-row {
         display: flex;
@@ -3145,33 +3164,33 @@
         gap: 8px;
         flex-wrap: nowrap;
     }
-    
+
     .horae-item-row .horae-item-icon {
         width: 50px;
         min-width: 50px;
         max-width: 50px;
         flex-shrink: 0;
     }
-    
+
     .horae-item-row .horae-item-name {
         flex: 3;
         min-width: 120px;
     }
-    
+
     .horae-item-row .horae-item-holder {
         flex: 2;
         min-width: 80px;
     }
-    
+
     .horae-item-row .horae-item-location {
         flex: 2;
         min-width: 80px;
     }
-    
+
     .horae-item-row .horae-delete-btn {
         flex-shrink: 0;
     }
-    
+
     /* 编辑器行 */
     .horae-editor-row {
         display: flex;
@@ -3179,11 +3198,11 @@
         gap: 8px;
         flex-wrap: nowrap;
     }
-    
+
     .horae-editor-row input {
         min-width: 60px;
     }
-    
+
     /* 服装编辑器 */
     .horae-costume-editor .horae-editor-row .char-input {
         width: 100px;
@@ -3191,7 +3210,7 @@
         max-width: 120px;
         flex-shrink: 0;
     }
-    
+
     .horae-costume-editor .horae-editor-row input:not(.char-input) {
         flex: 1;
     }
@@ -4147,7 +4166,8 @@ body .horae-context-menu {
     min-width: 0;
 }
 
-.horae-rel-from, .horae-rel-to {
+.horae-rel-from,
+.horae-rel-to {
     font-weight: 600;
     color: var(--horae-text);
 }
@@ -4182,7 +4202,8 @@ body .horae-context-menu {
     opacity: 1;
 }
 
-.horae-rel-edit, .horae-rel-delete {
+.horae-rel-edit,
+.horae-rel-delete {
     background: none;
     border: none;
     cursor: pointer;
@@ -4192,8 +4213,13 @@ body .horae-context-menu {
     font-size: 12px;
 }
 
-.horae-rel-edit:hover { color: var(--horae-primary); }
-.horae-rel-delete:hover { color: var(--horae-danger, #ef4444); }
+.horae-rel-edit:hover {
+    color: var(--horae-primary);
+}
+
+.horae-rel-delete:hover {
+    color: var(--horae-danger, #ef4444);
+}
 
 /* 底部面板关系/情绪 */
 .horae-panel-relationships {
@@ -4337,7 +4363,8 @@ body .horae-context-menu {
     opacity: 1;
 }
 
-.horae-loc-edit, .horae-loc-delete {
+.horae-loc-edit,
+.horae-loc-delete {
     background: none;
     border: none;
     cursor: pointer;
@@ -4347,8 +4374,13 @@ body .horae-context-menu {
     font-size: 12px;
 }
 
-.horae-loc-edit:hover { color: var(--horae-primary); }
-.horae-loc-delete:hover { color: var(--horae-danger, #ef4444); }
+.horae-loc-edit:hover {
+    color: var(--horae-primary);
+}
+
+.horae-loc-delete:hover {
+    color: var(--horae-danger, #ef4444);
+}
 
 .horae-loc-desc {
     font-size: 13px;
@@ -4465,6 +4497,7 @@ body .horae-context-menu {
 
 /* 移动端关系/场景操作始终可见 */
 @media (max-width: 768px) {
+
     .horae-rel-actions,
     .horae-loc-actions {
         opacity: 1;
@@ -4572,11 +4605,12 @@ body .horae-context-menu {
 
 /* ========== 向量召回 Debug 面板 ========== */
 .horae-vector-debug-section {
-    border: 1px solid var(--horae-border, rgba(255,255,255,0.08));
+    border: 1px solid var(--horae-border, rgba(255, 255, 255, 0.08));
     border-radius: var(--horae-radius, 8px);
     padding: 8px 10px;
-    background: var(--horae-bg-secondary, rgba(255,255,255,0.02));
+    background: var(--horae-bg-secondary, rgba(255, 255, 255, 0.02));
 }
+
 .horae-vector-debug-content {
     display: flex;
     flex-direction: column;
@@ -4585,12 +4619,14 @@ body .horae-context-menu {
     font-size: 12px;
     color: var(--horae-text);
 }
+
 .horae-vector-debug-content .horae-vector-debug-section {
     padding: 6px 8px;
     border-radius: 6px;
-    background: var(--horae-bg-secondary, rgba(255,255,255,0.03));
-    border: 1px solid var(--horae-border, rgba(255,255,255,0.06));
+    background: var(--horae-bg-secondary, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--horae-border, rgba(255, 255, 255, 0.06));
 }
+
 .horae-vector-debug-meta {
     display: flex;
     gap: 12px;
@@ -4599,6 +4635,7 @@ body .horae-context-menu {
     color: var(--horae-text-secondary);
     padding: 4px 0;
 }
+
 .horae-vector-debug-title {
     font-size: 12px;
     font-weight: 600;
@@ -4606,58 +4643,70 @@ body .horae-context-menu {
     color: var(--horae-text);
     opacity: 0.85;
 }
+
 .horae-vector-debug-row {
     display: flex;
     gap: 6px;
     align-items: flex-start;
     padding: 2px 0;
     font-size: 12px;
-    border-bottom: 1px dashed var(--horae-border, rgba(255,255,255,0.05));
+    border-bottom: 1px dashed var(--horae-border, rgba(255, 255, 255, 0.05));
 }
-.horae-vector-debug-row:last-child { border-bottom: none; }
+
+.horae-vector-debug-row:last-child {
+    border-bottom: none;
+}
+
 .horae-vector-debug-key {
     flex: 0 0 96px;
     color: var(--horae-text-secondary);
     font-size: 11px;
 }
+
 .horae-vector-debug-val {
     flex: 1;
     word-break: break-word;
     white-space: pre-wrap;
 }
+
 .horae-vector-debug-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 11px;
     margin-top: 4px;
 }
+
 .horae-vector-debug-table th,
 .horae-vector-debug-table td {
     padding: 3px 6px;
-    border-bottom: 1px solid var(--horae-border, rgba(255,255,255,0.05));
+    border-bottom: 1px solid var(--horae-border, rgba(255, 255, 255, 0.05));
     text-align: left;
     vertical-align: top;
 }
+
 .horae-vector-debug-table th {
     color: var(--horae-text-secondary);
     font-weight: 500;
-    background: rgba(255,255,255,0.02);
+    background: rgba(255, 255, 255, 0.02);
 }
+
 .horae-vector-debug-table td:nth-child(1),
 .horae-vector-debug-table td:nth-child(2),
 .horae-vector-debug-table td:nth-child(3) {
     white-space: nowrap;
 }
+
 .horae-vector-debug-table tr.horae-vector-debug-dropped {
     opacity: 0.55;
 }
+
 .horae-vector-debug-pre {
     max-height: 220px;
     overflow: auto;
     font-size: 11px;
     line-height: 1.5;
-    background: rgba(0,0,0,0.18);
-    border: 1px solid var(--horae-border, rgba(255,255,255,0.06));
+    background: rgba(0, 0, 0, 0.18);
+    border: 1px solid var(--horae-border, rgba(255, 255, 255, 0.06));
     border-radius: 6px;
     padding: 6px 8px;
     white-space: pre-wrap;
@@ -4677,13 +4726,15 @@ body .horae-context-menu {
     color: var(--horae-text);
     padding: 8px 10px;
     margin-bottom: 8px;
-    background: var(--horae-bg-secondary, rgba(255,255,255,0.03));
-    border: 1px solid var(--horae-border, rgba(255,255,255,0.06));
+    background: var(--horae-bg-secondary, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--horae-border, rgba(255, 255, 255, 0.06));
     border-radius: var(--horae-radius, 8px);
 }
-.horae-rpg-section-head > span:first-child {
+
+.horae-rpg-section-head>span:first-child {
     flex: 1;
 }
+
 .horae-rpg-btn-sm {
     display: inline-flex;
     align-items: center;
@@ -4691,29 +4742,37 @@ body .horae-context-menu {
     gap: 4px;
     font-size: 11px;
     padding: 4px 10px;
-    border: 1px solid var(--horae-border, rgba(255,255,255,0.08));
+    border: 1px solid var(--horae-border, rgba(255, 255, 255, 0.08));
     border-radius: 6px;
-    background: var(--horae-bg-secondary, rgba(255,255,255,0.04));
+    background: var(--horae-bg-secondary, rgba(255, 255, 255, 0.04));
     color: var(--horae-text-muted);
     cursor: pointer;
     transition: all 0.2s ease;
     background-image: none !important;
 }
+
 .horae-rpg-btn-sm:hover {
     background: rgba(124, 58, 237, 0.12);
     border-color: var(--horae-primary, #7c3aed);
     color: var(--horae-text);
 }
-.horae-rpg-btn-muted { opacity: 0.6; }
+
+.horae-rpg-btn-muted {
+    opacity: 0.6;
+}
 
 /* 属性条配置 */
-.horae-rpg-config-section { margin-bottom: 12px; }
+.horae-rpg-config-section {
+    margin-bottom: 12px;
+}
+
 .horae-rpg-config-row {
     display: flex;
     align-items: center;
     gap: 6px;
     padding: 3px 0;
 }
+
 .horae-rpg-cur-emoji {
     width: 36px;
     min-width: 36px;
@@ -4722,6 +4781,7 @@ body .horae-context-menu {
     font-size: 16px;
     padding: 2px;
 }
+
 .horae-rpg-config-key {
     font-size: 11px;
     font-family: monospace;
@@ -4732,6 +4792,7 @@ body .horae-context-menu {
     background: transparent;
     color: var(--horae-text-muted);
 }
+
 .horae-rpg-config-name {
     flex: 1;
     font-size: 11px;
@@ -4741,6 +4802,7 @@ body .horae-context-menu {
     background: transparent;
     color: var(--horae-text);
 }
+
 .horae-rpg-config-color {
     width: 24px;
     height: 20px;
@@ -4750,6 +4812,7 @@ body .horae-context-menu {
     cursor: pointer;
     background: transparent;
 }
+
 .horae-rpg-config-del,
 .horae-rpg-eq-slot-del,
 .horae-rpg-cur-del,
@@ -4761,13 +4824,14 @@ body .horae-context-menu {
     justify-content: center;
     font-size: 11px;
     padding: 3px 6px;
-    border: 1px solid var(--horae-border, rgba(255,255,255,0.08));
+    border: 1px solid var(--horae-border, rgba(255, 255, 255, 0.08));
     border-radius: 4px;
-    background: var(--horae-bg-secondary, rgba(255,255,255,0.04));
+    background: var(--horae-bg-secondary, rgba(255, 255, 255, 0.04));
     color: var(--horae-text-muted);
     cursor: pointer;
     transition: all 0.2s;
 }
+
 .horae-rpg-config-del:hover,
 .horae-rpg-eq-slot-del:hover,
 .horae-rpg-cur-del:hover,
@@ -4782,28 +4846,36 @@ body .horae-context-menu {
 /* 装备条目详细样式 */
 .horae-rpg-eq-item {
     padding: 4px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
-.horae-rpg-eq-item:last-child { border-bottom: none; }
+
+.horae-rpg-eq-item:last-child {
+    border-bottom: none;
+}
+
 .horae-rpg-eq-item-inactive {
     border-left: 3px solid var(--horae-warning, #f59e0b);
     padding-left: 8px;
     background: color-mix(in srgb, var(--horae-warning, #f59e0b) 10%, transparent);
 }
+
 .horae-rpg-eq-item-header {
     display: flex;
     align-items: center;
     gap: 6px;
     flex-wrap: wrap;
 }
+
 .horae-rpg-eq-item-icon {
     font-size: 1.1em;
     flex-shrink: 0;
 }
+
 .horae-rpg-eq-item-name {
     font-weight: 600;
     color: var(--horae-text, #e2e8f0);
 }
+
 .horae-rpg-eq-attr {
     display: inline-block;
     font-size: .78em;
@@ -4813,22 +4885,26 @@ body .horae-context-menu {
     color: #c4b5fd;
     white-space: nowrap;
 }
+
 .horae-rpg-eq-item-desc {
     font-size: .82em;
     color: var(--horae-text-muted, #94a3b8);
     padding: 1px 0 2px 0;
     line-height: 1.4;
 }
+
 .horae-rpg-eq-item-slot {
     font-size: .75em;
     color: var(--horae-text-muted, #94a3b8);
-    border: 1px solid var(--horae-border, rgba(255,255,255,0.08));
+    border: 1px solid var(--horae-border, rgba(255, 255, 255, 0.08));
     border-radius: 999px;
     padding: 1px 6px;
 }
+
 .horae-rpg-eq-slot-group {
     padding: 3px 0 5px 0;
 }
+
 .horae-rpg-eq-slot-label {
     font-size: .82em;
     font-weight: 600;
@@ -4836,6 +4912,7 @@ body .horae-context-menu {
     margin-bottom: 2px;
     display: block;
 }
+
 .horae-rpg-eq-slot-desc {
     display: inline-block;
     margin-left: 6px;
@@ -4847,12 +4924,14 @@ body .horae-context-menu {
     white-space: nowrap;
     vertical-align: bottom;
 }
+
 .horae-rpg-eq-form-select {
     max-width: 140px;
     min-height: 24px;
     font-size: 12px;
     padding: 2px 6px;
 }
+
 .horae-rpg-eq-form-badge,
 .horae-rpg-eq-inactive-badge {
     display: inline-flex;
@@ -4862,41 +4941,49 @@ body .horae-context-menu {
     padding: 1px 7px;
     font-size: .75em;
     line-height: 1.5;
-    border: 1px solid var(--horae-border, rgba(255,255,255,0.08));
+    border: 1px solid var(--horae-border, rgba(255, 255, 255, 0.08));
 }
+
 .horae-rpg-eq-form-badge {
     color: var(--horae-text-muted, #94a3b8);
-    background: var(--horae-bg-secondary, rgba(255,255,255,0.05));
+    background: var(--horae-bg-secondary, rgba(255, 255, 255, 0.05));
 }
+
 .horae-rpg-eq-inactive-badge,
 .horae-rpg-eq-inactive-title {
     color: var(--horae-warning, #f59e0b);
 }
+
 .horae-rpg-eq-inactive-badge {
     border-color: color-mix(in srgb, var(--horae-warning, #f59e0b) 55%, transparent);
     background: color-mix(in srgb, var(--horae-warning, #f59e0b) 14%, transparent);
 }
+
 .horae-rpg-eq-inactive-group {
     margin-top: 8px;
     padding-top: 6px;
     border-top: 1px dashed color-mix(in srgb, var(--horae-warning, #f59e0b) 45%, transparent);
 }
+
 .horae-rpg-eq-inactive-title {
     font-size: .82em;
     font-weight: 600;
     margin-bottom: 4px;
 }
+
 .horae-rpg-eq-inactive-reason {
     color: var(--horae-warning, #f59e0b);
     font-size: .78em;
     line-height: 1.35;
 }
+
 /* 物品栏装备按钮 */
 .horae-item-equip-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px; height: 28px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     border: 1px solid var(--horae-border);
     background: transparent;
@@ -4905,6 +4992,7 @@ body .horae-context-menu {
     transition: all .2s;
     flex-shrink: 0;
 }
+
 .horae-item-equip-btn:hover {
     background: rgba(167, 139, 250, 0.15);
     border-color: #a78bfa;
@@ -4914,12 +5002,13 @@ body .horae-context-menu {
 /* 角色属性卡片 */
 .horae-rpg-char-card,
 .horae-rpg-skill-group {
-    background: var(--horae-card-bg, rgba(255,255,255,0.04));
+    background: var(--horae-card-bg, rgba(255, 255, 255, 0.04));
     border: 1px solid var(--horae-border);
     border-radius: 8px;
     padding: 10px 12px;
     margin-bottom: 8px;
 }
+
 .horae-rpg-bar-card-header {
     display: flex;
     align-items: center;
@@ -4927,6 +5016,7 @@ body .horae-context-menu {
     gap: 6px;
     margin-bottom: 8px;
 }
+
 .horae-rpg-bar-card-right {
     display: flex;
     align-items: center;
@@ -4934,17 +5024,20 @@ body .horae-context-menu {
     flex-shrink: 0;
     margin-left: auto;
 }
+
 .horae-rpg-char-name {
     font-size: 13px;
     font-weight: 600;
     color: var(--horae-text);
 }
+
 .horae-rpg-bar {
     display: flex;
     align-items: center;
     gap: 8px;
     margin-bottom: 5px;
 }
+
 .horae-rpg-bar-label {
     font-size: 11px;
     font-weight: 600;
@@ -4952,18 +5045,21 @@ body .horae-context-menu {
     color: var(--horae-text-muted);
     text-align: right;
 }
+
 .horae-rpg-bar-track {
     flex: 1;
     height: 14px;
-    background: rgba(255,255,255,0.06);
+    background: rgba(255, 255, 255, 0.06);
     border-radius: 7px;
     overflow: hidden;
 }
+
 .horae-rpg-bar-fill {
     height: 100%;
     border-radius: 7px;
     transition: width 0.4s ease;
 }
+
 .horae-rpg-bar-val {
     font-size: 11px;
     min-width: 50px;
@@ -4979,6 +5075,7 @@ body .horae-context-menu {
     gap: 4px;
     margin-top: 6px;
 }
+
 .horae-rpg-status-tag {
     display: inline-flex;
     align-items: center;
@@ -5012,6 +5109,7 @@ body .horae-context-menu {
     background: rgba(239, 68, 68, 0.06);
     border: 1px solid rgba(239, 68, 68, 0.12);
 }
+
 .horae-rpg-status-item {
     display: flex;
     align-items: center;
@@ -5020,6 +5118,7 @@ body .horae-context-menu {
     color: #fca5a5;
     line-height: 1.5;
 }
+
 .horae-rpg-status-icon {
     font-size: 12px;
     width: 16px;
@@ -5029,30 +5128,37 @@ body .horae-context-menu {
 }
 
 /* 技能区 */
-.horae-rpg-skills-area { margin-top: 12px; }
+.horae-rpg-skills-area {
+    margin-top: 12px;
+}
+
 .horae-rpg-skills-empty {
     font-size: 11px;
     color: var(--horae-text-muted);
     padding: 8px 0;
     text-align: center;
 }
+
 .horae-rpg-skill-card {
     padding: 6px 10px;
     margin-bottom: 4px;
     border-radius: 6px;
-    background: rgba(255,255,255,0.03);
+    background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--horae-border);
 }
+
 .horae-rpg-skill-header {
     display: flex;
     align-items: center;
     gap: 8px;
 }
+
 .horae-rpg-skill-name {
     font-size: 12px;
     font-weight: 600;
     color: var(--horae-text);
 }
+
 .horae-rpg-skill-lv {
     font-size: 10px;
     padding: 1px 6px;
@@ -5061,12 +5167,14 @@ body .horae-context-menu {
     color: #818cf8;
     border: 1px solid rgba(99, 102, 241, 0.25);
 }
+
 .horae-rpg-skill-desc {
     font-size: 11px;
     color: var(--horae-text-muted);
     margin-top: 3px;
     line-height: 1.4;
 }
+
 .horae-rpg-skill-del {
     margin-left: auto;
     border: none;
@@ -5077,7 +5185,11 @@ body .horae-context-menu {
     opacity: 0.4;
     padding: 0 2px;
 }
-.horae-rpg-skill-del:hover { opacity: 1; color: #ef4444; }
+
+.horae-rpg-skill-del:hover {
+    opacity: 1;
+    color: #ef4444;
+}
 
 /* 技能添加表单 */
 #horae-rpg-skill-form {
@@ -5089,6 +5201,7 @@ body .horae-context-menu {
     border: 1px dashed var(--horae-border);
     border-radius: 6px;
 }
+
 #horae-rpg-skill-form select,
 #horae-rpg-skill-form input {
     font-size: 11px;
@@ -5100,7 +5213,11 @@ body .horae-context-menu {
     flex: 1;
     min-width: 80px;
 }
-#horae-rpg-skill-form select { min-width: 120px; }
+
+#horae-rpg-skill-form select {
+    min-width: 120px;
+}
+
 .horae-rpg-form-actions {
     display: flex;
     gap: 4px;
@@ -5114,20 +5231,23 @@ body .horae-context-menu {
     margin: 4px 0 2px;
     border-radius: 6px;
     background: var(--horae-rpg-bg, rgba(0, 0, 0, 0.15));
-    border: 1px solid var(--horae-border, rgba(255,255,255,0.1));
+    border: 1px solid var(--horae-border, rgba(255, 255, 255, 0.1));
     color: var(--horae-text, #e2e8f0);
     font-family: inherit;
     box-sizing: border-box;
 }
+
 .horae-rpg-hud-row {
     display: flex;
     flex-direction: column;
     gap: 2px;
     padding: 4px 0;
 }
-.horae-rpg-hud-row + .horae-rpg-hud-row {
-    border-top: 1px solid rgba(255,255,255,0.04);
+
+.horae-rpg-hud-row+.horae-rpg-hud-row {
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
 }
+
 .horae-rpg-hud-name {
     font-size: 11px;
     font-weight: 600;
@@ -5136,16 +5256,19 @@ body .horae-context-menu {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
 .horae-rpg-hud-effect {
     font-size: 9px;
     color: #f87171;
     margin-left: 2px;
 }
+
 .horae-rpg-hud-bars {
     display: flex;
     flex-direction: column;
     gap: 2px;
 }
+
 .horae-rpg-hud-bar {
     display: flex;
     align-items: center;
@@ -5153,24 +5276,28 @@ body .horae-context-menu {
     flex: 1;
     min-width: 80px;
 }
+
 .horae-rpg-hud-lbl {
     font-size: 9px;
     font-weight: 600;
     color: var(--horae-text-muted, #94a3b8);
     min-width: 18px;
 }
+
 .horae-rpg-hud-track {
     flex: 1;
     height: 6px;
-    background: rgba(255,255,255,0.06);
+    background: rgba(255, 255, 255, 0.06);
     border-radius: 3px;
     overflow: hidden;
 }
+
 .horae-rpg-hud-fill {
     height: 100%;
     border-radius: 3px;
     transition: width 0.3s;
 }
+
 .horae-rpg-hud-val {
     font-size: 9px;
     color: var(--horae-text-muted, #94a3b8);
@@ -5178,6 +5305,7 @@ body .horae-context-menu {
     text-align: right;
     font-variant-numeric: tabular-nums;
 }
+
 .horae-rpg-hud-header {
     display: flex;
     align-items: center;
@@ -5185,6 +5313,7 @@ body .horae-context-menu {
     gap: 6px;
     margin-bottom: 2px;
 }
+
 .horae-rpg-hud-right {
     display: flex;
     align-items: center;
@@ -5192,6 +5321,7 @@ body .horae-context-menu {
     flex-shrink: 0;
     margin-left: auto;
 }
+
 .horae-rpg-hud-lv-badge {
     font-size: 10px;
     font-weight: 700;
@@ -5201,14 +5331,17 @@ body .horae-context-menu {
     border-radius: 8px;
     white-space: nowrap;
 }
+
 .horae-rpg-hud-cur-tag {
     font-size: 10px;
     color: var(--horae-text, #e2e8f0);
     white-space: nowrap;
 }
+
 .horae-rpg-bar-card-right .horae-rpg-hud-cur-tag {
     font-size: 11px;
 }
+
 .horae-rpg-hud-xp {
     min-width: 80px;
 }
@@ -5216,30 +5349,38 @@ body .horae-context-menu {
 /* 等级配置面板 */
 .horae-rpg-lv-entry {
     padding: 6px 0;
-    border-bottom: 1px solid var(--horae-border, rgba(255,255,255,0.06));
+    border-bottom: 1px solid var(--horae-border, rgba(255, 255, 255, 0.06));
 }
-.horae-rpg-lv-entry:last-child { border-bottom: none; }
+
+.horae-rpg-lv-entry:last-child {
+    border-bottom: none;
+}
+
 .horae-rpg-lv-entry-header {
     display: flex;
     align-items: center;
     gap: 8px;
 }
+
 .horae-rpg-lv-entry-name {
     font-size: 12px;
     font-weight: 600;
     color: var(--horae-text);
     flex: 1;
 }
+
 .horae-rpg-lv-xp-row {
     display: flex;
     align-items: center;
     gap: 8px;
     margin-top: 4px;
 }
+
 .horae-rpg-lv-xp-row .horae-rpg-bar-track {
     flex: 1;
     height: 6px;
 }
+
 .horae-rpg-lv-xp-label {
     font-size: 10px;
     color: var(--horae-text-muted);
@@ -5250,11 +5391,12 @@ body .horae-context-menu {
 
 /* ========== RPG 角色卡折叠（details/summary） ========== */
 .horae-rpg-char-detail {
-    border: 1px solid var(--horae-border, rgba(255,255,255,0.1));
+    border: 1px solid var(--horae-border, rgba(255, 255, 255, 0.1));
     border-radius: 6px;
     margin-bottom: 6px;
     overflow: hidden;
 }
+
 .horae-rpg-char-summary {
     display: flex;
     align-items: center;
@@ -5268,7 +5410,11 @@ body .horae-context-menu {
     user-select: none;
     list-style: none;
 }
-.horae-rpg-char-summary::-webkit-details-marker { display: none; }
+
+.horae-rpg-char-summary::-webkit-details-marker {
+    display: none;
+}
+
 .horae-rpg-char-summary::before {
     content: '\f054';
     font-family: 'Font Awesome 6 Free';
@@ -5277,18 +5423,24 @@ body .horae-context-menu {
     transition: transform 0.2s;
     color: var(--horae-text-muted, #94a3b8);
 }
-.horae-rpg-char-detail[open] > .horae-rpg-char-summary::before {
+
+.horae-rpg-char-detail[open]>.horae-rpg-char-summary::before {
     transform: rotate(90deg);
 }
-.horae-rpg-char-detail-name { flex: 1; }
+
+.horae-rpg-char-detail-name {
+    flex: 1;
+}
+
 .horae-rpg-char-prof {
     font-size: 11px;
     font-weight: 400;
     color: var(--horae-text-muted, #94a3b8);
-    background: rgba(255,255,255,0.05);
+    background: rgba(255, 255, 255, 0.05);
     padding: 1px 6px;
     border-radius: 3px;
 }
+
 .horae-rpg-char-detail-body {
     padding: 10px 12px;
 }
@@ -5306,33 +5458,41 @@ body .horae-context-menu {
 .horae-rpg-char-block {
     margin-bottom: 8px;
 }
+
 .horae-rpg-char-block .horae-rpg-char-detail {
     margin-top: -1px;
     border-top: none;
     border-top-left-radius: 0;
     border-top-right-radius: 0;
 }
+
 .horae-rpg-char-block .horae-rpg-bar-card {
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
     margin-bottom: 0;
 }
+
 .horae-rpg-offscene {
     opacity: 0.7;
 }
+
 .horae-rpg-offscene .horae-rpg-char-detail {
     border-radius: 6px;
 }
 
 /* ========== RPG 角色卡分页标签 ========== */
-.horae-rpg-card-tabs { width: 100%; }
+.horae-rpg-card-tabs {
+    width: 100%;
+}
+
 .horae-rpg-card-tab-bar {
     display: flex;
     gap: 2px;
-    border-bottom: 1px solid var(--horae-border, rgba(255,255,255,0.1));
+    border-bottom: 1px solid var(--horae-border, rgba(255, 255, 255, 0.1));
     margin-bottom: 8px;
     flex-wrap: wrap;
 }
+
 .horae-rpg-card-tab-btn {
     padding: 4px 10px;
     font-size: 11px;
@@ -5344,13 +5504,23 @@ body .horae-context-menu {
     border-bottom: 2px solid transparent;
     transition: color 0.15s, border-color 0.15s;
 }
-.horae-rpg-card-tab-btn:hover { color: var(--horae-text, #e2e8f0); }
+
+.horae-rpg-card-tab-btn:hover {
+    color: var(--horae-text, #e2e8f0);
+}
+
 .horae-rpg-card-tab-btn.active {
     color: var(--horae-accent, #6366f1);
     border-bottom-color: var(--horae-accent, #6366f1);
 }
-.horae-rpg-card-tab-panel { display: none; }
-.horae-rpg-card-tab-panel.active { display: block; }
+
+.horae-rpg-card-tab-panel {
+    display: none;
+}
+
+.horae-rpg-card-tab-panel.active {
+    display: block;
+}
 
 /* 等级徽章 */
 .horae-rpg-lv-badge {
@@ -5364,21 +5534,27 @@ body .horae-context-menu {
 }
 
 /* 角色卡内装备 */
-.horae-rpg-card-eq { font-size: 12px; }
+.horae-rpg-card-eq {
+    font-size: 12px;
+}
+
 .horae-rpg-card-eq-item {
     padding: 3px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
+
 .horae-rpg-card-eq-item-inactive {
     border-left: 3px solid var(--horae-warning, #f59e0b);
     padding-left: 7px;
     background: color-mix(in srgb, var(--horae-warning, #f59e0b) 9%, transparent);
 }
+
 .horae-rpg-card-eq-slot {
     color: var(--horae-accent, #6366f1);
     font-weight: 600;
     margin-right: 4px;
 }
+
 .horae-rpg-card-eq-attrs {
     font-size: 11px;
     color: var(--horae-text-muted, #94a3b8);
@@ -5391,16 +5567,20 @@ body .horae-context-menu {
     gap: 4px 12px;
     font-size: 12px;
 }
+
 .horae-rpg-card-rep-row {
     display: flex;
     justify-content: space-between;
     padding: 2px 6px;
     border-radius: 3px;
-    background: rgba(255,255,255,0.03);
+    background: rgba(255, 255, 255, 0.03);
 }
 
 /* 角色卡内等级 */
-.horae-rpg-card-lvl { font-size: 12px; }
+.horae-rpg-card-lvl {
+    font-size: 12px;
+}
+
 .horae-rpg-card-lvl-val {
     font-size: 18px;
     font-weight: 700;
@@ -5409,8 +5589,17 @@ body .horae-context-menu {
     -webkit-text-fill-color: transparent;
     margin-bottom: 6px;
 }
-.horae-rpg-card-xp { display: flex; flex-direction: column; gap: 4px; }
-.horae-rpg-card-xp span { font-size: 11px; color: var(--horae-text-muted, #94a3b8); }
+
+.horae-rpg-card-xp {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.horae-rpg-card-xp span {
+    font-size: 11px;
+    color: var(--horae-text-muted, #94a3b8);
+}
 
 /* 角色卡内货币 */
 .horae-rpg-card-cur {
@@ -5419,12 +5608,13 @@ body .horae-context-menu {
     gap: 4px 12px;
     font-size: 12px;
 }
+
 .horae-rpg-card-cur-row {
     display: flex;
     justify-content: space-between;
     padding: 2px 6px;
     border-radius: 3px;
-    background: rgba(255,255,255,0.03);
+    background: rgba(255, 255, 255, 0.03);
 }
 
 /* ========== RPG 属性面板文字模式 ========== */
@@ -5435,26 +5625,35 @@ body .horae-context-menu {
     font-size: 12px;
     margin-bottom: 8px;
 }
+
 .horae-rpg-attr-row {
     display: flex;
     justify-content: space-between;
     padding: 2px 6px;
     border-radius: 3px;
-    background: rgba(255,255,255,0.03);
+    background: rgba(255, 255, 255, 0.03);
 }
+
 .horae-rpg-attr-row span:last-child {
     font-weight: 600;
     color: var(--horae-primary-light, #a78bfa);
 }
-.horae-rpg-attr-section { margin-bottom: 8px; }
+
+.horae-rpg-attr-section {
+    margin-bottom: 8px;
+}
 
 /* ========== RPG 角色卡内技能折叠 ========== */
-.horae-rpg-card-skills { margin-top: 6px; }
+.horae-rpg-card-skills {
+    margin-top: 6px;
+}
+
 .horae-rpg-skill-detail {
-    border: 1px solid var(--horae-border, rgba(255,255,255,0.06));
+    border: 1px solid var(--horae-border, rgba(255, 255, 255, 0.06));
     border-radius: 4px;
     margin-bottom: 3px;
 }
+
 .horae-rpg-skill-summary {
     display: flex;
     align-items: center;
@@ -5465,14 +5664,22 @@ body .horae-context-menu {
     color: var(--horae-text, #e2e8f0);
     list-style: none;
 }
-.horae-rpg-skill-summary::-webkit-details-marker { display: none; }
+
+.horae-rpg-skill-summary::-webkit-details-marker {
+    display: none;
+}
+
 .horae-rpg-skill-summary .horae-rpg-skill-del {
     margin-left: auto;
     opacity: 0;
     transition: opacity 0.15s;
 }
-.horae-rpg-skill-detail:hover .horae-rpg-skill-del { opacity: 1; }
-.horae-rpg-skill-detail > .horae-rpg-skill-desc {
+
+.horae-rpg-skill-detail:hover .horae-rpg-skill-del {
+    opacity: 1;
+}
+
+.horae-rpg-skill-detail>.horae-rpg-skill-desc {
     padding: 4px 8px 6px;
     font-size: 11px;
     color: var(--horae-text-muted, #94a3b8);
@@ -5483,12 +5690,13 @@ body .horae-context-menu {
     flex: 1;
     font-size: 11px;
     padding: 2px 4px;
-    border: 1px solid var(--horae-border, rgba(255,255,255,0.1));
+    border: 1px solid var(--horae-border, rgba(255, 255, 255, 0.1));
     border-radius: 4px;
     background: transparent;
     color: var(--horae-text-muted, #94a3b8);
     min-width: 60px;
 }
+
 .horae-rpg-attr-del {
     background: none;
     border: none;
@@ -5499,40 +5707,50 @@ body .horae-context-menu {
     opacity: 0.5;
     transition: opacity 0.15s;
 }
-.horae-rpg-attr-del:hover { opacity: 1; }
+
+.horae-rpg-attr-del:hover {
+    opacity: 1;
+}
 
 /* ========== RPG 角色属性编辑表单 ========== */
-.horae-rpg-manual-section { margin-top: 6px; }
+.horae-rpg-manual-section {
+    margin-top: 6px;
+}
+
 .horae-rpg-charattr-row {
     display: flex;
     align-items: center;
     gap: 8px;
     margin-bottom: 4px;
 }
+
 .horae-rpg-charattr-row label {
     font-size: 11px;
     color: var(--horae-text-muted, #94a3b8);
     min-width: 80px;
     flex-shrink: 0;
 }
+
 .horae-rpg-charattr-val {
     flex: 1;
     padding: 3px 6px;
     font-size: 12px;
-    border: 1px solid var(--horae-border, rgba(255,255,255,0.1));
+    border: 1px solid var(--horae-border, rgba(255, 255, 255, 0.1));
     border-radius: 4px;
     background: transparent;
     color: var(--horae-text, #e2e8f0);
     max-width: 80px;
 }
+
 .horae-rpg-form-title {
     font-size: 12px;
     font-weight: 600;
     color: var(--horae-text, #e2e8f0);
     margin-bottom: 6px;
     padding-bottom: 4px;
-    border-bottom: 1px solid var(--horae-border, rgba(255,255,255,0.08));
+    border-bottom: 1px solid var(--horae-border, rgba(255, 255, 255, 0.08));
 }
+
 .horae-rpg-attr-header {
     display: flex;
     align-items: center;
@@ -5541,6 +5759,7 @@ body .horae-context-menu {
     font-size: 11px;
     color: var(--horae-text-muted, #94a3b8);
 }
+
 .horae-rpg-charattr-edit {
     background: none;
     border: none;
@@ -5551,16 +5770,21 @@ body .horae-context-menu {
     opacity: 0.6;
     transition: opacity 0.15s;
 }
-.horae-rpg-charattr-edit:hover { opacity: 1; }
+
+.horae-rpg-charattr-edit:hover {
+    opacity: 1;
+}
+
 #horae-rpg-charattr-form {
     padding: 8px 0;
 }
+
 #horae-rpg-charattr-form select {
     width: 100%;
     margin-bottom: 8px;
     padding: 4px 6px;
     font-size: 12px;
-    border: 1px solid var(--horae-border, rgba(255,255,255,0.1));
+    border: 1px solid var(--horae-border, rgba(255, 255, 255, 0.1));
     border-radius: 4px;
     background: var(--horae-bg-secondary, #1e1e2e);
     color: var(--horae-text, #e2e8f0);
@@ -5578,8 +5802,15 @@ body .horae-context-menu {
 }
 
 @keyframes horaeTutorialFadeIn {
-    from { opacity: 0; transform: translateY(-8px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .horae-tutorial-card-head {
@@ -5712,6 +5943,7 @@ body .horae-context-menu {
     background: var(--horae-bg);
     border: 1px solid var(--horae-border);
 }
+
 .htd-header {
     padding: 12px 16px;
     font-size: 15px;
@@ -5723,17 +5955,20 @@ body .horae-context-menu {
     align-items: center;
     gap: 8px;
 }
+
 .htd-body {
     flex: 1;
     overflow-y: auto;
     padding: 12px;
 }
+
 .htd-section {
     margin-bottom: 12px;
     background: var(--horae-bg-secondary);
     border-radius: var(--horae-radius);
     padding: 12px;
 }
+
 .htd-section-title {
     font-size: 13px;
     font-weight: 600;
@@ -5743,41 +5978,59 @@ body .horae-context-menu {
     align-items: center;
     gap: 6px;
 }
-.htd-toggle { cursor: pointer; user-select: none; }
-.htd-toggle:hover { color: var(--horae-text); }
+
+.htd-toggle {
+    cursor: pointer;
+    user-select: none;
+}
+
+.htd-toggle:hover {
+    color: var(--horae-text);
+}
+
 .htd-toggle .htd-arrow {
     margin-left: auto;
     font-size: 10px;
     transition: transform 0.2s;
     color: var(--horae-text-muted);
 }
-.htd-field { margin-bottom: 10px; }
-.htd-field:last-child { margin-bottom: 0; }
+
+.htd-field {
+    margin-bottom: 10px;
+}
+
+.htd-field:last-child {
+    margin-bottom: 0;
+}
+
 .htd-label {
     font-size: 12px;
     color: var(--horae-text-muted);
     display: block;
     margin-bottom: 4px;
 }
+
 .htd-label em {
     color: var(--horae-primary-light);
     font-style: normal;
     font-weight: 600;
 }
+
 .htd-hue-bar {
     width: 100%;
     height: 26px;
     border-radius: 13px;
     background: linear-gradient(to right,
-        hsl(0,100%,50%), hsl(30,100%,50%), hsl(60,100%,50%), hsl(90,100%,50%),
-        hsl(120,100%,50%), hsl(150,100%,50%), hsl(180,100%,50%), hsl(210,100%,50%),
-        hsl(240,100%,50%), hsl(270,100%,50%), hsl(300,100%,50%), hsl(330,100%,50%),
-        hsl(360,100%,50%));
+            hsl(0, 100%, 50%), hsl(30, 100%, 50%), hsl(60, 100%, 50%), hsl(90, 100%, 50%),
+            hsl(120, 100%, 50%), hsl(150, 100%, 50%), hsl(180, 100%, 50%), hsl(210, 100%, 50%),
+            hsl(240, 100%, 50%), hsl(270, 100%, 50%), hsl(300, 100%, 50%), hsl(330, 100%, 50%),
+            hsl(360, 100%, 50%));
     cursor: crosshair;
     position: relative;
     border: 2px solid var(--horae-border);
     touch-action: none;
 }
+
 .htd-hue-ind {
     position: absolute;
     top: -3px;
@@ -5787,8 +6040,9 @@ body .horae-context-menu {
     border-radius: 5px;
     transform: translateX(-50%);
     pointer-events: none;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(0,0,0,0.2);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(0, 0, 0, 0.2);
 }
+
 .htd-slider {
     -webkit-appearance: none;
     appearance: none;
@@ -5800,6 +6054,7 @@ body .horae-context-menu {
     cursor: pointer;
     border: none !important;
 }
+
 .htd-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     width: 18px;
@@ -5808,8 +6063,9 @@ body .horae-context-menu {
     background: var(--horae-primary);
     border: 2px solid #fff;
     cursor: pointer;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
+
 .htd-slider::-moz-range-thumb {
     width: 18px;
     height: 18px;
@@ -5818,13 +6074,21 @@ body .horae-context-menu {
     border: 2px solid #fff;
     cursor: pointer;
 }
+
 .htd-colorlight {
     background: linear-gradient(to right, #1a1a2e, var(--horae-primary, #7c3aed), #e8d8ff) !important;
 }
+
 .htd-daynight {
     background: linear-gradient(to right, #0c0c18 0%, #1a1a2e 30%, #e8e8ec 70%, #fafafa 100%) !important;
 }
-.htd-color-row { display: flex; align-items: center; gap: 8px; }
+
+.htd-color-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .htd-cpick {
     width: 36px;
     height: 28px;
@@ -5834,11 +6098,13 @@ body .horae-context-menu {
     padding: 0;
     background: transparent;
 }
+
 .htd-hex {
     font-size: 12px;
     color: var(--horae-text-muted);
     font-family: monospace;
 }
+
 .htd-swatches {
     display: flex;
     gap: 4px;
@@ -5847,15 +6113,21 @@ body .horae-context-menu {
     padding-top: 8px;
     border-top: 1px solid var(--horae-border);
 }
+
 .htd-swatch {
     width: 26px;
     height: 26px;
     border-radius: 5px;
-    border: 2px solid rgba(128,128,128,0.25);
+    border: 2px solid rgba(128, 128, 128, 0.25);
     cursor: help;
     transition: transform 0.1s;
 }
-.htd-swatch:hover { transform: scale(1.2); z-index: 1; }
+
+.htd-swatch:hover {
+    transform: scale(1.2);
+    z-index: 1;
+}
+
 .htd-fine-row {
     display: flex;
     align-items: center;
@@ -5864,7 +6136,13 @@ body .horae-context-menu {
     font-size: 12px;
     color: var(--horae-text);
 }
-.htd-fine-row > span:first-child { flex: 1; min-width: 55px; font-size: 11px; }
+
+.htd-fine-row>span:first-child {
+    flex: 1;
+    min-width: 55px;
+    font-size: 11px;
+}
+
 .htd-fine-cpick {
     width: 30px;
     height: 22px;
@@ -5875,20 +6153,30 @@ body .horae-context-menu {
     background: transparent;
     flex-shrink: 0;
 }
+
 .htd-fine-hex {
     font-size: 11px;
     font-family: monospace;
     color: var(--horae-text-muted);
     min-width: 62px;
 }
-.htd-img-group { padding: 8px 0; border-bottom: 1px solid var(--horae-border); }
-.htd-img-group:last-child { border-bottom: none; }
+
+.htd-img-group {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--horae-border);
+}
+
+.htd-img-group:last-child {
+    border-bottom: none;
+}
+
 .htd-img-label {
     font-size: 12px;
     font-weight: 600;
     color: var(--horae-text);
     margin-bottom: 4px;
 }
+
 .htd-img-ctrl {
     display: flex;
     align-items: center;
@@ -5897,8 +6185,16 @@ body .horae-context-menu {
     color: var(--horae-text-muted);
     margin-top: 6px;
 }
-.htd-img-ctrl em { color: var(--horae-primary-light); font-style: normal; }
-.htd-img-ctrl .htd-slider { flex: 1; }
+
+.htd-img-ctrl em {
+    color: var(--horae-primary-light);
+    font-style: normal;
+}
+
+.htd-img-ctrl .htd-slider {
+    flex: 1;
+}
+
 .htd-img-preview {
     max-width: 100%;
     max-height: 60px;
@@ -5907,6 +6203,7 @@ body .horae-context-menu {
     border: 1px solid var(--horae-border);
     object-fit: cover;
 }
+
 .htd-input {
     width: 100%;
     padding: 6px 8px;
@@ -5917,28 +6214,48 @@ body .horae-context-menu {
     border-radius: var(--horae-radius-sm);
     box-sizing: border-box;
 }
-.htd-input:focus { border-color: var(--horae-primary) !important; outline: none; }
-.htd-save-sec { background: transparent; padding: 0; }
+
+.htd-input:focus {
+    border-color: var(--horae-primary) !important;
+    outline: none;
+}
+
+.htd-save-sec {
+    background: transparent;
+    padding: 0;
+}
+
 .htd-btn-row {
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
     margin-top: 10px;
 }
+
 .htd-btn-row .horae-btn {
     flex: 1;
     min-width: 70px;
     font-size: 12px;
     padding: 6px 10px;
 }
+
 @media (max-width: 600px) {
     .horae-theme-designer .htd-content {
         max-width: 100vw;
         max-height: 95vh;
         border-radius: 0;
     }
-    .htd-swatch { width: 22px; height: 22px; }
-    .htd-btn-row .horae-btn { min-width: 60px; font-size: 11px; padding: 5px 8px; }
+
+    .htd-swatch {
+        width: 22px;
+        height: 22px;
+    }
+
+    .htd-btn-row .horae-btn {
+        min-width: 60px;
+        font-size: 11px;
+        padding: 5px 8px;
+    }
 }
 
 /* ===== RPG 骰子面板 ===== */
@@ -5953,11 +6270,13 @@ body .horae-context-menu {
     user-select: none;
     -webkit-user-select: none;
 }
+
 .horae-rpg-dice-panel.horae-dice-placed {
     transform: none;
     right: auto !important;
     bottom: auto !important;
 }
+
 .horae-rpg-dice-toggle {
     width: 42px;
     height: 42px;
@@ -5971,10 +6290,18 @@ body .horae-context-menu {
     cursor: grab;
     font-size: 18px;
     transition: background 0.2s, box-shadow 0.2s;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
-.horae-rpg-dice-toggle:active { cursor: grabbing; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
-.horae-rpg-dice-toggle:hover { background: var(--horae-card-bg, #252540); }
+
+.horae-rpg-dice-toggle:active {
+    cursor: grabbing;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.horae-rpg-dice-toggle:hover {
+    background: var(--horae-card-bg, #252540);
+}
+
 .horae-rpg-dice-body {
     position: absolute;
     bottom: 50px;
@@ -5984,19 +6311,22 @@ body .horae-context-menu {
     border: 1px solid var(--horae-border, #333);
     border-radius: 10px;
     padding: 10px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
+
 /* 面板靠近顶部时弹出方向翻转到下方 */
 .horae-rpg-dice-panel.horae-dice-flip-down .horae-rpg-dice-body {
     bottom: auto;
     top: 50px;
 }
+
 .horae-rpg-dice-types {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
     margin-bottom: 8px;
 }
+
 .horae-rpg-dice-btn {
     flex: 1 1 auto;
     min-width: 42px;
@@ -6011,17 +6341,23 @@ body .horae-context-menu {
     transition: all 0.15s;
     text-align: center;
 }
-.horae-rpg-dice-btn:hover { border-color: var(--horae-accent, #6366f1); }
+
+.horae-rpg-dice-btn:hover {
+    border-color: var(--horae-accent, #6366f1);
+}
+
 .horae-rpg-dice-btn.active {
     background: var(--horae-accent, #6366f1);
     color: #fff;
     border-color: var(--horae-accent, #6366f1);
 }
+
 .horae-rpg-dice-config {
     display: flex;
     gap: 8px;
     margin-bottom: 8px;
 }
+
 .horae-rpg-dice-config label {
     font-size: 11px;
     color: var(--horae-text-dim, #888);
@@ -6029,6 +6365,7 @@ body .horae-context-menu {
     align-items: center;
     gap: 4px;
 }
+
 .horae-rpg-dice-input {
     width: 48px;
     padding: 3px 5px;
@@ -6039,6 +6376,7 @@ body .horae-context-menu {
     font-size: 12px;
     text-align: center;
 }
+
 .horae-rpg-dice-result {
     min-height: 28px;
     padding: 6px 8px;
@@ -6051,6 +6389,7 @@ body .horae-context-menu {
     margin-bottom: 6px;
     word-break: break-all;
 }
+
 .horae-rpg-dice-inject {
     width: 100%;
     padding: 6px;
@@ -6063,32 +6402,70 @@ body .horae-context-menu {
     font-weight: 600;
     transition: opacity 0.15s;
 }
-.horae-rpg-dice-inject:hover { opacity: 0.85; }
+
+.horae-rpg-dice-inject:hover {
+    opacity: 0.85;
+}
+
 @media screen and (max-width: 768px) {
-    .horae-rpg-dice-body { width: 220px; }
+    .horae-rpg-dice-body {
+        width: 220px;
+    }
 }
 
 /* ========== 平板适配（769px ~ 1024px） ========== */
 @media screen and (min-width: 769px) and (max-width: 1024px) {
+
     /* 标签页 */
-    .horae-tab { min-width: 0; padding: 8px 6px; font-size: 11px; gap: 4px; }
-    .horae-tab i { font-size: 13px; }
-    .horae-tab span { font-size: 10px; }
+    .horae-tab {
+        min-width: 0;
+        padding: 8px 6px;
+        font-size: 11px;
+        gap: 4px;
+    }
+
+    .horae-tab i {
+        font-size: 13px;
+    }
+
+    .horae-tab span {
+        font-size: 10px;
+    }
 
     /* 设置区稍微收紧 */
-    .horae-setting-item { margin-bottom: 8px; }
-    .horae-setting-sub-hint { font-size: 10px; }
+    .horae-setting-item {
+        margin-bottom: 8px;
+    }
+
+    .horae-setting-sub-hint {
+        font-size: 10px;
+    }
 
     /* 编辑字段行 */
-    .horae-edit-field-row { grid-template-columns: 1fr 1fr 1fr; }
+    .horae-edit-field-row {
+        grid-template-columns: 1fr 1fr 1fr;
+    }
 
     /* 数据按钮网格 */
-    .horae-data-btn { padding: 14px 8px; min-height: 60px; }
-    .horae-data-btn i { font-size: 20px; }
-    .horae-data-btn span { font-size: 12px; }
+    .horae-data-btn {
+        padding: 14px 8px;
+        min-height: 60px;
+    }
+
+    .horae-data-btn i {
+        font-size: 20px;
+    }
+
+    .horae-data-btn span {
+        font-size: 12px;
+    }
 
     /* 弹窗 */
-    .horae-modal { padding: 12px; box-sizing: border-box; }
+    .horae-modal {
+        padding: 12px;
+        box-sizing: border-box;
+    }
+
     .horae-modal-content {
         width: 100% !important;
         max-width: 92vw !important;
@@ -6096,50 +6473,132 @@ body .horae-context-menu {
         margin: auto;
         box-sizing: border-box;
     }
+
     .horae-modal-body {
         max-height: 60vh;
         overflow-y: auto;
     }
+
     .horae-review-modal .horae-modal-content {
         max-width: 92vw !important;
         width: 92vw !important;
         max-height: 85vh;
     }
+
     /* 触屏输入缩放修复 */
     .horae-modal input,
     .horae-modal textarea,
-    .horae-modal select { font-size: 16px; }
-    .horae-modal-footer { flex-wrap: wrap; gap: 6px; }
-    .horae-modal-footer .horae-btn { flex: 1 1 calc(50% - 3px); min-width: calc(50% - 3px); }
+    .horae-modal select {
+        font-size: 16px;
+    }
+
+    .horae-modal-footer {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .horae-modal-footer .horae-btn {
+        flex: 1 1 calc(50% - 3px);
+        min-width: calc(50% - 3px);
+    }
 
     /* 进度弹窗 */
-    .horae-progress-container { max-width: 88vw; min-width: auto; }
+    .horae-progress-container {
+        max-width: 88vw;
+        min-width: auto;
+    }
 
     /* RPG HUD */
-    .horae-rpg-hud { padding: 4px 8px; }
-    .horae-rpg-hud-name { font-size: 10px; min-width: 60px; }
-    .horae-rpg-hud-lbl { font-size: 8px; }
-    .horae-rpg-hud-val { font-size: 8px; }
+    .horae-rpg-hud {
+        padding: 4px 8px;
+    }
+
+    .horae-rpg-hud-name {
+        font-size: 10px;
+        min-width: 60px;
+    }
+
+    .horae-rpg-hud-lbl {
+        font-size: 8px;
+    }
+
+    .horae-rpg-hud-val {
+        font-size: 8px;
+    }
 
     /* 时间线 */
-    .horae-timeline-item { flex-wrap: wrap; row-gap: 4px; }
-    .horae-timeline-summary { font-size: 12px; }
-    .horae-timeline-meta { font-size: 10px; }
+    .horae-timeline-item {
+        flex-wrap: wrap;
+        row-gap: 4px;
+    }
+
+    .horae-timeline-summary {
+        font-size: 12px;
+    }
+
+    .horae-timeline-meta {
+        font-size: 10px;
+    }
 
     /* 物品编辑器适配 */
-    .horae-item-row { flex-wrap: wrap; gap: 6px; }
-    .horae-item-row .horae-item-icon { max-width: 36px; min-width: 36px; order: 1; }
-    .horae-item-row .horae-item-name { flex: 1; min-width: calc(100% - 80px); order: 2; }
-    .horae-item-row .horae-delete-btn { order: 3; }
-    .horae-item-row .horae-item-holder { flex: 1; min-width: 45%; order: 4; }
-    .horae-item-row .horae-item-location { flex: 1; min-width: 45%; order: 5; }
-    .horae-item-row .horae-item-importance { width: 60px; min-width: 60px; order: 6; }
-    .horae-item-desc-row { padding-left: 0; margin-left: 0; }
+    .horae-item-row {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .horae-item-row .horae-item-icon {
+        max-width: 36px;
+        min-width: 36px;
+        order: 1;
+    }
+
+    .horae-item-row .horae-item-name {
+        flex: 1;
+        min-width: calc(100% - 80px);
+        order: 2;
+    }
+
+    .horae-item-row .horae-delete-btn {
+        order: 3;
+    }
+
+    .horae-item-row .horae-item-holder {
+        flex: 1;
+        min-width: 45%;
+        order: 4;
+    }
+
+    .horae-item-row .horae-item-location {
+        flex: 1;
+        min-width: 45%;
+        order: 5;
+    }
+
+    .horae-item-row .horae-item-importance {
+        width: 60px;
+        min-width: 60px;
+        order: 6;
+    }
+
+    .horae-item-desc-row {
+        padding-left: 0;
+        margin-left: 0;
+    }
 
     /* 服装编辑器适配 */
-    .horae-costume-editor .horae-editor-row { flex-wrap: wrap; }
-    .horae-costume-editor .horae-editor-row .char-input { max-width: 80px; flex: 0 0 80px; }
-    .horae-costume-editor .horae-editor-row input:not(.char-input) { flex: 1; min-width: calc(100% - 120px); }
+    .horae-costume-editor .horae-editor-row {
+        flex-wrap: wrap;
+    }
+
+    .horae-costume-editor .horae-editor-row .char-input {
+        max-width: 80px;
+        flex: 0 0 80px;
+    }
+
+    .horae-costume-editor .horae-editor-row input:not(.char-input) {
+        flex: 1;
+        min-width: calc(100% - 120px);
+    }
 
     /* 面板内容可滚动 */
     .horae-editor-row.horae-agenda-edit-row .horae-agenda-type-select,
@@ -6147,22 +6606,30 @@ body .horae-context-menu {
         flex: 1 1 calc(50% - 4px) !important;
         max-width: calc(50% - 4px);
     }
+
     .horae-editor-row.horae-agenda-edit-row input.horae-agenda-text {
         flex: 1 1 100%;
     }
-    .horae-panel-content { max-height: 60vh; overflow-y: auto; }
+
+    .horae-panel-content {
+        max-height: 60vh;
+        overflow-y: auto;
+    }
 
     /* 物品/NPC/关系/待办行操作按钮常显（触屏无 hover） */
     .horae-rel-actions,
     .horae-loc-actions,
     .horae-agenda-delete,
-    .horae-item-lock-btn { opacity: 1; }
+    .horae-item-lock-btn {
+        opacity: 1;
+    }
 
     /* 提示词预设按钮区手机端自动换行 */
     .horae-prompt-presets-actions {
         flex-wrap: wrap;
         row-gap: 6px;
     }
+
     .horae-prompt-presets-actions .horae-prompt-presets-sep {
         display: none;
     }
@@ -6175,10 +6642,11 @@ body .horae-context-menu {
     gap: 6px;
     padding: 8px 10px;
     margin-bottom: 10px;
-    background: rgba(255,255,255,.03);
+    background: rgba(255, 255, 255, .03);
     border: 1px solid var(--horae-border);
     border-radius: 8px;
 }
+
 .horae-prompt-presets-bar select {
     flex: 1;
     min-width: 0;
@@ -6194,6 +6662,7 @@ body .horae-context-menu {
 .horae-rpg-sh-node {
     margin-bottom: 2px;
 }
+
 .horae-rpg-sh-node-head {
     display: flex;
     align-items: center;
@@ -6202,9 +6671,11 @@ body .horae-context-menu {
     border-radius: 5px;
     transition: background 0.15s;
 }
+
 .horae-rpg-sh-node-head:hover {
-    background: rgba(255,255,255,0.04);
+    background: rgba(255, 255, 255, 0.04);
 }
+
 .horae-rpg-sh-node-name {
     flex: 1;
     font-size: 13px;
@@ -6214,6 +6685,7 @@ body .horae-context-menu {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
 .horae-rpg-sh-node-actions {
     display: flex;
     gap: 3px;
@@ -6221,9 +6693,11 @@ body .horae-context-menu {
     opacity: 0.4;
     transition: opacity 0.2s;
 }
+
 .horae-rpg-sh-node-head:hover .horae-rpg-sh-node-actions {
     opacity: 1;
 }
+
 .horae-rpg-sh-node-desc {
     font-size: 11px;
     color: var(--horae-text-muted);
@@ -6242,14 +6716,16 @@ body .horae-context-menu {
     border: 1px solid var(--horae-border);
     border-radius: 6px;
     margin-bottom: 6px;
-    background: var(--horae-bg-secondary, rgba(255,255,255,0.03));
+    background: var(--horae-bg-secondary, rgba(255, 255, 255, 0.03));
 }
+
 .horae-rpg-tpl-name {
     font-weight: 600;
     font-size: 13px;
     color: var(--horae-text);
     min-width: 60px;
 }
+
 .horae-rpg-tpl-slots {
     flex: 1;
     font-size: 10px;
@@ -6258,11 +6734,13 @@ body .horae-context-menu {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
 .horae-rpg-tpl-parts {
     margin-top: 2px;
     color: var(--horae-warning, #f59e0b);
     font-size: 10px;
 }
+
 .horae-rpg-tpl-actions {
     display: flex;
     gap: 4px;
@@ -6274,10 +6752,12 @@ body .horae-context-menu {
 .horae-rpg-bar-config-row .horae-rpg-config-default-max {
     width: 56px;
 }
+
 .horae-rpg-bar-config-row .horae-rpg-config-desc {
     flex: 1 1 180px;
     min-width: 120px;
 }
+
 .horae-rpg-config-required {
     display: inline-flex;
     align-items: center;
@@ -6294,19 +6774,23 @@ body .horae-context-menu {
         gap: 4px;
         padding: 6px 0;
     }
+
     .horae-rpg-config-row input {
         font-size: 14px;
         min-height: 32px;
     }
+
     .horae-rpg-eq-slot-name,
     .horae-rpg-cur-name {
         flex: 1 1 auto;
         min-width: 0;
     }
+
     .horae-rpg-section-head {
         flex-wrap: wrap;
         gap: 4px;
     }
+
     .horae-rpg-section-head .horae-rpg-btn-sm {
         padding: 6px 10px;
         font-size: 13px;

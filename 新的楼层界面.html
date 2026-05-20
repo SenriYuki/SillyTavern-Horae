@@ -1,0 +1,1269 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <title>Horae Story Panel - Ultimate Perfect UI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
+        .preview-shell {
+
+            width: 100%;
+
+            --bg-base: #2b2d31;
+
+            --text-title: #e3e5e8;
+            --text-main: #b5bac1;
+            --text-muted: #80848e;
+
+            --accent-color: #a78bfa;
+            --danger-color: #fb7185;
+            --success-color: #34d399;
+            --warning-color: #fbbf24;
+            --info-color: #38bdf8;
+            --pink-color: #f472b6;
+
+            --light-shadow: rgba(255, 255, 255, 0.05);
+            --dark-shadow: rgba(0, 0, 0, 0.4);
+
+            --neo-drop: 6px 6px 12px var(--dark-shadow), -4px -4px 10px var(--light-shadow);
+            --neo-drop-sm: 4px 4px 8px var(--dark-shadow), -2px -2px 6px var(--light-shadow);
+            --neo-inset: inset 4px 4px 8px var(--dark-shadow), inset -4px -4px 8px var(--light-shadow);
+            --neo-inset-sm: inset 2px 2px 4px var(--dark-shadow), inset -2px -2px 4px var(--light-shadow);
+
+            --radius-lg: 20px;
+            --radius-md: 12px;
+            --radius-sm: 8px;
+            --radius-round: 50px;
+        }
+
+        /* =========================================
+           主面板与头部
+           ========================================= */
+        .horae-message-panel {
+            background: var(--bg-base);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--neo-drop);
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+
+        .horae-panel-top {
+            padding: 18px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.02);
+            cursor: pointer;
+            transition: background 0.2s;
+            user-select: none;
+        }
+
+        .horae-panel-top:hover {
+            background: rgba(255, 255, 255, 0.015);
+        }
+
+        .toggle-left {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .toggle-icon {
+            flex-shrink: 0;
+            font-size: 1.2rem;
+            color: var(--accent-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            box-shadow: var(--neo-drop);
+        }
+
+        .toggle-info {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .toggle-time {
+            color: var(--text-title);
+            font-size: 1.1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+        }
+
+        .toggle-summary {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+        }
+
+        .toggle-actions {
+            flex-shrink: 0;
+            display: flex;
+            gap: 12px;
+        }
+
+        .neo-btn-icon {
+            background: var(--bg-base);
+            border: none;
+            color: var(--text-main);
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            box-shadow: var(--neo-drop);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            outline: none;
+        }
+
+        .neo-btn-icon:hover {
+            color: var(--accent-color);
+            box-shadow: var(--neo-drop-sm);
+        }
+
+        .neo-btn-icon:active {
+            box-shadow: var(--neo-inset);
+        }
+
+        .horae-panel-content {
+            padding: 16px 24px 24px 24px;
+            display: block;
+        }
+
+        .neo-dashboard {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .neo-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .neo-chip {
+            background: var(--bg-base);
+            box-shadow: var(--neo-inset);
+            padding: 8px 16px;
+            border-radius: var(--radius-round);
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .neo-chip i {
+            color: var(--accent-color);
+            opacity: 0.8;
+        }
+
+        /* =========================================
+           通用表单与控件组件
+           ========================================= */
+        .neo-input,
+        .neo-textarea {
+            width: 100%;
+            background: var(--bg-base);
+            border: none;
+            color: var(--text-title);
+            font-size: 0.95rem;
+            box-shadow: var(--neo-inset);
+            outline: none;
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            transition: box-shadow 0.2s;
+            line-height: 1.5;
+        }
+
+        .neo-input {
+            padding: 8px 12px;
+            height: 36px;
+        }
+
+        select.neo-input {
+            cursor: pointer;
+            padding-right: 24px;
+        }
+
+        select.neo-input option {
+            background: var(--bg-base);
+            color: var(--text-title);
+        }
+
+        .neo-textarea {
+            padding: 10px 14px;
+            resize: none;
+            overflow: hidden;
+            height: auto;
+        }
+
+        .neo-textarea.lg {
+            padding: 14px 18px;
+            font-size: 1.05rem;
+        }
+
+        .neo-input:focus,
+        .neo-textarea:focus {
+            box-shadow: var(--neo-inset), 0 0 0 1px var(--warning-color);
+        }
+
+        .neo-text-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 500;
+            transition: color 0.2s;
+            outline: none;
+            padding: 0;
+        }
+
+        .neo-text-btn:hover {
+            color: var(--text-title);
+        }
+
+        .neo-text-btn.add:hover {
+            color: var(--accent-color);
+        }
+
+        .neo-inset-section {
+            background: var(--bg-base);
+            box-shadow: var(--neo-inset);
+            border-radius: var(--radius-md);
+            padding: 16px 20px;
+        }
+
+        .neo-section-header {
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .section-title {
+            font-size: 0.85rem;
+            color: var(--text-title);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .section-title i {
+            color: var(--accent-color);
+            opacity: 0.9;
+        }
+
+        .action-group-hover {
+            display: flex;
+            gap: 4px;
+            opacity: 0;
+            transform: translateX(6px);
+            transition: all 0.2s ease;
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+
+        .action-hover-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            background: transparent;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+
+        .action-hover-btn.btn-edit:hover {
+            background: rgba(56, 189, 248, 0.1);
+            color: var(--info-color);
+            box-shadow: var(--neo-drop-sm);
+        }
+
+        .action-hover-btn.btn-del:hover {
+            background: rgba(251, 113, 133, 0.1);
+            color: var(--danger-color);
+            box-shadow: var(--neo-drop-sm);
+        }
+
+        .is-editing .action-group-hover,
+        :hover>.action-group-hover,
+        .action-group-hover:hover {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .is-editing .btn-edit {
+            color: var(--success-color);
+        }
+
+        .is-editing .btn-edit i::before {
+            content: "\f00c";
+        }
+
+        .view-mode {
+            display: flex;
+            gap: 10px;
+            flex: 1;
+            min-width: 0;
+            align-items: flex-start;
+        }
+
+        .edit-mode {
+            display: none;
+            gap: 10px;
+            flex: 1;
+            min-width: 0;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+
+        .is-editing .view-mode {
+            display: none !important;
+        }
+
+        .is-editing .edit-mode {
+            display: flex !important;
+        }
+
+        /* =========================================
+           特定列表模块展示排版
+           ========================================= */
+        .neo-event-card {
+            background: var(--bg-base);
+            box-shadow: var(--neo-drop);
+            border-radius: var(--radius-md);
+            padding: 18px 20px;
+            border-left: 4px solid var(--warning-color);
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .event-header {
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .event-badge {
+            font-size: 0.85rem;
+            color: var(--warning-color);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .event-body-text {
+            font-size: 1.05rem;
+            color: var(--text-title);
+            line-height: 1.6;
+            word-break: break-word;
+        }
+
+        .neo-event-card .action-group-hover {
+            position: absolute;
+            right: 20px;
+            top: 16px;
+            opacity: 1;
+        }
+
+        /* 好感度（重构建：改为弹性流式布局，标签自适应伸缩不遮挡） */
+        .aff-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .aff-chip {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: var(--radius-sm);
+            padding: 6px 12px;
+            display: inline-flex;
+            align-items: center;
+            transition: all 0.2s ease;
+            position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            height: 38px;
+        }
+
+        .aff-chip:hover {
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .aff-chip .view-mode {
+            align-items: center;
+            margin: 0;
+            gap: 10px;
+        }
+
+        .aff-chip .t-title {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-title);
+            max-width: 140px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .aff-chip .t-val {
+            font-weight: bold;
+            font-size: 0.95rem;
+            color: var(--pink-color);
+            font-family: monospace;
+        }
+
+        .aff-chip .edit-mode {
+            align-items: center;
+            gap: 6px;
+        }
+
+        .aff-chip .edit-mode .neo-input {
+            height: 26px;
+            padding: 4px 8px;
+            font-size: 0.8rem;
+        }
+
+        /* 好感度悬浮操作 - 查看模式下飞在右上角防止撑宽，编辑模式下乖乖待在右侧防止遮挡输入框 */
+        .aff-chip .action-group-hover {
+            position: absolute;
+            right: -8px;
+            top: -14px;
+            background: var(--bg-base);
+            border-radius: 20px;
+            box-shadow: var(--neo-drop-sm);
+            padding: 2px 4px;
+            z-index: 10;
+            margin: 0;
+        }
+
+        .aff-chip.is-editing .action-group-hover {
+            position: static;
+            background: transparent;
+            box-shadow: none;
+            padding: 0;
+            margin-left: 2px;
+        }
+
+        /* 关系网络（单行极简流） */
+        .rel-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .rel-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 10px;
+            margin: 0 -10px;
+            border-radius: var(--radius-sm);
+            transition: background 0.2s;
+            position: relative;
+        }
+
+        .rel-row:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .rel-row .view-mode {
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9rem;
+        }
+
+        .rel-node {
+            font-weight: 600;
+            color: var(--text-title);
+            background: rgba(0, 0, 0, 0.2);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .rel-arrow {
+            color: var(--accent-color);
+            opacity: 0.7;
+            font-size: 0.8rem;
+        }
+
+        .rel-label {
+            color: var(--text-main);
+            font-style: italic;
+        }
+
+        .rel-row .edit-mode {
+            align-items: center;
+            gap: 6px;
+        }
+
+        .rel-row .edit-mode .neo-input {
+            height: 28px;
+            padding: 4px 8px;
+            font-size: 0.85rem;
+        }
+
+        .neo-dict-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .neo-dict-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 8px 10px;
+            border-radius: var(--radius-sm);
+            margin: 0 -10px;
+            transition: background 0.2s;
+            position: relative;
+        }
+
+        .neo-dict-row:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .dict-key {
+            color: var(--accent-color);
+            font-weight: 600;
+            white-space: nowrap;
+            flex-shrink: 0;
+            line-height: 1.5;
+        }
+
+        .dict-key::after {
+            content: ':';
+            color: var(--text-muted);
+            margin-left: 2px;
+        }
+
+        .dict-value {
+            color: var(--text-main);
+            line-height: 1.5;
+            word-break: break-word;
+        }
+
+        .neo-item-list {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .neo-item-card {
+            background: var(--bg-base);
+            box-shadow: var(--neo-drop-sm);
+            border-radius: var(--radius-sm);
+            padding: 12px 14px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .item-emoji {
+            font-size: 1.6rem;
+            line-height: 1;
+            margin-top: 2px;
+        }
+
+        .item-info {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding-right: 2px;
+        }
+
+        .item-line-top {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            font-weight: 600;
+            color: var(--text-title);
+            font-size: 1rem;
+        }
+
+        .item-holder-badge {
+            background: var(--bg-base);
+            box-shadow: var(--neo-inset-sm);
+            color: var(--accent-color);
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: normal;
+        }
+
+        .item-meta {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .item-desc {
+            font-size: 0.9rem;
+            color: var(--text-main);
+            line-height: 1.4;
+            word-break: break-word;
+        }
+
+        .neo-agenda-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .agenda-card {
+            background: var(--bg-base);
+            box-shadow: var(--neo-drop-sm);
+            padding: 12px 14px;
+            border-radius: var(--radius-sm);
+            border-left: 3px solid var(--text-muted);
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            transition: border-color 0.3s;
+        }
+
+        .agenda-card.type-suspense {
+            border-left-color: var(--accent-color);
+        }
+
+        .agenda-card.type-suspense .agenda-type {
+            color: var(--accent-color);
+        }
+
+        .agenda-card.type-plan {
+            border-left-color: var(--info-color);
+        }
+
+        .agenda-card.type-plan .agenda-type {
+            color: var(--info-color);
+        }
+
+        .agenda-date {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            padding-top: 2px;
+            font-family: monospace;
+            width: 80px;
+            flex-shrink: 0;
+        }
+
+        .agenda-content {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
+            flex: 1;
+        }
+
+        .agenda-type {
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .agenda-text {
+            font-size: 0.95rem;
+            color: var(--text-title);
+            word-break: break-word;
+        }
+
+        /* =========================================
+           底部与响应式
+           ========================================= */
+        .neo-footer-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 12px;
+        }
+
+        .action-group {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .neo-btn-text {
+            background: var(--bg-base);
+            border: none;
+            color: var(--text-main);
+            padding: 10px 20px;
+            border-radius: var(--radius-round);
+            box-shadow: var(--neo-drop);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+
+        .neo-btn-text:hover {
+            color: var(--text-title);
+            box-shadow: var(--neo-drop-sm);
+        }
+
+        .neo-btn-text:active {
+            box-shadow: var(--neo-inset);
+        }
+
+        .btn-ai-text {
+            color: var(--accent-color);
+        }
+
+        .btn-save-apply {
+            color: var(--success-color);
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 15px 0;
+            }
+
+            .preview-shell {
+                width: calc(100vw - 20px);
+            }
+
+            .is-editing .edit-mode.dict-edit-mode {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .is-editing .edit-mode .neo-input.short-key {
+                width: 100%;
+            }
+
+            .dict-view {
+                flex-direction: column;
+                gap: 2px;
+            }
+
+            .dict-key::after {
+                content: '';
+            }
+
+            .agenda-card .view-mode,
+            .agenda-card .edit-mode {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .agenda-date {
+                width: auto;
+                font-weight: 600;
+                padding-top: 0;
+            }
+
+            .horae-panel-top,
+            .horae-panel-content {
+                padding: 16px;
+            }
+
+            .action-group-hover {
+                opacity: 0.7;
+                transform: none;
+            }
+
+            .neo-footer-actions {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 12px;
+                margin-top: 6px;
+            }
+
+            .action-group {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+                width: 100%;
+            }
+
+            .neo-btn-text {
+                width: 100%;
+                justify-content: center;
+                padding: 12px 10px;
+                font-size: 0.85rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <main class="preview-shell">
+        <div class="horae-message-panel">
+
+            <div class="horae-panel-top" id="panel-toggle-zone">
+                <div class="toggle-left">
+                    <div class="toggle-icon"><i class="fa-regular fa-clock"></i></div>
+                    <div class="toggle-info">
+                        <div class="toggle-time">05/20 周三 21:40</div>
+                        <div class="toggle-summary">发现银边信，失踪案出现新线索</div>
+                    </div>
+                </div>
+                <div class="toggle-actions">
+                    <button class="neo-btn-icon" title="面具设定"><i class="fa-solid fa-masks-theater"></i></button>
+                    <button class="neo-btn-icon" title="刷新状态"><i class="fa-solid fa-arrows-rotate"></i></button>
+                    <button class="neo-btn-icon btn-ai-analyze" title="AI 分析与提取"><i
+                            class="fa-solid fa-magnifying-glass"></i></button>
+                </div>
+            </div>
+
+            <div class="horae-panel-content" id="panel-content-zone">
+                <div class="neo-dashboard">
+                    <div class="neo-tags">
+                        <span class="neo-chip"><i class="fa-solid fa-location-dot"></i> 灰鸦旅馆 · 二楼客房</span>
+                        <span class="neo-chip"><i class="fa-solid fa-cloud-moon"></i> 雨夜、压抑、摇晃的烛光</span>
+                        <span class="neo-chip"><i class="fa-solid fa-users"></i> 艾琳, 林风, 店主</span>
+                    </div>
+
+                    <div class="neo-event-card editable-block">
+                        <div class="event-header">
+                            <span class="event-badge"><i class="fa-solid fa-bolt"></i> 重要事件</span>
+                            <div class="action-group-hover">
+                                <button class="action-hover-btn btn-edit"><i class="fa-solid fa-pen"></i></button>
+                            </div>
+                        </div>
+                        <div class="view-mode">
+                            <div class="event-body-text t-body">众人在灰鸦旅馆发现一封被隐藏的银边信件，内容暗示了镇长与失踪案之间存在不可告人的交易。</div>
+                        </div>
+                        <div class="edit-mode">
+                            <textarea class="neo-textarea lg no-enter e-body"
+                                rows="2">众人在灰鸦旅馆发现一封被隐藏的银边信件，内容暗示了镇长与失踪案之间存在不可告人的交易。</textarea>
+                        </div>
+                    </div>
+
+                    <!-- 紧凑型好感度模块 (针对主角的好感) -->
+                    <div class="neo-inset-section">
+                        <div class="neo-section-header" style="margin-bottom: 12px;">
+                            <span class="section-title"><i class="fa-solid fa-heart"></i> 好感度追踪</span>
+                            <button class="neo-text-btn add btn-add-aff"><i class="fa-solid fa-plus"></i> 添加</button>
+                        </div>
+                        <div class="aff-grid list-container">
+                            <div class="aff-chip editable-block">
+                                <div class="view-mode">
+                                    <span class="t-title">艾琳</span>
+                                    <span class="t-val">75</span>
+                                </div>
+                                <div class="edit-mode">
+                                    <!-- 适当增加 15px 的基础宽度给中文留有余地 -->
+                                    <input class="neo-input e-title no-enter" style="width: 70px;" value="艾琳">
+                                    <input class="neo-input e-val no-enter" style="width: 50px;" value="75">
+                                </div>
+                                <div class="action-group-hover"><button class="action-hover-btn btn-edit"><i
+                                            class="fa-solid fa-pen"></i></button><button
+                                        class="action-hover-btn btn-del"><i class="fa-solid fa-xmark"></i></button>
+                                </div>
+                            </div>
+                            <div class="aff-chip editable-block">
+                                <div class="view-mode">
+                                    <span class="t-title">店主</span>
+                                    <span class="t-val">30</span>
+                                </div>
+                                <div class="edit-mode">
+                                    <input class="neo-input e-title no-enter" style="width: 70px;" value="店主">
+                                    <input class="neo-input e-val no-enter" style="width: 50px;" value="30">
+                                </div>
+                                <div class="action-group-hover"><button class="action-hover-btn btn-edit"><i
+                                            class="fa-solid fa-pen"></i></button><button
+                                        class="action-hover-btn btn-del"><i class="fa-solid fa-xmark"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 极简流关系网络 -->
+                    <div class="neo-inset-section">
+                        <div class="neo-section-header" style="margin-bottom: 12px;">
+                            <span class="section-title"><i class="fa-solid fa-diagram-project"></i> 关系网络</span>
+                            <button class="neo-text-btn add btn-add-rel"><i class="fa-solid fa-plus"></i> 添加</button>
+                        </div>
+                        <div class="rel-list list-container">
+                            <div class="rel-row editable-block">
+                                <div class="view-mode">
+                                    <span class="rel-node t-from">店主</span>
+                                    <i class="fa-solid fa-arrow-right-long rel-arrow"></i>
+                                    <span class="rel-node t-to">镇长</span>
+                                    <span class="rel-label t-rel">暗中包庇交易</span>
+                                </div>
+                                <div class="edit-mode">
+                                    <input class="neo-input e-from no-enter" style="width:70px" value="店主">
+                                    <i class="fa-solid fa-arrow-right-long"></i>
+                                    <input class="neo-input e-to no-enter" style="width:70px" value="镇长">
+                                    <input class="neo-input e-rel no-enter" style="flex:1" value="暗中包庇交易">
+                                </div>
+                                <div class="action-group-hover"><button class="action-hover-btn btn-edit"><i
+                                            class="fa-solid fa-pen"></i></button><button
+                                        class="action-hover-btn btn-del"><i class="fa-solid fa-xmark"></i></button>
+                                </div>
+                            </div>
+                            <div class="rel-row editable-block">
+                                <div class="view-mode">
+                                    <span class="rel-node t-from">艾琳</span>
+                                    <i class="fa-solid fa-arrow-right-long rel-arrow"></i>
+                                    <span class="rel-node t-to">老酒鬼</span>
+                                    <span class="rel-label t-rel">怀疑对方隐瞒线索</span>
+                                </div>
+                                <div class="edit-mode">
+                                    <input class="neo-input e-from no-enter" style="width:70px" value="艾琳">
+                                    <i class="fa-solid fa-arrow-right-long"></i>
+                                    <input class="neo-input e-to no-enter" style="width:70px" value="老酒鬼">
+                                    <input class="neo-input e-rel no-enter" style="flex:1" value="怀疑对方隐瞒线索">
+                                </div>
+                                <div class="action-group-hover"><button class="action-hover-btn btn-edit"><i
+                                            class="fa-solid fa-pen"></i></button><button
+                                        class="action-hover-btn btn-del"><i class="fa-solid fa-xmark"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="neo-inset-section">
+                        <div class="neo-section-header">
+                            <span class="section-title"><i class="fa-solid fa-shirt"></i> 服装与细节</span>
+                            <button class="neo-text-btn add btn-add-dict"><i class="fa-solid fa-plus"></i> 添加</button>
+                        </div>
+                        <div class="neo-dict-list list-container">
+                            <div class="neo-dict-row editable-block">
+                                <div class="view-mode dict-view">
+                                    <div class="dict-key t-title">艾琳</div>
+                                    <div class="dict-value t-desc">深灰斗篷彻底被雨水打湿，袖口还沾着刚跑过泥泞小路的泥点。</div>
+                                </div>
+                                <div class="edit-mode dict-edit-mode">
+                                    <input type="text" class="neo-input e-title short-key no-enter"
+                                        style="width:90px;flex-shrink:0;" value="艾琳">
+                                    <textarea
+                                        class="neo-textarea e-desc no-enter">深灰斗篷彻底被雨水打湿，袖口还沾着刚跑过泥泞小路的泥点。</textarea>
+                                </div>
+                                <div class="action-group-hover"><button class="action-hover-btn btn-edit"><i
+                                            class="fa-solid fa-pen"></i></button><button
+                                        class="action-hover-btn btn-del"><i class="fa-solid fa-xmark"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="neo-inset-section">
+                        <div class="neo-section-header">
+                            <span class="section-title"><i class="fa-solid fa-box-open"></i> 物品状态追踪</span>
+                            <button class="neo-text-btn add btn-add-item"><i class="fa-solid fa-plus"></i> 添加</button>
+                        </div>
+                        <div class="neo-item-list list-container">
+                            <div class="neo-item-card editable-block">
+                                <div class="view-mode">
+                                    <div class="item-emoji t-emoji">✉️</div>
+                                    <div class="item-info">
+                                        <div class="item-line-top"><span class="t-name">银边信</span> <span
+                                                class="item-holder-badge t-holder">林风</span></div>
+                                        <div class="item-meta"><i class="fa-solid fa-location-dot"></i> <span
+                                                class="t-loc">灰鸦旅馆二楼客房</span></div>
+                                        <div class="item-desc t-desc">信封边缘覆着银粉，火漆上压着镇长家族的旧印记。</div>
+                                    </div>
+                                </div>
+                                <div class="edit-mode" style="flex-direction: column;">
+                                    <div style="display:flex; gap:8px;">
+                                        <input class="neo-input e-emoji no-enter" style="width:50px;text-align:center"
+                                            value="✉️" title="图标">
+                                        <input class="neo-input e-name no-enter" style="flex:1" value="银边信"
+                                            placeholder="物品名称">
+                                        <input class="neo-input e-holder no-enter" style="width:80px" value="林风"
+                                            placeholder="持有者">
+                                    </div>
+                                    <input class="neo-input e-loc no-enter" value="灰鸦旅馆二楼客房" placeholder="所处位置">
+                                    <textarea class="neo-textarea e-desc no-enter"
+                                        placeholder="物品描述">信封边缘覆着银粉，火漆上压着镇长家族的旧印记。</textarea>
+                                </div>
+                                <div class="action-group-hover"><button class="action-hover-btn btn-edit"><i
+                                            class="fa-solid fa-pen"></i></button><button
+                                        class="action-hover-btn btn-del" title="丢弃"><i
+                                            class="fa-solid fa-trash-can"></i></button></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="neo-inset-section">
+                        <div class="neo-section-header">
+                            <span class="section-title"><i class="fa-solid fa-list-check"></i> 悬念与计划</span>
+                            <button class="neo-text-btn add btn-add-agenda"><i class="fa-solid fa-plus"></i> 添加</button>
+                        </div>
+                        <div class="neo-agenda-list list-container">
+                            <div class="agenda-card editable-block type-suspense">
+                                <div class="view-mode">
+                                    <div class="agenda-date t-date">05/21</div>
+                                    <div class="agenda-content">
+                                        <span class="agenda-type t-type">未解悬念</span>
+                                        <span class="agenda-text t-desc">查明银边信中提到的“第七口井”在哪里。</span>
+                                    </div>
+                                </div>
+                                <div class="edit-mode" style="flex-direction: column;">
+                                    <div style="display:flex; gap:8px;">
+                                        <input class="neo-input e-date no-enter" style="width:100px" value="05/21">
+                                        <select class="neo-input e-type no-enter" style="flex:1">
+                                            <option value="未解悬念">未解悬念</option>
+                                            <option value="行动计划">行动计划</option>
+                                        </select>
+                                    </div>
+                                    <textarea class="neo-textarea e-desc no-enter">查明银边信中提到的“第七口井”在哪里。</textarea>
+                                </div>
+                                <div class="action-group-hover"><button class="action-hover-btn btn-edit"><i
+                                            class="fa-solid fa-pen"></i></button><button
+                                        class="action-hover-btn btn-del" title="取消并移除"><i
+                                            class="fa-solid fa-xmark"></i></button></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="neo-footer-actions">
+                        <div class="action-group">
+                            <button class="neo-btn-text"><i class="fa-solid fa-arrows-rotate"></i> 重新扫描</button>
+                            <button class="neo-btn-text btn-ai-text"><i class="fa-solid fa-wand-magic-sparkles"></i>
+                                AI分析</button>
+                        </div>
+                        <div class="action-group">
+                            <button class="neo-btn-text btn-save-apply"><i class="fa-solid fa-check"></i> 应用</button>
+                            <button class="neo-btn-text btn-collapse"><i class="fa-solid fa-chevron-up"></i>
+                                收缩展开</button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            const panelContent = document.getElementById('panel-content-zone');
+
+            const togglePanelContent = () => {
+                const isHidden = (panelContent.style.display === 'none');
+                panelContent.style.display = isHidden ? 'block' : 'none';
+            };
+
+            document.getElementById('panel-toggle-zone').addEventListener('click', (e) => {
+                if (e.target.closest('.neo-btn-icon')) return;
+                togglePanelContent();
+            });
+
+            document.querySelector('.btn-collapse').addEventListener('click', () => {
+                togglePanelContent();
+            });
+
+            document.body.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && e.target.classList.contains('no-enter')) {
+                    e.preventDefault();
+                    if (e.target.tagName.toLowerCase() === 'select') e.target.blur();
+                    const block = e.target.closest('.editable-block');
+                    if (block) {
+                        const editBtn = block.querySelector('.btn-edit');
+                        if (editBtn) editBtn.click();
+                    }
+                }
+            });
+
+            document.body.addEventListener('input', (e) => {
+                if (e.target.tagName.toLowerCase() === 'textarea') {
+                    e.target.style.height = 'auto';
+                    e.target.style.height = e.target.scrollHeight + 'px';
+                }
+            });
+
+            const mainPanel = document.querySelector('.horae-panel-content');
+
+            mainPanel.addEventListener('click', (e) => {
+
+                // 1. 保存/编辑
+                const editBtn = e.target.closest('.btn-edit');
+                if (editBtn) {
+                    const block = editBtn.closest('.editable-block');
+                    const isEditing = block.classList.contains('is-editing');
+                    const pairs = [
+                        ['.t-body', '.e-body'], ['.t-title', '.e-title'], ['.t-desc', '.e-desc'],
+                        ['.t-emoji', '.e-emoji'], ['.t-name', '.e-name'], ['.t-holder', '.e-holder'],
+                        ['.t-loc', '.e-loc'], ['.t-date', '.e-date'], ['.t-type', '.e-type'],
+                        ['.t-val', '.e-val'], ['.t-from', '.e-from'], ['.t-to', '.e-to'], ['.t-rel', '.e-rel']
+                    ];
+
+                    if (!isEditing) {
+                        block.classList.add('is-editing');
+                        pairs.forEach(([vClass, eClass]) => {
+                            const vEl = block.querySelector(vClass);
+                            const eEl = block.querySelector(eClass);
+                            if (vEl && eEl) { eEl.value = vEl.textContent; }
+                        });
+                        const textareas = block.querySelectorAll('textarea');
+                        textareas.forEach(t => { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; });
+                        block.querySelector('input, textarea')?.focus();
+                    } else {
+                        pairs.forEach(([vClass, eClass]) => {
+                            const vEl = block.querySelector(vClass);
+                            const eEl = block.querySelector(eClass);
+                            if (vEl && eEl) { vEl.textContent = eEl.value; }
+                        });
+                        block.classList.remove('is-editing');
+
+                        if (block.classList.contains('agenda-card')) {
+                            const typeValue = block.querySelector('.t-type').textContent;
+                            block.classList.remove('type-suspense', 'type-plan');
+                            if (typeValue === '未解悬念') {
+                                block.classList.add('type-suspense');
+                            } else {
+                                block.classList.add('type-plan');
+                            }
+                        }
+                    }
+                    return;
+                }
+
+                // 2. 物理删除(直接挥发)
+                const delBtn = e.target.closest('.btn-del');
+                if (delBtn) {
+                    const block = delBtn.closest('.editable-block');
+                    if (block) { block.remove(); }
+                    return;
+                }
+
+                // 3. 追加新内容模版
+                const addBtn = e.target.closest('.add');
+                if (addBtn) {
+                    const container = addBtn.closest('.neo-inset-section').querySelector('.list-container');
+                    let newHtml = "";
+
+                    if (addBtn.classList.contains('btn-add-aff')) {
+                        // 新增时，初始化宽度也与最新设计保持一致
+                        newHtml = `
+                            <div class="aff-chip editable-block is-editing">
+                                <div class="view-mode"><span class="t-title">角色</span><span class="t-val">0</span></div>
+                                <div class="edit-mode">
+                                    <input class="neo-input e-title no-enter" style="width: 70px;" placeholder="角色">
+                                    <input class="neo-input e-val no-enter" style="width: 50px;" placeholder="数值">
+                                </div>
+                                <div class="action-group-hover"><button class="action-hover-btn btn-edit"><i class="fa-solid fa-pen"></i></button><button class="action-hover-btn btn-del"><i class="fa-solid fa-xmark"></i></button></div>
+                            </div>
+                        `;
+                    } else if (addBtn.classList.contains('btn-add-rel')) {
+                        newHtml = `
+                            <div class="rel-row editable-block is-editing">
+                                <div class="view-mode">
+                                    <span class="rel-node t-from">谁</span><i class="fa-solid fa-arrow-right-long rel-arrow"></i><span class="rel-node t-to">谁</span><span class="rel-label t-rel">由于什么产生什么关系</span>
+                                </div>
+                                <div class="edit-mode">
+                                    <input class="neo-input e-from no-enter" style="width:70px" placeholder="主">
+                                    <i class="fa-solid fa-arrow-right-long"></i>
+                                    <input class="neo-input e-to no-enter" style="width:70px" placeholder="客">
+                                    <input class="neo-input e-rel no-enter" style="flex:1" placeholder="关系简述">
+                                </div>
+                                <div class="action-group-hover"><button class="action-hover-btn btn-edit"><i class="fa-solid fa-pen"></i></button><button class="action-hover-btn btn-del"><i class="fa-solid fa-xmark"></i></button></div>
+                            </div>
+                        `;
+                    } else if (addBtn.classList.contains('btn-add-dict')) {
+                        newHtml = `
+                            <div class="neo-dict-row editable-block is-editing">
+                                <div class="view-mode dict-view"><div class="dict-key t-title">新名称</div><div class="dict-value t-desc">填写状态描述</div></div>
+                                <div class="edit-mode dict-edit-mode">
+                                    <input type="text" class="neo-input e-title short-key no-enter" style="width:90px;flex-shrink:0;" placeholder="名字">
+                                    <textarea class="neo-textarea e-desc no-enter" placeholder="在此输入描述内容..."></textarea>
+                                </div>
+                                <div class="action-group-hover"><button class="action-hover-btn btn-edit"><i class="fa-solid fa-pen"></i></button><button class="action-hover-btn btn-del"><i class="fa-solid fa-xmark"></i></button></div>
+                            </div>
+                        `;
+                    } else if (addBtn.classList.contains('btn-add-item')) {
+                        newHtml = `
+                            <div class="neo-item-card editable-block is-editing">
+                                <div class="view-mode">
+                                    <div class="item-emoji t-emoji">📦</div>
+                                    <div class="item-info">
+                                        <div class="item-line-top"><span class="t-name">新物品</span> <span class="item-holder-badge t-holder">持有者</span></div>
+                                        <div class="item-meta"><i class="fa-solid fa-location-dot"></i> <span class="t-loc">未知</span></div>
+                                        <div class="item-desc t-desc">未知物品描述。</div>
+                                    </div>
+                                </div>
+                                <div class="edit-mode" style="flex-direction: column;">
+                                    <div style="display:flex; gap:8px;">
+                                        <input class="neo-input e-emoji no-enter" style="width:50px;text-align:center" placeholder="📦">
+                                        <input class="neo-input e-name no-enter" style="flex:1" placeholder="物品名称">
+                                        <input class="neo-input e-holder no-enter" style="width:80px" placeholder="谁持有">
+                                    </div>
+                                    <input class="neo-input e-loc no-enter" placeholder="在哪里">
+                                    <textarea class="neo-textarea e-desc no-enter" placeholder="关于该物品的描述..."></textarea>
+                                </div>
+                                <div class="action-group-hover"><button class="action-hover-btn btn-edit"><i class="fa-solid fa-pen"></i></button><button class="action-hover-btn btn-del"><i class="fa-solid fa-trash-can"></i></button></div>
+                            </div>
+                        `;
+                    } else if (addBtn.classList.contains('btn-add-agenda')) {
+                        newHtml = `
+                            <div class="agenda-card editable-block type-suspense is-editing">
+                                <div class="view-mode">
+                                    <div class="agenda-date t-date">未定</div>
+                                    <div class="agenda-content">
+                                        <span class="agenda-type t-type">未解悬念</span>
+                                        <span class="agenda-text t-desc">新事项内容。</span>
+                                    </div>
+                                </div>
+                                <div class="edit-mode" style="flex-direction: column;">
+                                    <div style="display:flex; gap:8px;">
+                                        <input class="neo-input e-date no-enter" style="width:100px" placeholder="时间设定">
+                                        <select class="neo-input e-type no-enter" style="flex:1">
+                                            <option value="未解悬念">未解悬念</option>
+                                            <option value="行动计划">行动计划</option>
+                                        </select>
+                                    </div>
+                                    <textarea class="neo-textarea e-desc no-enter" placeholder="填写事项详情内容..."></textarea>
+                                </div>
+                                <div class="action-group-hover"><button class="action-hover-btn btn-edit"><i class="fa-solid fa-pen"></i></button><button class="action-hover-btn btn-del" title="取消并移除"><i class="fa-solid fa-xmark"></i></button></div>
+                            </div>
+                        `;
+                    }
+                    container.insertAdjacentHTML('beforeend', newHtml);
+                    const newlyAdded = container.lastElementChild;
+                    newlyAdded.querySelector('input, select')?.focus();
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

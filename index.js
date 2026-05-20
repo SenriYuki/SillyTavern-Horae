@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki，柏柏
- * 版本: 1.13.9B
+ * 版本: 1.13.10B
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -17,6 +17,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 import { t, tForLang, initI18n, getLanguage, isZhLocale, setLanguage, detectEffectiveAiLangIsZh, detectEffectiveAiLang } from './core/i18n.js';
 import { initPromptDefaults, ensurePromptDefaults, getPromptDefaultSync } from './core/promptDefaults.js';
 import { installSaveRequestGzipFetchHook } from './utils/saveRequestGzip.js';
+import { mountMessagePanel as mountVueMessagePanel } from './dist/messagePanel.js?v=1.13.10B';
 
 // ============================================
 // 常量定义
@@ -24,7 +25,7 @@ import { installSaveRequestGzipFetchHook } from './utils/saveRequestGzip.js';
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.13.9B';
+const VERSION = '1.13.10B';
 const DEFAULT_VECTOR_STRIP_TAGS = 'dream_status,Episode,details,think,thinking,Thinking';
 
 // 配套正则规则（自动注入ST原生正则系统）
@@ -8729,6 +8730,7 @@ function repairAllSummaryStates() {
 /** 刷新所有已展开的底部面板 */
 function refreshVisiblePanels() {
     document.querySelectorAll('.horae-message-panel').forEach(panelEl => {
+        if (panelEl.classList.contains('horae-message-panel-vue')) return;
         const msgEl = panelEl.closest('.mes');
         if (!msgEl) return;
         const msgId = parseInt(msgEl.getAttribute('mesid'));
@@ -10134,10 +10136,365 @@ function openThemeDesigner() {
     update();
 }
 
+function _cloneMessagePanelData(value) {
+    if (value == null) return value;
+    try {
+        return structuredClone(value);
+    } catch (_) {
+        return JSON.parse(JSON.stringify(value));
+    }
+}
+
+function _applyMessagePanelHostLayout(panelEl) {
+    if (!panelEl) return;
+    if (!settings.showMessagePanel) {
+        panelEl.style.display = 'none';
+    }
+    const w = Math.max(50, Math.min(100, settings.panelWidth || 100));
+    if (w < 100) {
+        panelEl.style.maxWidth = `${w}%`;
+    }
+    const ofs = Math.max(0, settings.panelOffset || 0);
+    if (ofs > 0) {
+        panelEl.style.marginLeft = `${ofs}px`;
+    }
+    if (isLightMode()) {
+        panelEl.classList.add('horae-light');
+    }
+}
+
+function _getMessagePanelVueLabels() {
+    return {
+        sideplay: t('badge.sideplay'),
+        sideplayTitle: t('tooltip.sideplayMark'),
+        noTracking: t('badge.noTracking'),
+        rescan: t('tooltip.rescan'),
+        quickScan: t('tooltip.quickScan'),
+        aiAnalyze: t('tooltip.aiAnalysis'),
+        apply: t('common.save'),
+        collapse: t('common.cancel'),
+        add: t('common.add'),
+        role: t('placeholder.holderName'),
+        value: t('placeholder.affectionTotal'),
+        location: t('label.location'),
+        atmosphere: t('label.atmosphere'),
+        characters: t('characters.present'),
+        event: t('timeline.events'),
+        noSpecialEvents: t('ui.noSpecialEvents'),
+        eventPlaceholder: t('placeholder.eventSummary'),
+        levelNone: t('levels.none'),
+        levelNormal: t('levels.normal'),
+        levelImportant: t('levels.important'),
+        levelCritical: t('levels.critical'),
+        affection: t('characters.affection'),
+        relationships: t('characters.relationships'),
+        relationshipHint: t('placeholder.relType'),
+        relFrom: t('placeholder.relFrom'),
+        relTo: t('placeholder.relTo'),
+        relType: t('placeholder.relType'),
+        costumes: t('status.costumes'),
+        items: t('status.itemTracking'),
+        itemName: t('placeholder.itemName'),
+        itemDesc: t('placeholder.itemDesc'),
+        holder: t('label.holder'),
+        agenda: t('timeline.agenda'),
+        agendaMystery: t('timeline.mystery'),
+        agendaPlan: t('timeline.plan'),
+        agendaText: t('placeholder.agendaContentHint'),
+        date: t('placeholder.agendaDate'),
+        unscheduled: t('ui.noStoryDate'),
+        openDrawer: t('tooltip.openPanel'),
+    };
+}
+
+function _openHoraeDrawerFromMessagePanel() {
+    const drawerIcon = $('#horae_drawer_icon');
+    const drawerContent = $('#horae_drawer_content');
+    const isOpen = drawerIcon.hasClass('openIcon');
+    if (isOpen) {
+        drawerIcon.removeClass('openIcon').addClass('closedIcon');
+        drawerContent.removeClass('openDrawer').addClass('closedDrawer').css('display', 'none');
+    } else {
+        $('.openDrawer').not('#horae_drawer_content').not('.pinnedOpen').css('display', 'none')
+            .removeClass('openDrawer').addClass('closedDrawer');
+        $('.openIcon').not('#horae_drawer_icon').not('.drawerPinnedOpen')
+            .removeClass('openIcon').addClass('closedIcon');
+        drawerIcon.removeClass('closedIcon').addClass('openIcon');
+        drawerContent.removeClass('closedDrawer').addClass('openDrawer').css('display', '');
+    }
+}
+
+async function _saveMessagePanelMetaFromVue(messageId, meta) {
+    const existingMeta = horaeManager.getMessageMeta(messageId) || createEmptyMeta();
+    const nextMeta = _cloneMessagePanelData(meta || createEmptyMeta());
+    _preserveRebuildControlFlags(nextMeta, existingMeta);
+
+    if (existingMeta?.npcs && !nextMeta.npcs) nextMeta.npcs = _cloneMessagePanelData(existingMeta.npcs);
+    if (existingMeta?.mood && !nextMeta.mood) nextMeta.mood = _cloneMessagePanelData(existingMeta.mood);
+    if (existingMeta?.deletedItems && !nextMeta.deletedItems) nextMeta.deletedItems = _cloneMessagePanelData(existingMeta.deletedItems);
+    if (existingMeta?.deletedAgenda && !nextMeta.deletedAgenda) nextMeta.deletedAgenda = _cloneMessagePanelData(existingMeta.deletedAgenda);
+
+    horaeManager.setMessageMeta(messageId, nextMeta);
+
+    if (nextMeta.relationships?.length > 0) {
+        horaeManager._mergeRelationships(nextMeta.relationships);
+    }
+    if (nextMeta.scene?.scene_desc && nextMeta.scene?.location) {
+        horaeManager._updateLocationMemory(nextMeta.scene.location, nextMeta.scene.scene_desc);
+    }
+
+    injectHoraeTagToMessage(messageId, nextMeta);
+    await getContext().saveChat();
+    refreshAllDisplays();
+    showToast(t('toast.saveSuccess'), 'success');
+
+    return _cloneMessagePanelData(horaeManager.getMessageMeta(messageId) || nextMeta);
+}
+
+async function _quickScanMessagePanelMetaForVue(messageId) {
+    const chat = horaeManager.getChat();
+    const message = chat?.[messageId];
+    if (!message) {
+        showToast(t('toast.cannotGetContent'), 'error');
+        return null;
+    }
+
+    let parsed = horaeManager.parseHoraeTag(message.mes);
+    if (!parsed) parsed = horaeManager.parseLooseFormat(message.mes);
+    if (!parsed) {
+        showToast(t('toast.noFormatData'), 'warning');
+        return null;
+    }
+
+    const existingMeta = horaeManager.getMessageMeta(messageId) || createEmptyMeta();
+    const newMeta = horaeManager.mergeParsedToMeta(existingMeta, parsed);
+    if (newMeta._tableUpdates) {
+        horaeManager.applyTableUpdates(newMeta._tableUpdates);
+        delete newMeta._tableUpdates;
+    }
+    if (parsed.deletedAgenda?.length > 0) {
+        horaeManager.removeCompletedAgenda(parsed.deletedAgenda);
+    }
+    if (parsed.relationships?.length > 0) {
+        horaeManager._mergeRelationships(parsed.relationships);
+    }
+    if (parsed.scene?.scene_desc && parsed.scene?.location) {
+        horaeManager._updateLocationMemory(parsed.scene.location, parsed.scene.scene_desc);
+    }
+
+    horaeManager.setMessageMeta(messageId, newMeta);
+    await getContext().saveChat();
+    refreshAllDisplays();
+    showToast(t('toast.saveSuccess'), 'success');
+    return _cloneMessagePanelData(newMeta);
+}
+
+async function _rescanMessagePanelMetaForVue(messageId) {
+    const chat = horaeManager.getChat();
+    const message = chat?.[messageId];
+    if (!message) {
+        showToast(t('toast.cannotGetContent'), 'error');
+        return null;
+    }
+
+    const existingMeta = horaeManager.getMessageMeta(messageId) || createEmptyMeta();
+    const shouldRebuild = _hasTimelineSummary(existingMeta);
+    if (shouldRebuild && !confirm(t('confirm.rescanExistingTimeline'))) {
+        return null;
+    }
+
+    const parsed = horaeManager.parseHoraeTag(message.mes);
+    let newMeta;
+    if (parsed) {
+        newMeta = horaeManager.mergeParsedToMeta(createEmptyMeta(), parsed);
+        if (shouldRebuild) {
+            _preserveRebuildControlFlags(newMeta, existingMeta);
+        } else {
+            if ((!parsed.npcs || Object.keys(parsed.npcs).length === 0) && existingMeta?.npcs) {
+                newMeta.npcs = existingMeta.npcs;
+            }
+            if ((!newMeta.agenda || newMeta.agenda.length === 0) && existingMeta?.agenda?.length > 0) {
+                newMeta.agenda = existingMeta.agenda;
+            }
+            if ((!newMeta.deletedAgenda || newMeta.deletedAgenda.length === 0) && existingMeta?.deletedAgenda?.length > 0) {
+                newMeta.deletedAgenda = existingMeta.deletedAgenda;
+            }
+        }
+        if (shouldRebuild && newMeta._tableUpdates) {
+            newMeta.tableContributions = newMeta._tableUpdates;
+            delete newMeta._tableUpdates;
+        } else if (newMeta._tableUpdates) {
+            horaeManager.applyTableUpdates(newMeta._tableUpdates);
+            delete newMeta._tableUpdates;
+        }
+        if (parsed.deletedAgenda?.length > 0) horaeManager.removeCompletedAgenda(parsed.deletedAgenda);
+    } else {
+        newMeta = createEmptyMeta();
+        if (shouldRebuild) {
+            _preserveRebuildControlFlags(newMeta, existingMeta);
+        } else if (existingMeta?.npcs) {
+            newMeta.npcs = existingMeta.npcs;
+        }
+    }
+
+    horaeManager.setMessageMeta(messageId, newMeta);
+    if (shouldRebuild) {
+        _rebuildDerivedMetaCaches();
+    } else if (parsed) {
+        if (parsed.relationships?.length > 0) horaeManager._mergeRelationships(parsed.relationships);
+        if (parsed.scene?.scene_desc && parsed.scene?.location) {
+            horaeManager._updateLocationMemory(parsed.scene.location, parsed.scene.scene_desc);
+        }
+    }
+
+    await getContext().saveChat();
+    refreshAllDisplays();
+    showToast(parsed ? t('toast.saveSuccess') : t('toast.noHoraeTagsFound'), parsed ? 'success' : 'warning');
+    return _cloneMessagePanelData(newMeta);
+}
+
+async function _aiAnalyzeMessagePanelMetaForVue(messageId) {
+    let updatedMeta = null;
+    await handlePanelAiAnalyzeAction(messageId, async () => {
+        const chat = horaeManager.getChat();
+        const message = chat?.[messageId];
+        if (!message) {
+            showToast(t('toast.cannotGetContent'), 'error');
+            return;
+        }
+
+        const result = await analyzeMessageWithAI(message.mes, { messageIndex: messageId });
+        if (!result) {
+            showToast(t('toast.aiAnalysisNoData'), 'warning');
+            return;
+        }
+
+        const existingMeta = horaeManager.getMessageMeta(messageId) || createEmptyMeta();
+        const shouldRebuild = _hasTimelineSummary(existingMeta);
+        const baseMeta = shouldRebuild ? createEmptyMeta() : existingMeta;
+        const newMeta = horaeManager.mergeParsedToMeta(baseMeta, result);
+        if (shouldRebuild) {
+            _preserveRebuildControlFlags(newMeta, existingMeta);
+            if (newMeta._tableUpdates) {
+                newMeta.tableContributions = newMeta._tableUpdates;
+                delete newMeta._tableUpdates;
+            }
+        } else if (newMeta._tableUpdates) {
+            horaeManager.applyTableUpdates(newMeta._tableUpdates);
+            delete newMeta._tableUpdates;
+        }
+        if (result.deletedAgenda?.length > 0) {
+            horaeManager.removeCompletedAgenda(result.deletedAgenda);
+        }
+        horaeManager.setMessageMeta(messageId, newMeta);
+        if (shouldRebuild) {
+            _rebuildDerivedMetaCaches();
+        } else {
+            if (result.relationships?.length > 0) horaeManager._mergeRelationships(result.relationships);
+            if (result.scene?.scene_desc && result.scene?.location) {
+                horaeManager._updateLocationMemory(result.scene.location, result.scene.scene_desc);
+            }
+        }
+        injectHoraeTagToMessage(messageId, newMeta);
+        await getContext().saveChat();
+        refreshAllDisplays();
+        showToast(t('toast.saveSuccess'), 'success');
+        updatedMeta = _cloneMessagePanelData(newMeta);
+    });
+
+    return updatedMeta;
+}
+
+async function _toggleSideplayMessagePanelMetaForVue(messageId) {
+    const meta = horaeManager.getMessageMeta(messageId);
+    if (!meta) return null;
+
+    meta._skipHorae = !meta._skipHorae;
+    horaeManager.setMessageMeta(messageId, meta);
+    horaeManager.rebuildRelationships();
+    horaeManager.rebuildLocationMemory();
+
+    if (settings.vectorEnabled && vectorManager.isReady) {
+        try {
+            if (meta._skipHorae) {
+                await vectorManager.removeMessage(messageId);
+            } else {
+                await vectorManager.addMessage(messageId, meta);
+            }
+        } catch (err) {
+            console.warn(`[Horae] 同步番外向量索引失败 #${messageId}:`, err);
+        }
+    }
+
+    await getContext().saveChat();
+    refreshAllDisplays();
+    showToast(meta._skipHorae ? t('badge.sideplayMarked') : t('toast.saveSuccess'), 'success');
+    return _cloneMessagePanelData(meta);
+}
+
+function _mountVueMessagePanel(messageEl, messageIndex, meta, mesTextEl) {
+    const hostEl = document.createElement('div');
+    hostEl.className = 'horae-message-panel horae-message-panel-vue';
+    hostEl.dataset.messageId = String(messageIndex);
+    _applyMessagePanelHostLayout(hostEl);
+    mesTextEl.insertAdjacentElement('afterend', hostEl);
+
+    renderRpgHud(messageEl, messageIndex);
+
+    try {
+        const mounted = mountVueMessagePanel(hostEl, {
+            messageId: messageIndex,
+            initialMeta: _cloneMessagePanelData(meta),
+            labels: _getMessagePanelVueLabels(),
+            config: {
+                sideplayMode: !!settings.sideplayMode,
+                showPanel: !!settings.showMessagePanel,
+            },
+            adapter: {
+                save: (nextMeta) => _saveMessagePanelMetaFromVue(messageIndex, nextMeta),
+                quickScan: () => _quickScanMessagePanelMetaForVue(messageIndex),
+                rescan: () => _rescanMessagePanelMetaForVue(messageIndex),
+                aiAnalyze: () => _aiAnalyzeMessagePanelMetaForVue(messageIndex),
+                toggleSideplay: () => _toggleSideplayMessagePanelMetaForVue(messageIndex),
+                openDrawer: () => _openHoraeDrawerFromMessagePanel(),
+            },
+        });
+        hostEl._horaeVueUnmount = mounted?.unmount;
+        return true;
+    } catch (err) {
+        console.warn('[Horae] Vue 楼层面板挂载失败，回退到旧面板:', err);
+        if (hostEl.isConnected) {
+            hostEl.remove();
+        }
+        return false;
+    }
+}
+
 /**
  * 为消息添加元数据面板
  */
 function addMessagePanel(messageEl, messageIndex) {
+    try {
+        const existingPanel = messageEl.querySelector('.horae-message-panel');
+        if (existingPanel) return;
+
+        const meta = horaeManager.getMessageMeta(messageIndex);
+        if (!meta) return;
+
+        const mesTextEl = messageEl.querySelector('.mes_text');
+        if (!mesTextEl) return;
+
+        if (_mountVueMessagePanel(messageEl, messageIndex, meta, mesTextEl)) return;
+    } catch (err) {
+        console.warn(`[Horae] Vue 面板初始化失败 #${messageIndex}，回退旧面板:`, err);
+    }
+    addLegacyMessagePanel(messageEl, messageIndex);
+}
+
+/**
+ * 为消息添加旧版元数据面板
+ */
+function addLegacyMessagePanel(messageEl, messageIndex) {
     try {
         const existingPanel = messageEl.querySelector('.horae-message-panel');
         if (existingPanel) return;
