@@ -1,9 +1,16 @@
 import { createApp } from 'vue';
 import MessagePanel from './MessagePanel.vue';
-import messagePanelCss from './messagePanel.css?inline';
+import defaultMessagePanelThemeCss from './theme/日间.css?inline';
 
 const FONT_AWESOME_STYLESHEET_RE = /(?:fontawesome|font-awesome|\/css\/all(?:\.min)?\.css|\/css\/fontawesome(?:\.min)?\.css)/i;
 const FONT_AWESOME_FALLBACK_HREF = '/css/fontawesome.min.css';
+
+function getPanelThemeCss(config = {}) {
+  const themeCss = typeof config.messagePanelThemeCss === 'string'
+    ? config.messagePanelThemeCss.trim()
+    : '';
+  return themeCss || defaultMessagePanelThemeCss;
+}
 
 function resetShadowHostChrome(hostEl) {
   hostEl.style.setProperty('margin-top', '10px', 'important');
@@ -18,13 +25,14 @@ function resetShadowHostChrome(hostEl) {
   hostEl.style.setProperty('order', '9999', 'important');
 }
 
-function injectPanelStyles(shadowRoot) {
-  if (!shadowRoot.querySelector('style[data-horae-message-panel-style]')) {
-    const styleEl = document.createElement('style');
+function injectPanelStyles(shadowRoot, config = {}) {
+  let styleEl = shadowRoot.querySelector('style[data-horae-message-panel-style]');
+  if (!styleEl) {
+    styleEl = document.createElement('style');
     styleEl.dataset.horaeMessagePanelStyle = 'true';
-    styleEl.textContent = messagePanelCss;
     shadowRoot.append(styleEl);
   }
+  styleEl.textContent = getPanelThemeCss(config);
 
   const stylesheetHrefs = new Set();
   document.querySelectorAll('link[rel~="stylesheet"][href]').forEach((link) => {
@@ -44,14 +52,16 @@ function injectPanelStyles(shadowRoot) {
     linkEl.href = href;
     shadowRoot.append(linkEl);
   });
+
+  shadowRoot.append(styleEl);
 }
 
-function createShadowMount(hostEl) {
+function createShadowMount(hostEl, config = {}) {
   resetShadowHostChrome(hostEl);
 
   const shadowRoot = hostEl.shadowRoot || hostEl.attachShadow({ mode: 'open' });
   shadowRoot.textContent = '';
-  injectPanelStyles(shadowRoot);
+  injectPanelStyles(shadowRoot, config);
 
   const panelContainer = document.createElement('div');
   panelContainer.style.setProperty('margin-top', '0', 'important');
@@ -74,13 +84,20 @@ function createShadowMount(hostEl) {
     attributeFilter: ['class', 'data-message-id'],
   });
 
-  return { panelContainer, classObserver, syncPanelContainer };
+  return {
+    panelContainer,
+    classObserver,
+    syncPanelContainer,
+    updateTheme(nextConfig = {}) {
+      injectPanelStyles(shadowRoot, nextConfig);
+    },
+  };
 }
 
 export function mountMessagePanel(hostEl, options = {}) {
   if (!hostEl) return null;
 
-  const { panelContainer, classObserver, syncPanelContainer } = createShadowMount(hostEl);
+  const { panelContainer, classObserver, syncPanelContainer, updateTheme } = createShadowMount(hostEl, options.config);
   const app = createApp(MessagePanel, {
     ...options,
     setHostState(state = {}) {
@@ -113,6 +130,7 @@ export function mountMessagePanel(hostEl, options = {}) {
       vm?.replaceMeta?.(meta);
     },
     updateConfig(config) {
+      updateTheme(config);
       vm?.replaceConfig?.(config);
     },
   };

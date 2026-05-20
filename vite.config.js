@@ -20,7 +20,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         assetFileNames: (assetInfo) => {
-          if (assetInfo.name === 'style.css') return 'messagePanel.css';
+          if (assetInfo.name === 'style.css') return 'messagePanelStyle.css';
           return '[name][extname]';
         },
       },

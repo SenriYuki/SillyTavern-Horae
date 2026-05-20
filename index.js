@@ -27,6 +27,25 @@ const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
 const VERSION = '1.13.11B';
 const DEFAULT_VECTOR_STRIP_TAGS = 'dream_status,Episode,details,think,thinking,Thinking';
+const MESSAGE_PANEL_THEME_TYPE = 'horae-message-panel-theme';
+const MESSAGE_PANEL_THEME_DAY = 'day';
+const MESSAGE_PANEL_THEME_NIGHT = 'night';
+const MESSAGE_PANEL_THEME_DEFAULT = MESSAGE_PANEL_THEME_DAY;
+const MESSAGE_PANEL_BUILTIN_THEMES = [
+    {
+        id: MESSAGE_PANEL_THEME_DAY,
+        nameKey: 'settings.messagePanelThemeDay',
+        path: 'src/messagePanel/theme/日间.css',
+        format: 'css',
+    },
+    {
+        id: MESSAGE_PANEL_THEME_NIGHT,
+        nameKey: 'settings.messagePanelThemeNight',
+        path: 'src/messagePanel/theme/夜间.css',
+        format: 'css',
+    },
+];
+const messagePanelBuiltinThemeCssCache = new Map();
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -158,6 +177,8 @@ const DEFAULT_SETTINGS = {
     themeMode: 'dark',             // 插件主题：dark / light / custom-{index}
     customCSS: '',                 // 用户自定义CSS
     customThemes: [],              // 导入的美化主题 [{name, author, variables, css}]
+    messagePanelTheme: MESSAGE_PANEL_THEME_DEFAULT, // 新版楼层界面主题：day / night / custom-{index}
+    messagePanelCustomThemes: [],  // 导入的新版楼层界面主题 [{name, author, version, css}]
     globalTables: [],              // 全局表格（跨角色卡共享）
     showTopIcon: true,             // 显示顶部导航栏图标
     customTablesPrompt: '',        // 自定义表格填写规则提示词（空=使用默认）
@@ -9386,6 +9407,180 @@ function deleteCustomTheme(index) {
     showToast(t('toast.saveSuccess'), 'info');
 }
 
+function getMessagePanelBuiltinTheme(mode) {
+    const themeMode = String(mode || MESSAGE_PANEL_THEME_DEFAULT);
+    return MESSAGE_PANEL_BUILTIN_THEMES.find(theme => theme.id === themeMode) || null;
+}
+
+function resolveMessagePanelTheme(mode) {
+    const themeMode = String(mode || settings.messagePanelTheme || MESSAGE_PANEL_THEME_DEFAULT);
+    const builtinTheme = getMessagePanelBuiltinTheme(themeMode);
+    if (builtinTheme) {
+        return {
+            ...builtinTheme,
+            name: t(builtinTheme.nameKey),
+            builtin: true,
+            css: '',
+        };
+    }
+    if (themeMode.startsWith('custom-')) {
+        const idx = parseInt(themeMode.split('-')[1], 10);
+        const theme = (settings.messagePanelCustomThemes || [])[idx];
+        if (theme && typeof theme.css === 'string') {
+            return { ...theme, id: themeMode, builtin: false };
+        }
+    }
+    return resolveMessagePanelTheme(MESSAGE_PANEL_THEME_DEFAULT);
+}
+
+function getMessagePanelThemeCss() {
+    const theme = resolveMessagePanelTheme(settings.messagePanelTheme);
+    if (!theme.builtin) return theme.css || '';
+    return messagePanelBuiltinThemeCssCache.get(theme.id) || '';
+}
+
+function refreshMessagePanelThemeSelector() {
+    const sel = document.getElementById('horae-setting-message-panel-theme');
+    if (!sel) return;
+
+    sel.innerHTML = '';
+    MESSAGE_PANEL_BUILTIN_THEMES.forEach(theme => {
+        const opt = document.createElement('option');
+        opt.value = theme.id;
+        opt.textContent = t(theme.nameKey);
+        sel.appendChild(opt);
+    });
+
+    const themes = settings.messagePanelCustomThemes || [];
+    themes.forEach((theme, i) => {
+        const opt = document.createElement('option');
+        opt.value = `custom-${i}`;
+        opt.textContent = `📁 ${theme.name || t('settings.messagePanelThemeImported')}`;
+        sel.appendChild(opt);
+    });
+
+    const resolved = resolveMessagePanelTheme(settings.messagePanelTheme);
+    sel.value = resolved.id || MESSAGE_PANEL_THEME_DEFAULT;
+    if (settings.messagePanelTheme !== sel.value) {
+        settings.messagePanelTheme = sel.value;
+    }
+}
+
+async function ensureMessagePanelThemeCss(mode = settings.messagePanelTheme) {
+    const theme = resolveMessagePanelTheme(mode);
+    if (!theme.builtin) return theme.css || '';
+    if (messagePanelBuiltinThemeCssCache.has(theme.id)) {
+        return messagePanelBuiltinThemeCssCache.get(theme.id) || '';
+    }
+
+    const css = await getBuiltinMessagePanelThemeCss(theme.id);
+    messagePanelBuiltinThemeCssCache.set(theme.id, css || '');
+    return css || '';
+}
+
+async function updateVueMessagePanelConfig() {
+    try {
+        await ensureMessagePanelThemeCss(settings.messagePanelTheme);
+    } catch (err) {
+        console.warn('[Horae] 加载楼层界面主题失败:', err);
+    }
+    const vueConfig = _getMessagePanelVueConfig();
+    document.querySelectorAll('.horae-message-panel.horae-message-panel-vue').forEach(panel => {
+        panel._horaeVueUpdateConfig?.(vueConfig);
+    });
+}
+
+async function getBuiltinMessagePanelThemeCss(mode) {
+    const theme = getMessagePanelBuiltinTheme(mode);
+    if (!theme) return '';
+    const response = await fetch(`/scripts/extensions/${EXTENSION_FOLDER}/${theme.path}`, { cache: 'no-cache' });
+    if (!response.ok) throw new Error(`Failed to load built-in message panel theme: ${response.status}`);
+    const text = await response.text();
+    if (theme.format !== 'json') return text;
+
+    const data = JSON.parse(text);
+    return typeof data.css === 'string' ? data.css : '';
+}
+
+async function exportMessagePanelTheme() {
+    try {
+        const mode = settings.messagePanelTheme || MESSAGE_PANEL_THEME_DEFAULT;
+        const current = resolveMessagePanelTheme(mode);
+        const css = current.builtin ? await getBuiltinMessagePanelThemeCss(current.id) : current.css;
+        const theme = {
+            type: MESSAGE_PANEL_THEME_TYPE,
+            name: current.name || t('settings.messagePanelThemeDay'),
+            author: current.author || '',
+            version: current.version || '1.0',
+            css: css || '',
+        };
+        const blob = new Blob([JSON.stringify(theme, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'horae-message-panel-theme.json';
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(t('toast.themeExported'), 'info');
+    } catch (err) {
+        console.error('[Horae] 导出楼层界面主题失败:', err);
+        showToast(t('toast.messagePanelThemeExportFailed'), 'error');
+    }
+}
+
+function importMessagePanelTheme() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+            const text = await file.text();
+            const theme = JSON.parse(text);
+            if (!theme || typeof theme.css !== 'string' || !theme.css.trim()) {
+                showToast(t('toast.messagePanelThemeInvalidFile'), 'error');
+                return;
+            }
+            const nextTheme = {
+                type: MESSAGE_PANEL_THEME_TYPE,
+                name: theme.name || file.name.replace(/\.json$/i, ''),
+                author: theme.author || '',
+                version: theme.version || '1.0',
+                css: theme.css,
+            };
+            if (!Array.isArray(settings.messagePanelCustomThemes)) settings.messagePanelCustomThemes = [];
+            settings.messagePanelCustomThemes.push(nextTheme);
+            settings.messagePanelTheme = `custom-${settings.messagePanelCustomThemes.length - 1}`;
+            saveSettings();
+            refreshMessagePanelThemeSelector();
+            updateVueMessagePanelConfig();
+            showToast(t('toast.themeImported', { name: nextTheme.name }), 'success');
+        } catch (err) {
+            showToast(t('toast.themeParseFailed'), 'error');
+            console.error('[Horae] 导入楼层界面主题失败:', err);
+        }
+    });
+    input.click();
+}
+
+function deleteMessagePanelCustomTheme(index) {
+    const themes = settings.messagePanelCustomThemes || [];
+    if (!themes[index]) return;
+    if (!confirm(t('confirm.deleteTheme', { name: themes[index].name }))) return;
+
+    const currentMode = settings.messagePanelTheme || MESSAGE_PANEL_THEME_DEFAULT;
+    themes.splice(index, 1);
+    settings.messagePanelCustomThemes = themes;
+    if (currentMode === `custom-${index}` || (currentMode.startsWith('custom-') && parseInt(currentMode.split('-')[1], 10) >= index)) {
+        settings.messagePanelTheme = MESSAGE_PANEL_THEME_DEFAULT;
+    }
+    saveSettings();
+    refreshMessagePanelThemeSelector();
+    updateVueMessagePanelConfig();
+    showToast(t('toast.saveSuccess'), 'info');
+}
+
 // ============================================
 // 自助美化工具 (Theme Designer)
 // ============================================
@@ -10214,6 +10409,8 @@ function _getMessagePanelVueConfig() {
     return {
         sideplayMode: !!settings.sideplayMode,
         showPanel: !!settings.showMessagePanel,
+        messagePanelTheme: settings.messagePanelTheme || MESSAGE_PANEL_THEME_DEFAULT,
+        messagePanelThemeCss: getMessagePanelThemeCss(),
     };
 }
 
@@ -10468,6 +10665,9 @@ function _mountVueMessagePanel(messageEl, messageIndex, meta, mesTextEl) {
         });
         hostEl._horaeVueUnmount = mounted?.unmount;
         hostEl._horaeVueUpdateConfig = mounted?.updateConfig;
+        ensureMessagePanelThemeCss(settings.messagePanelTheme)
+            .then(() => hostEl._horaeVueUpdateConfig?.(_getMessagePanelVueConfig()))
+            .catch(err => console.warn('[Horae] 加载楼层界面主题失败:', err));
         return true;
     } catch (err) {
         console.warn('[Horae] Vue 楼层面板挂载失败，回退到旧面板:', err);
@@ -12681,6 +12881,7 @@ function initSettingsEvents() {
     const _SETTINGS_EXPORT_KEYS = [
         'enabled', 'autoParse', 'gzipSaveRequests', 'autoFillPrevTimelineOnSend', 'injectContext', 'injectCustomPrompts', 'showMessagePanel', 'showTopIcon',
         'useNewMessagePanel',
+        'messagePanelTheme', 'messagePanelCustomThemes',
         'injectionDepthSource', 'injectionPosition', 'timelineInjectionMode',
         'sendTimeline', 'contextDepth', 'sendCharacters', 'sendCharacterAffection', 'sendMainCharacterPersonality', 'sendItems',
         'sendLocationMemory', 'sendRelationships', 'sendMood',
@@ -13153,6 +13354,12 @@ function initSettingsEvents() {
         applyThemeMode();
     });
 
+    $('#horae-setting-message-panel-theme').on('change', function () {
+        settings.messagePanelTheme = this.value || MESSAGE_PANEL_THEME_DEFAULT;
+        saveSettings();
+        updateVueMessagePanelConfig();
+    });
+
     // 美化导入/导出/删除/自助美化
     $('#horae-btn-theme-export').on('click', exportTheme);
     $('#horae-btn-theme-import').on('click', importTheme);
@@ -13164,6 +13371,16 @@ function initSettingsEvents() {
             return;
         }
         deleteCustomTheme(parseInt(mode.split('-')[1]));
+    });
+    $('#horae-btn-message-panel-theme-export').on('click', exportMessagePanelTheme);
+    $('#horae-btn-message-panel-theme-import').on('click', importMessagePanelTheme);
+    $('#horae-btn-message-panel-theme-delete').on('click', function () {
+        const mode = settings.messagePanelTheme || MESSAGE_PANEL_THEME_DEFAULT;
+        if (!mode.startsWith('custom-')) {
+            showToast(t('toast.onlyDeleteImported'), 'warning');
+            return;
+        }
+        deleteMessagePanelCustomTheme(parseInt(mode.split('-')[1], 10));
     });
 
     // 自定义CSS
@@ -14104,6 +14321,7 @@ function syncSettingsToUI() {
     // 主题模式
     refreshThemeSelector();
     applyThemeMode();
+    refreshMessagePanelThemeSelector();
 
     // 自定义CSS
     $('#horae-custom-css').val(settings.customCSS || '');

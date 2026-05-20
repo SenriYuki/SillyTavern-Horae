@@ -708,6 +708,34 @@
                     </div>
 
                     <div class="horae-setting-item">
+                        <label data-i18n="settings.messagePanelTheme">
+                            楼层界面主题
+                            <select id="horae-setting-message-panel-theme" class="horae-select">
+                                <option value="day" data-i18n="settings.messagePanelThemeDay">日间</option>
+                                <option value="night" data-i18n="settings.messagePanelThemeNight">夜间</option>
+                            </select>
+                        </label>
+                        <div class="horae-theme-buttons">
+                            <button id="horae-btn-message-panel-theme-import" class="horae-icon-btn"
+                                data-i18n-title="tooltip.importTheme" title="">
+                                <i class="fa-solid fa-file-import"></i>
+                            </button>
+                            <button id="horae-btn-message-panel-theme-export" class="horae-icon-btn"
+                                data-i18n-title="tooltip.exportTheme" title="">
+                                <i class="fa-solid fa-file-export"></i>
+                            </button>
+                            <button id="horae-btn-message-panel-theme-delete" class="horae-icon-btn"
+                                data-i18n-title="tooltip.deleteTheme" title="">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
+                        <span class="horae-setting-hint" data-i18n="settings.messagePanelThemeHint">
+                            <i class="fa-solid fa-circle-info"></i>
+                            切换新楼层界面的完整CSS主题。导入的JSON需要包含 css 字段。
+                        </span>
+                    </div>
+
+                    <div class="horae-setting-item">
                         <div class="horae-section-header horae-collapse-header" id="horae-css-collapse-toggle"
                             data-i18n="settings.customCss"
                             style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
