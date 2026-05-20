@@ -824,18 +824,56 @@
 }
 
 @media (max-width: 768px) {
-  .horae-message-panel-vue .horae-panel-top,
+  .horae-message-panel-vue .horae-panel-top {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
   .horae-message-panel-vue .horae-panel-content {
     padding: 16px;
   }
 
+  .horae-message-panel-vue .toggle-left {
+    gap: 10px;
+  }
+
+  .horae-message-panel-vue .toggle-icon {
+    width: 30px;
+    height: 30px;
+    font-size: 0.92rem;
+  }
+
+  .horae-message-panel-vue .toggle-info {
+    gap: 0;
+    overflow: hidden;
+  }
+
+  .horae-message-panel-vue .toggle-time {
+    font-size: 0.92rem;
+    line-height: 1.2;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .horae-message-panel-vue .toggle-summary {
+    display: none;
+  }
+
   .horae-message-panel-vue .toggle-actions {
-    gap: 8px;
+    gap: 6px;
   }
 
   .horae-message-panel-vue .neo-btn-icon {
-    width: 34px;
-    height: 34px;
+    width: 30px;
+    height: 30px;
+    font-size: 0.82rem !important;
+  }
+
+  .horae-message-panel-vue .horae-sideplay-badge {
+    font-size: 9px;
+    padding: 1px 5px;
   }
 
   .horae-message-panel-vue .dict-view,
