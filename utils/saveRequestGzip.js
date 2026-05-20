@@ -1,7 +1,7 @@
 const SAVE_REQUEST_PATHS = new Set([
     '/api/chats/save',
     '/api/chats/group/save',
-    '/api/backends/chat-completions/generate',
+    // '/api/backends/chat-completions/generate',
 ]);
 
 const HOOK_KEY = Symbol.for('horae.saveRequestGzipFetchHook');
