@@ -1,4 +1,4 @@
-# Horae - 時光記憶 v1.14.0 | SillyTavern 記憶增強插件
+# Horae - 時光記憶 v1.14.1 | SillyTavern 記憶增強插件
 
 [English](README.md) | [简体中文](README.zh-CN.md) | **繁體中文**
 
@@ -52,8 +52,6 @@ Image
 - **串行隊列**：輔助 API 請求會排隊執行，降低多個後台任務同時觸發 429 的概率。
 - **預設不回退主 API**：輔助 API 失敗時預設不偷跑主 API，避免繼續撞主 API 速率限制。
 - **安全匯出**：API 地址、密鑰、模型不會進入 Horae 配置檔匯出內容。
-
-
 
 > 更早版本的更新日志请查看 [CHANGELOG.md](CHANGELOG.md)
 

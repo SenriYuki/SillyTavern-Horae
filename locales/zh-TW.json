@@ -404,7 +404,9 @@
         "vectorHintNetwork": "無法連接到 API 伺服器，請檢查網路/VPN/CORS",
         "vectorHintTimeout": "請求超時，伺服器回應過慢",
         "vectorHintFormat": "API 回傳格式異常，請確認該模型支援 embedding",
-        "vectorHintUnknown": "未知錯誤，請檢查瀏覽器主控台"
+        "vectorHintUnknown": "未知錯誤，請檢查瀏覽器主控台",
+        "noOrphanRpg": "沒有需要清理的無主 RPG 資料",
+        "orphanRpgPurged": "已清理 {{n}} 個無角色檔的 RPG 資料"
     },
     "confirm": {
         "deleteSummary": "刪除此總結？原始事件將恢復顯示。",
@@ -419,6 +421,7 @@
         "closeUnsaved": "有未儲存的更改，確定關閉？",
         "restoreDefaultBars": "確定恢復屬性條為預設配置？",
         "cleanStaleData": "清理聊天中不在當前配置內的舊屬性條資料？",
+        "purgeOrphanRpg": "將清理 {{n}} 個未登記角色的 RPG 資料（{{names}}）。\n這些角色不在 user 與 NPC 列表中，僅在 RPG 模組裡殘留。是否繼續？",
         "restoreDefaultAttrs": "確定恢復屬性面板為預設配置？",
         "restoreRpgPrompts": "確定恢復 RPG 提示詞為預設？",
         "importPromptsReplace": "確定匯入？當前所有提示詞將被替換。",
@@ -454,6 +457,7 @@
         "expandToOriginal": "切換為原始時間線",
         "restoreDefault": "恢復預設",
         "cleanStale": "清理聊天中不在當前配置內的舊屬性條資料",
+        "purgeOrphanRpg": "清理無角色檔殘留的 RPG 資料",
         "exportConfig": "匯出配置",
         "importConfig": "匯入配置",
         "addAttribute": "新增屬性",

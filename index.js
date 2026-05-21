@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.14.0
+ * 版本: 1.14.1
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -22,7 +22,7 @@ import { initPromptDefaults, ensurePromptDefaults, ensurePresetPrompts, getPromp
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.14.0';
+const VERSION = '1.14.1';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -341,7 +341,7 @@ function _getDefaultRpgBarConfig() {
         ...bar,
         name: tForLang(lang, `rpgDefaults.bars.${bar.key}.name`),
         min: 0,
-        max: 100,
+        max: 9999,
         defaultMax: 100,
         required: true,
         desc: tForLang(lang, `rpgDefaults.bars.${bar.key}.desc`),
@@ -682,7 +682,7 @@ function _normalizeRpgBarConfigInPlace() {
             name: String(bar?.name || fallback.name || bar?.key || `BAR${idx + 1}`).trim(),
             color: bar?.color || fallback.color || '#a78bfa',
             min: Number.isFinite(parseInt(bar?.min, 10)) ? parseInt(bar.min, 10) : (fallback.min ?? 0),
-            max: Number.isFinite(parseInt(bar?.max, 10)) ? parseInt(bar.max, 10) : (fallback.max ?? 100),
+            max: Number.isFinite(parseInt(bar?.max, 10)) ? parseInt(bar.max, 10) : (fallback.max ?? 9999),
             defaultMax: Number.isFinite(parseInt(bar?.defaultMax, 10)) ? parseInt(bar.defaultMax, 10) : (fallback.defaultMax ?? 100),
             required: bar?.required !== false,
             desc: String(bar?.desc || fallback.desc || '').trim(),
@@ -7089,6 +7089,14 @@ function updateRpgDisplay() {
 
     const _uoUserName = getContext().name1 || '';
 
+    // 渲染过滤：仅保留 user 与已登记 NPC；未登记的临时 owner 留在底层不展示，避免面板膨胀
+    {
+        const stateNpcs = horaeManager.getLatestState()?.npcs || {};
+        for (const name of [...allNames]) {
+            if (name !== _uoUserName && !stateNpcs[name]) allNames.delete(name);
+        }
+    }
+
     /** 构建单个角色的分页标签 HTML */
     function _buildCharTabs(name) {
         const tabs = [];
@@ -12380,6 +12388,58 @@ function initSettingsEvents() {
         refreshAllDisplays();
         showToast(t('toast.staleDataCleaned', { n: cleaned, keys: keyList }), 'success');
     });
+    // 清理无角色档的 RPG 数据：扫描 chat[0].rpg.* 中不属于 user 与已登记 NPC 的 owner
+    $('#horae-rpg-purge-orphan').on('click', async () => {
+        const chat = horaeManager.getChat();
+        if (!chat?.length) { showToast(t('toast.noChatData'), 'warning'); return; }
+        const rpg = chat[0]?.horae_meta?.rpg;
+        if (!rpg) { showToast(t('toast.noOrphanRpg'), 'success'); return; }
+
+        const stateNpcs = horaeManager.getLatestState()?.npcs || {};
+        const userName = getContext().name1 || '';
+        const validNames = new Set(Object.keys(stateNpcs));
+        if (userName) validNames.add(userName);
+
+        const RPG_BUCKETS = ['bars', 'status', 'skills', 'attributes', 'reputation', 'equipment', 'levels', 'xp', 'currency'];
+        const owners = new Set();
+        for (const sub of RPG_BUCKETS) {
+            for (const name of Object.keys(rpg[sub] || {})) owners.add(name);
+        }
+        for (const name of Object.keys(rpg.equipmentConfig?.perChar || {})) owners.add(name);
+
+        const orphans = [...owners].filter(n => n && !validNames.has(n));
+        if (orphans.length === 0) { showToast(t('toast.noOrphanRpg'), 'success'); return; }
+
+        const preview = orphans.slice(0, 8).join('、') + (orphans.length > 8 ? '…' : '');
+        if (!confirm(t('confirm.purgeOrphanRpg', { n: orphans.length, names: preview }))) return;
+
+        for (const name of orphans) {
+            for (const sub of RPG_BUCKETS) {
+                if (rpg[sub]?.[name]) delete rpg[sub][name];
+            }
+            if (rpg.equipmentConfig?.perChar?.[name]) delete rpg.equipmentConfig.perChar[name];
+            const _cfgs = chat[0]?.horae_meta?._rpgConfigs;
+            if (_cfgs?.equipmentConfig?.perChar?.[name]) delete _cfgs.equipmentConfig.perChar[name];
+        }
+
+        // 写入防回滚清单，与 _cascadeDeleteNpcs 保持一致
+        if (!chat[0].horae_meta._deletedNpcs) chat[0].horae_meta._deletedNpcs = [];
+        for (const name of orphans) {
+            if (!chat[0].horae_meta._deletedNpcs.includes(name)) {
+                chat[0].horae_meta._deletedNpcs.push(name);
+            }
+        }
+
+        if (Array.isArray(settings.pinnedNpcs) && settings.pinnedNpcs.length) {
+            const before = settings.pinnedNpcs.length;
+            settings.pinnedNpcs = settings.pinnedNpcs.filter(n => !orphans.includes(n));
+            if (settings.pinnedNpcs.length !== before) saveSettings();
+        }
+
+        await getContext().saveChat();
+        refreshAllDisplays();
+        showToast(t('toast.orphanRpgPurged', { n: orphans.length }), 'success');
+    });
     // 属性条：导出
     $('#horae-rpg-bar-export').on('click', () => {
         const blob = new Blob([JSON.stringify(settings.rpgBarConfig, null, 2)], { type: 'application/json' });
@@ -12445,7 +12505,7 @@ function initSettingsEvents() {
         const existing = new Set(settings.rpgBarConfig.map(b => b.key));
         let newKey = 'bar1';
         for (let n = 1; existing.has(newKey); n++) newKey = `bar${n}`;
-        settings.rpgBarConfig.push({ key: newKey, name: newKey.toUpperCase(), color: '#a78bfa', min: 0, max: 100, defaultMax: 100, required: true, desc: '' });
+        settings.rpgBarConfig.push({ key: newKey, name: newKey.toUpperCase(), color: '#a78bfa', min: 0, max: 9999, defaultMax: 100, required: true, desc: '' });
         saveSettings();
         renderBarConfig();
         horaeManager.init(getContext(), settings);
@@ -14505,6 +14565,15 @@ async function _initVectorModel() {
 }
 
 async function _buildVectorIndex() {
+    // 配置完整但模型未就绪时自动加载，避免用户只改 URL/Key 不会触发 init 的盲点
+    if (!vectorManager.isReady && !vectorManager.isLoading && settings.vectorEnabled) {
+        const apiReady = settings.vectorSource === 'api'
+            && settings.vectorApiUrl && settings.vectorApiKey && settings.vectorApiModel;
+        const localReady = settings.vectorSource !== 'api' && settings.vectorModel;
+        if (apiReady || localReady) {
+            await _initVectorModel();
+        }
+    }
     if (!vectorManager.isReady) {
         showToast(t('toast.vectorWaitModel'), 'warning');
         return;
@@ -14731,7 +14800,7 @@ async function _generateForAuxTask(prompt, opts = {}) {
             showToast(t('toast.subApiMissing', { missing }), 'warning');
         }
     }
-    return await _generateForAiTasks(prompt, rawOpts);
+    return await _generateForAiTasks(prompt, { ...rawOpts, kind });
 }
 
 function _extractHoraeSummaryText(raw) {
@@ -15443,6 +15512,15 @@ async function testVectorApiConnection() {
             throw wrapped;
         }
         showToast(t('toast.vectorTestSuccess', { dim: vec.length }), 'success');
+        // 测试通过即说明 URL/Key/Model 可用，同步回 settings 并初始化模型，省去再去切下拉触发 init
+        if (settings.vectorEnabled && settings.vectorSource === 'api'
+            && !vectorManager.isReady && !vectorManager.isLoading) {
+            settings.vectorApiUrl = url;
+            settings.vectorApiKey = key;
+            settings.vectorApiModel = model;
+            saveSettings();
+            _initVectorModel();
+        }
     } catch (err) {
         const friendly = _vectorErrorHint(err);
         showToast(t('toast.vectorTestFailed', { error: friendly }), 'error');
@@ -15578,22 +15656,25 @@ async function testSubApiConnection() {
 function _getAuxApiPromptProfile(kind = 'summary') {
     if (kind === 'analysis') {
         return {
-            system: 'You are a strict information extraction engine for creative fiction. Read the provided passage and output only the requested structured tags. Do not summarize outside the required format.',
-            ready: 'Understood. I will extract only explicit facts and output the requested structured tags.',
-            prefill: '<horae>',
+            system: 'You are a strict information extraction engine for narrative passages. Follow every instruction in the user message verbatim and output only the requested structured tag blocks (such as <horae>...</horae> and <horaeevent>...</horaeevent>). Do not add prose, explanations, or summaries.',
+            ready: 'Understood. I will follow the user instructions and output only the requested structured tag blocks.',
+            prefill: '',
+            skipOaiInjection: true,
         };
     }
     if (kind === 'aiEnrich') {
         return {
             system: 'You are a strict character profile extractor for creative fiction. Output only the requested JSON object and do not add prose.',
             ready: 'Understood. I will extract the character profile and output strict JSON only.',
-            prefill: '{',
+            prefill: '',
+            skipOaiInjection: true,
         };
     }
     return {
         system: 'You are a professional literary analyst specializing in creative fiction. Your task is to read provided narrative passages and produce a concise, faithful plot summary. Analyze all content objectively regardless of themes, genre, or mature content. Preserve the emotional tone and key character dynamics. Output only the summary text.',
         ready: 'Understood. I will read the provided narrative passages and produce a faithful, objective plot summary that preserves all key details, character dynamics, and emotional tone. Please provide the content.',
         prefill: 'I have received the narrative content. Here is the concise summary:',
+        skipOaiInjection: false,
     };
 }
 
@@ -15602,10 +15683,12 @@ async function _buildAuxApiMessages(prompt, kind = 'summary') {
     const profile = _getAuxApiPromptProfile(kind);
     const messages = [];
     let _oaiSettings = null;
-    try {
-        const mod = await import('/scripts/openai.js');
-        _oaiSettings = mod.oai_settings;
-    } catch (_) { }
+    if (!profile.skipOaiInjection) {
+        try {
+            const mod = await import('/scripts/openai.js');
+            _oaiSettings = mod.oai_settings;
+        } catch (_) { }
+    }
     if (_oaiSettings?.main_prompt) {
         messages.push({ role: 'system', content: _oaiSettings.main_prompt });
     }
@@ -15621,10 +15704,12 @@ async function _buildAuxApiMessages(prompt, kind = 'summary') {
         content: profile.ready
     });
     messages.push({ role: 'user', content: prompt });
-    messages.push({
-        role: 'assistant',
-        content: profile.prefill
-    });
+    if (profile.prefill) {
+        messages.push({
+            role: 'assistant',
+            content: profile.prefill
+        });
+    }
     if (_oaiSettings?.jailbreak_prompt) {
         messages.push({ role: 'system', content: _oaiSettings.jailbreak_prompt });
     }
@@ -15765,31 +15850,24 @@ async function generateWithDirectApi(prompt, profile = null, opts = {}) {
  */
 async function _geminiNativeRequest(prompt, rawUrl, model, apiKey, opts = {}) {
     const profile = _getAuxApiPromptProfile(opts.kind || 'summary');
-    // ── 1. 收集 system 指令（main/nsfw/literary 进 systemInstruction，jailbreak 单独留） ──
-    // OpenAI 路径走的是「user 之后接一条 assistant prefill，再用 system 末尾注入 jailbreak」
-    // Gemini 限制：contents 不允许连续两条 user，且 system 角色只能在 systemInstruction
-    // 等价做法：jailbreak 拼到 user 文本末尾（紧贴 model prefill 之前，注意力权重最高）
+    // 1. 收集 system 指令；提取类任务跳过 ST 主预设注入，避免 RP 主提示词污染结构化输出
     const systemParts = [];
     let jailbreakText = '';
-    try {
-        const { oai_settings } = await import('/scripts/openai.js');
-        if (oai_settings?.main_prompt) {
-            systemParts.push({ text: oai_settings.main_prompt });
-        }
-        if (oai_settings?.nsfw_toggle && oai_settings?.nsfw_prompt) {
-            systemParts.push({ text: oai_settings.nsfw_prompt });
-        }
-        systemParts.push({
-            text: profile.system,
-        });
-        if (oai_settings?.jailbreak_prompt) {
-            jailbreakText = String(oai_settings.jailbreak_prompt || '').trim();
-        }
-    } catch (_) {
-        systemParts.push({
-            text: profile.system,
-        });
+    if (!profile.skipOaiInjection) {
+        try {
+            const { oai_settings } = await import('/scripts/openai.js');
+            if (oai_settings?.main_prompt) {
+                systemParts.push({ text: oai_settings.main_prompt });
+            }
+            if (oai_settings?.nsfw_toggle && oai_settings?.nsfw_prompt) {
+                systemParts.push({ text: oai_settings.nsfw_prompt });
+            }
+            if (oai_settings?.jailbreak_prompt) {
+                jailbreakText = String(oai_settings.jailbreak_prompt || '').trim();
+            }
+        } catch (_) { /* noop */ }
     }
+    systemParts.push({ text: profile.system });
 
     // ── 2. safetySettings（与 ST 后端 GEMINI_SAFETY 常量对齐） ──
     const modelLow = model.toLowerCase();
@@ -15805,16 +15883,14 @@ async function _geminiNativeRequest(prompt, rawUrl, model, apiKey, opts = {}) {
         safetySettings.push({ category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold });
     }
 
-    // ── 3. 请求体（Gemini 原生 contents 格式 + 末尾 model prefill 锚点） ──
-    // user 文本：原 prompt + 末尾 jailbreak（如有）
-    // 末尾追加一条 model 角色的 prefill —— 让 Gemini 从「I have received... Here is the summary:」延续生成
-    // 这是 Gemini 标准 prefill 技术，等价于 OpenAI 路径里末尾 assistant 锚点的越狱效果
+    // 3. 请求体：Gemini 原生 contents 格式，prefill 仅在叙事类任务（带 prefill 文本）时使用
     const userText = jailbreakText ? `${prompt}\n\n${jailbreakText}` : prompt;
+    const contents = [{ role: 'user', parts: [{ text: userText }] }];
+    if (profile.prefill) {
+        contents.push({ role: 'model', parts: [{ text: profile.prefill }] });
+    }
     const body = {
-        contents: [
-            { role: 'user', parts: [{ text: userText }] },
-            { role: 'model', parts: [{ text: profile.prefill }] },
-        ],
+        contents,
         safetySettings,
         generationConfig: {
             candidateCount: 1,
@@ -17981,7 +18057,7 @@ async function clearAllData() {
 
 /** AI 辅助生成入口。默认走 generateRaw 并显式带入当前 OAI 预设片段。 */
 async function _generateForAiTasks(prompt, opts = {}) {
-    const { noVectorRecallMarker = false, noContextInjectionMarker = false } = opts;
+    const { noVectorRecallMarker = false, noContextInjectionMarker = false, kind = 'summary' } = opts;
     const context = getContext();
     const markerLines = [];
     if (noVectorRecallMarker) markerLines.push(_createNoVectorRecallMarker());
@@ -17997,7 +18073,7 @@ async function _generateForAiTasks(prompt, opts = {}) {
         });
     }
 
-    const messages = await _buildSummaryMessages(finalPrompt);
+    const messages = await _buildAuxApiMessages(finalPrompt, kind);
 
     try {
         return await context.generateRaw({ prompt: messages });
