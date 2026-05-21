@@ -149,7 +149,7 @@ const DEFAULT_SETTINGS = {
     injectContext: true,
     injectCustomPrompts: true, // 是否在摘要/总结后台任务中注入自定义头尾提示词
     showMessagePanel: true,
-    useNewMessagePanel: false,      // 使用新的 Vue 楼层面板；关闭后回退旧版 index.js 面板
+    useNewMessagePanel: true,      // 使用新的 Vue 楼层面板；关闭后回退旧版 index.js 面板
     gzipSaveRequests: true, // 对消息保存接口请求体进行 Gzip 压缩
     injectionDepthSource: 'system', // 注入深度来源: system(原逻辑) / preset(按完整提示词末尾偏移)
     injectionPosition: 0,
@@ -243,10 +243,10 @@ const DEFAULT_SETTINGS = {
     dicePosX: null,                 // 骰子面板拖拽位置X（null=默认右下角）
     dicePosY: null,                 // 骰子面板拖拽位置Y
     // 教学
-    tutorialCompleted: false,       // 新用户导航教学是否已完成
+    tutorialCompleted: true,       // 新用户导航教学是否已完成
     // 向量记忆
     vectorEnabled: false,
-    vectorSource: 'local',             // 'local' = 本地模型, 'api' = 远程 API
+    vectorSource: 'api',             // 'local' = 本地模型, 'api' = 远程 API
     vectorModel: 'Xenova/bge-small-zh-v1.5',
     vectorDtype: 'q8',
     vectorApiUrl: 'https://api.siliconflow.cn/v1',                  // OpenAI 兼容 embedding API 地址
