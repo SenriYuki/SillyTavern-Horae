@@ -226,17 +226,18 @@ export class VectorManager {
             const stored = await this._loadAllVectors();
             const staleKeys = [];
             for (const item of stored) {
-                if (item.messageIndex >= chat.length) {
+                const normalizedMessageIndex = this._normalizeMessageIndex(item.messageIndex);
+                if (normalizedMessageIndex === null || normalizedMessageIndex >= chat.length) {
                     staleKeys.push(item.messageIndex);
                     continue;
                 }
-                const meta = chat[item.messageIndex]?.horae_meta;
+                const meta = chat[normalizedMessageIndex]?.horae_meta;
                 const doc = this.buildVectorDocument(meta);
                 if (!doc || this._hashString(doc) !== item.hash) {
                     staleKeys.push(item.messageIndex);
                     continue;
                 }
-                this.vectors.set(item.messageIndex, {
+                this.vectors.set(normalizedMessageIndex, {
                     vector: item.vector,
                     hash: item.hash,
                     document: item.document,
@@ -314,6 +315,8 @@ export class VectorManager {
     async addMessage(messageIndex, meta) {
         if (!this.isReady || !this.chatId) return;
         if (meta?._skipHorae) return;
+        messageIndex = this._normalizeMessageIndex(messageIndex);
+        if (messageIndex === null) return;
 
         const doc = this.buildVectorDocument(meta);
         if (!doc) return;
@@ -341,6 +344,8 @@ export class VectorManager {
     }
 
     async removeMessage(messageIndex) {
+        messageIndex = this._normalizeMessageIndex(messageIndex);
+        if (messageIndex === null) return;
         const existing = this.vectors.get(messageIndex);
         if (!existing) return;
 
@@ -567,6 +572,19 @@ export class VectorManager {
             excludeReasonMap.get(idx).add(reason);
         };
         let visibleExcludedCount = 0;
+        let skippedTailCount = 0;
+        if (flags.logExclusions !== false) {
+            const absoluteLatestIndex = chat.length - 1;
+            const absoluteLatestMsg = absoluteLatestIndex >= 0 ? chat[absoluteLatestIndex] : null;
+            const effectiveLatestIndex = effectiveEnd - 1;
+            const effectiveLatestMsg = effectiveLatestIndex >= 0 ? chat[effectiveLatestIndex] : null;
+            console.log(
+                `[Horae Vector] latest floor debug | `
+                + `skipLast=${skipLast} `
+                + `absolute=index:${absoluteLatestIndex},floor:${absoluteLatestIndex + 1},hidden:${!!absoluteLatestMsg?.is_hidden},user:${!!absoluteLatestMsg?.is_user} `
+                + `effective=index:${effectiveLatestIndex},floor:${effectiveLatestIndex + 1},hidden:${!!effectiveLatestMsg?.is_hidden},user:${!!effectiveLatestMsg?.is_user}`
+            );
+        }
         for (let i = 0; i < effectiveEnd; i++) {
             const msg = chat[i];
             if (!msg || msg.is_user || msg.is_hidden) continue;
@@ -574,6 +592,11 @@ export class VectorManager {
             excludeIndices.add(i);
             addExcludeReason(i, 'visible-message');
             visibleExcludedCount++;
+        }
+        for (let i = effectiveEnd; i < chat.length; i++) {
+            if (!excludeIndices.has(i)) skippedTailCount++;
+            excludeIndices.add(i);
+            addExcludeReason(i, 'skipped-tail');
         }
         for (let i = Math.max(0, effectiveEnd - EXCLUDE_RECENT); i < effectiveEnd; i++) {
             excludeIndices.add(i);
@@ -592,6 +615,9 @@ export class VectorManager {
         if (flags.logExclusions !== false) {
             if (visibleExcludedCount > 0) {
                 console.log(`[Horae Vector] 排除未隐藏楼层: ${visibleExcludedCount} 条`);
+            }
+            if (skippedTailCount > 0) {
+                console.log(`[Horae Vector] 排除 skipLast 尾部楼层: ${skippedTailCount} 条`);
             }
             if (promptExcludedCount > 0) {
                 console.log(`[Horae Vector] 额外排除已在Prompt中的楼层: ${promptExcludedCount} 条`);
@@ -1176,9 +1202,37 @@ export class VectorManager {
             : new Set();
         let count = 0;
         for (const [msgIdx] of this.vectors) {
-            if (!excluded.has(msgIdx)) count++;
+            if (!this._isExcludedMessageIndex(excluded, msgIdx)) count++;
         }
         return count;
+    }
+
+    _normalizeMessageIndex(messageIndex) {
+        const normalized = Number(messageIndex);
+        return Number.isInteger(normalized) && normalized >= 0 ? normalized : null;
+    }
+
+    _isExcludedMessageIndex(excludeIndices, messageIndex) {
+        if (!excludeIndices || typeof excludeIndices.has !== 'function') return false;
+        if (excludeIndices.has(messageIndex)) return true;
+        const normalized = this._normalizeMessageIndex(messageIndex);
+        if (normalized === null) return false;
+        return excludeIndices.has(normalized) || excludeIndices.has(String(normalized));
+    }
+
+    _resolveExcludeReasons(excludeReasonMap, messageIndex) {
+        if (!(excludeReasonMap instanceof Map)) return ['unknown'];
+        const keys = [messageIndex];
+        const normalized = this._normalizeMessageIndex(messageIndex);
+        if (normalized !== null) keys.push(normalized, String(normalized));
+        for (const key of keys) {
+            const reasons = excludeReasonMap.get(key);
+            if (!reasons) continue;
+            if (Array.isArray(reasons)) return reasons.length > 0 ? reasons : ['unknown'];
+            if (reasons instanceof Set) return reasons.size > 0 ? [...reasons] : ['unknown'];
+            return [String(reasons)];
+        }
+        return ['unknown'];
     }
 
     /**
@@ -1217,27 +1271,20 @@ export class VectorManager {
         const belowThreshold = [];
         let searchedCount = 0;
 
-        const resolveExcludeReasons = (msgIdx) => {
-            if (!(excludeReasonMap instanceof Map)) return ['unknown'];
-            const reasons = excludeReasonMap.get(msgIdx);
-            if (!reasons) return ['unknown'];
-            if (Array.isArray(reasons)) return reasons.length > 0 ? reasons : ['unknown'];
-            if (reasons instanceof Set) return reasons.size > 0 ? [...reasons] : ['unknown'];
-            return [String(reasons)];
-        };
-
         for (const [msgIdx, entry] of this.vectors) {
-            if (excludeIndices.has(msgIdx)) {
-                excludedByIndex.push({ messageIndex: msgIdx, reasons: resolveExcludeReasons(msgIdx) });
+            const normalizedMsgIdx = this._normalizeMessageIndex(msgIdx);
+            const resolvedMsgIdx = normalizedMsgIdx ?? msgIdx;
+            if (this._isExcludedMessageIndex(excludeIndices, msgIdx)) {
+                excludedByIndex.push({ messageIndex: resolvedMsgIdx, reasons: this._resolveExcludeReasons(excludeReasonMap, msgIdx) });
                 continue;
             }
             searchedCount++;
             const sim = this._dotProduct(queryVec, entry.vector);
-            allScored.push({ messageIndex: msgIdx, similarity: sim, document: entry.document });
+            allScored.push({ messageIndex: resolvedMsgIdx, similarity: sim, document: entry.document });
             if (sim >= threshold) {
-                scored.push({ messageIndex: msgIdx, similarity: sim, document: entry.document });
+                scored.push({ messageIndex: resolvedMsgIdx, similarity: sim, document: entry.document });
             } else {
-                belowThreshold.push({ messageIndex: msgIdx, similarity: sim, document: entry.document });
+                belowThreshold.push({ messageIndex: resolvedMsgIdx, similarity: sim, document: entry.document });
             }
         }
 
@@ -1320,18 +1367,9 @@ export class VectorManager {
             return [];
         }
 
-        const resolveExcludeReasons = (msgIdx) => {
-            if (!(excludeReasonMap instanceof Map)) return ['unknown'];
-            const reasons = excludeReasonMap.get(msgIdx);
-            if (!reasons) return ['unknown'];
-            if (Array.isArray(reasons)) return reasons.length > 0 ? reasons : ['unknown'];
-            if (reasons instanceof Set) return reasons.size > 0 ? [...reasons] : ['unknown'];
-            return [String(reasons)];
-        };
-
         const excludedByIndex = [];
         for (const msgIdx of excludeIndices || []) {
-            excludedByIndex.push({ messageIndex: msgIdx, reasons: resolveExcludeReasons(msgIdx) });
+            excludedByIndex.push({ messageIndex: msgIdx, reasons: this._resolveExcludeReasons(excludeReasonMap, msgIdx) });
         }
         if (excludedByIndex.length > 0) {
             excludedByIndex.sort((a, b) => a.messageIndex - b.messageIndex);
@@ -1355,10 +1393,12 @@ export class VectorManager {
             let searchedCount = 0;
 
             for (const [msgIdx, entry] of this.vectors) {
-                if (excludeIndices.has(msgIdx)) continue;
+                const normalizedMsgIdx = this._normalizeMessageIndex(msgIdx);
+                const resolvedMsgIdx = normalizedMsgIdx ?? msgIdx;
+                if (this._isExcludedMessageIndex(excludeIndices, msgIdx)) continue;
                 searchedCount++;
                 const sim = this._dotProduct(queryVec, entry.vector);
-                const row = { messageIndex: msgIdx, similarity: sim, document: entry.document };
+                const row = { messageIndex: resolvedMsgIdx, similarity: sim, document: entry.document };
                 allScored.push(row);
                 if (sim >= threshold) scored.push(row);
             }

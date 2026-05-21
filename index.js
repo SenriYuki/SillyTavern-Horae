@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki，柏柏
- * 版本: 1.13.11B
+ * 版本: 1.13.12B
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -17,7 +17,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 import { t, tForLang, initI18n, getLanguage, isZhLocale, setLanguage, detectEffectiveAiLangIsZh, detectEffectiveAiLang } from './core/i18n.js';
 import { initPromptDefaults, ensurePromptDefaults, getPromptDefaultSync } from './core/promptDefaults.js';
 import { installSaveRequestGzipFetchHook } from './utils/saveRequestGzip.js';
-import { mountMessagePanel as mountVueMessagePanel } from './dist/messagePanel.js?v=1.13.11B';
+import { mountMessagePanel as mountVueMessagePanel } from './dist/messagePanel.js?v=1.13.12B';
 
 // ============================================
 // 常量定义
@@ -25,7 +25,7 @@ import { mountMessagePanel as mountVueMessagePanel } from './dist/messagePanel.j
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.13.11B';
+const VERSION = '1.13.12B';
 const DEFAULT_VECTOR_STRIP_TAGS = 'dream_status,Episode,details,think,thinking,Thinking';
 const MESSAGE_PANEL_THEME_TYPE = 'horae-message-panel-theme';
 const MESSAGE_PANEL_THEME_DAY = 'day';
@@ -47,7 +47,7 @@ const MESSAGE_PANEL_BUILTIN_THEMES = [
     // {
     //     id: '粉色主题',
     //     nameKey: '粉色主题',
-    //     path: 'src/messagePanel/theme/粉色.css',
+    //     path: 'src/messagePanel/theme/new.css',
     //     format: 'css',
     // },
 ];
@@ -962,9 +962,9 @@ function loadSettings() {
     }
     if (_normalizeAutoSummarySettingsInPlace(saved || {}) || _normalizePromptSettingsInPlace() || _normalizeVectorRecallPresetsInPlace() || _normalizeVectorStripTagsInPlace(saved || {}) || _normalizeRpgSettingsInPlace()) changed = true;
     if (_migrateLegacyVectorSettings(settings)) changed = true;
-    console.log(
-        `[Horae][MainPersonality] loadSettings: saved=${saved?.sendMainCharacterPersonality} merged=${!!settings.sendMainCharacterPersonality} sendCharacters=${settings.sendCharacters !== false} pinnedNpcs=${JSON.stringify(settings.pinnedNpcs || [])}`
-    );
+    // console.log(
+    //     `[Horae][MainPersonality] loadSettings: saved=${saved?.sendMainCharacterPersonality} merged=${!!settings.sendMainCharacterPersonality} sendCharacters=${settings.sendCharacters !== false} pinnedNpcs=${JSON.stringify(settings.pinnedNpcs || [])}`
+    // );
     if (changed) saveSettings();
 }
 
@@ -13078,9 +13078,9 @@ function initSettingsEvents() {
     $('#horae-setting-send-main-character-personality').on('change', function () {
         settings.sendMainCharacterPersonality = this.checked;
         saveSettings();
-        console.log(
-            `[Horae][MainPersonality] setting changed: sendMainCharacterPersonality=${this.checked} sendCharacters=${settings.sendCharacters !== false} pinnedNpcs=${JSON.stringify(settings.pinnedNpcs || [])}`
-        );
+        // console.log(
+        //     `[Horae][MainPersonality] setting changed: sendMainCharacterPersonality=${this.checked} sendCharacters=${settings.sendCharacters !== false} pinnedNpcs=${JSON.stringify(settings.pinnedNpcs || [])}`
+        // );
         horaeManager.init(getContext(), settings);
         updateTokenCounter();
     });
@@ -14187,9 +14187,9 @@ function syncSettingsToUI() {
     $('#horae-setting-send-character-affection').prop('checked', settings.sendCharacterAffection !== false);
     $('#horae-setting-send-main-character-personality').prop('checked', !!settings.sendMainCharacterPersonality);
     $('#horae-setting-send-items').prop('checked', settings.sendItems);
-    console.log(
-        `[Horae][MainPersonality] syncSettingsToUI: sendMainCharacterPersonality=${!!settings.sendMainCharacterPersonality} sendCharacters=${settings.sendCharacters !== false}`
-    );
+    // console.log(
+    //     `[Horae][MainPersonality] syncSettingsToUI: sendMainCharacterPersonality=${!!settings.sendMainCharacterPersonality} sendCharacters=${settings.sendCharacters !== false}`
+    // );
 
     applyTopIconVisibility();
 
@@ -19811,14 +19811,14 @@ async function onPromptReady(eventData) {
                 .filter(line => /^N[\d?]+\s+/.test(line.trim()))
                 .slice(0, 100)
                 .map(line => line.length > 220 ? `${line.slice(0, 220)}...` : line);
-            console.log(
-                `[Horae][MainPersonality] onPromptReady: sendMainCharacterPersonality=${!!settings.sendMainCharacterPersonality} sendCharacters=${settings.sendCharacters !== false} context.name2="${getContext()?.name2 || ''}" pinnedNpcs=${JSON.stringify(settings.pinnedNpcs || [])} npcLines=${npcLines.length}`
-            );
-            if (npcLines.length > 0) {
-                console.log(`[Horae][MainPersonality] onPromptReady npc preview:\n${npcLines.join('\n')}`);
-            }
+            // console.log(
+            //     `[Horae][MainPersonality] onPromptReady: sendMainCharacterPersonality=${!!settings.sendMainCharacterPersonality} sendCharacters=${settings.sendCharacters !== false} context.name2="${getContext()?.name2 || ''}" pinnedNpcs=${JSON.stringify(settings.pinnedNpcs || [])} npcLines=${npcLines.length}`
+            // );
+            // if (npcLines.length > 0) {
+            //     console.log(`[Horae][MainPersonality] onPromptReady npc preview:\n${npcLines.join('\n')}`);
+            // }
         } catch (e) {
-            console.warn('[Horae][MainPersonality] onPromptReady debug log failed:', e);
+            // console.warn('[Horae][MainPersonality] onPromptReady debug log failed:', e);
         }
         const timelineMode = settings.timelineInjectionMode === 'separate' ? 'separate' : 'inline';
         let dataPrompt = rawDataPrompt;
