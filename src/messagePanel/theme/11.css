@@ -1,72 +1,75 @@
 @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
 
 .horae-message-panel.horae-message-panel-vue {
-    /* 主体使用暖白，避免全粉导致眼花 */
-    background: #fffbfb !important;
+    /* 像素美乐蒂核心配色变量 */
+    --melody-white: #fffbfb;
+    --melody-pink: #ff9eac;
+    --melody-light: #ffd1dc;
+    --melody-red: #e86a7a;
+    --melody-black: #4a2e36;
 
-    /* 强硬的深色像素边框 */
-    border: 2px solid #4a2e36 !important;
-    border-radius: 0 !important;
+    /* 替换原生系统变量为像素风 */
+    --mp-bg-base: var(--melody-white);
+    --mp-text-title: var(--melody-black);
+    --mp-text-main: var(--melody-black);
+    --mp-text-muted: var(--melody-red);
+    --mp-accent: var(--melody-red);
+    --mp-danger: #ea3323;
+    --mp-success: #3b8c2a;
+    --mp-warning: var(--melody-red);
+    --mp-info: #1b7cf3;
+    --mp-pink: var(--melody-pink);
 
-    /* 复合多种颜色构成的立体像素阴影: 暖白 -> 亮粉 -> 深褐 */
-    /* 因为原本外阴影是 6px，所以这里总体也控制在 6px 偏移，绝不改变原本占据的大小 */
-    box-shadow: 2px 2px 0px #fffbfb, 4px 4px 0px #ff9eac, 6px 6px 0px #4a2e36 !important;
+    /* 重写阴影规则，去除所有的模糊渐变 */
+    --mp-light-shadow: transparent;
+    --mp-dark-shadow: var(--melody-black);
+    --mp-neo-drop: 4px 4px 0px var(--melody-black);
+    --mp-neo-drop-sm: 2px 2px 0px var(--melody-black);
+    --mp-neo-inset: inset 0 0 0 2px var(--melody-black);
+    --mp-neo-inset-sm: inset 0 0 0 2px var(--melody-pink);
 
-    color: #4a2e36 !important;
-    margin-top: 10px !important;
-    margin-bottom: 18px !important;
-    overflow: hidden !important;
-
-    /* 配合英文字体提升像素感，中文字体保持系统默认以便于阅读 */
-    font-family: 'VT323', monospace, sans-serif !important;
-
-    /* --- 定义 Pixel Melody 变量树 --- */
-    --mp-bg-base: #fffbfb;
-    --mp-bg-alt: #fff0f5;
-    /* 极浅的粉色背景，用于局部区块区分 */
-    --mp-text-title: #4a2e36;
-    /* 深褐黑 */
-    --mp-text-main: #5a3e46;
-    --mp-text-muted: #8c6e76;
-    /* 褪色粉褐 */
-    --mp-accent: #ff9eac;
-    /* 经典美乐蒂粉 */
-    --mp-danger: #e86a7a;
-    /* 深粉/红 */
-    --mp-success: #ff9eac;
-    /* 像素绿 */
-    --mp-warning: #facc15;
-    --mp-info: #7dd3fc;
-    --mp-pink: #ff9eac;
-    --mp-outline: #4a2e36;
-    /* 线条的深褐黑色 */
-
-    /* 拟态完全废弃 -> 转为硬直的像素投影 */
-    --mp-neo-drop: 2px 2px 0px var(--mp-outline);
-    --mp-neo-drop-sm: 1px 1px 0px var(--mp-outline);
-    --mp-neo-inset: inset 2px 2px 0px rgba(74, 46, 54, 0.1);
-    --mp-neo-inset-sm: inset 1px 1px 0px rgba(74, 46, 54, 0.1);
-
-    /* 圆角全部干掉，拥抱像素风 */
+    /* 严格关闭所有的圆角 */
     --mp-radius-md: 0px;
     --mp-radius-sm: 0px;
     --mp-radius-round: 0px;
     --mp-dashboard-height: 500px;
 
-    /* 暗黑模式像素变体 (类似深色游戏机主题) */
+    /* 面板主框架：利用阴影模拟不改变尺寸的多色复合边框 */
+    background: var(--mp-bg-base) !important;
+    border: 4px solid var(--melody-black) !important;
+    border-radius: 0 !important;
+    box-shadow:
+        inset 0 0 0 2px var(--melody-pink),
+        4px 4px 0px var(--melody-pink),
+        8px 8px 0px var(--melody-black) !important;
+
+    color: var(--mp-text-main) !important;
+    margin-top: 10px !important;
+    margin-bottom: 22px !important;
+    /* 预留些许下阴影空间 */
+    overflow: hidden !important;
+    font-family: 'VT323', monospace !important;
+    image-rendering: pixelated;
+
+    /* 暗色模式反转配色 */
     &.horae-dark {
-        --mp-bg-base: #2a2025;
-        --mp-bg-alt: #362930;
-        --mp-text-title: #fffbfb;
-        --mp-text-main: #ffd1dc;
-        --mp-text-muted: #c7a7b0;
-        --mp-outline: #ff9eac;
+        --melody-white: #2b1f24;
+        --melody-pink: #7a3a46;
+        --melody-light: #4a2e36;
+        --melody-red: #ff9eac;
+        --melody-black: #fffbfb;
+
+        --mp-bg-base: var(--melody-white);
+        --mp-text-title: var(--melody-black);
+        --mp-text-main: var(--melody-black);
+        --mp-text-muted: var(--melody-red);
+        --mp-dark-shadow: var(--melody-black);
         color: var(--mp-text-main) !important;
     }
 
     &.horae-sideplay {
         opacity: 0.85;
-        /* 像素风透明度不宜太低，否则显脏 */
+        /* 加重一下透明度以免像素风看不清 */
     }
 
     *,
@@ -79,26 +82,25 @@
         -webkit-appearance: none !important;
         appearance: none !important;
         background-image: none !important;
+        box-shadow: none;
+        text-shadow: none !important;
         font: inherit !important;
     }
 
     .horae-panel-top {
-        padding: 16px 24px;
+        padding: 18px 24px;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 16px;
-        border-bottom: 2px dashed var(--mp-accent);
-        /* 虚线增强手账/像素感 */
+        border-bottom: 4px dashed var(--melody-pink);
         cursor: pointer;
-        transition: background 0.1s;
+        transition: background 0.2s;
         user-select: none;
-        background: var(--mp-bg-alt);
     }
 
     .horae-panel-top:hover {
-        background: #ffd1dc;
-        /* 悬停美乐蒂浅粉 */
+        background: var(--melody-light);
     }
 
     .toggle-left {
@@ -111,24 +113,17 @@
 
     .toggle-icon {
         flex: 0 0 auto;
-        font-size: 1.2rem;
-        color: var(--mp-bg-base) !important;
-        background: var(--mp-accent);
+        font-size: 1.1rem;
+        color: var(--melody-white) !important;
+        background: var(--melody-pink);
+        border: 2px solid var(--melody-black);
         display: flex;
         align-items: center;
         justify-content: center;
         width: 40px;
         height: 40px;
-        /* 正方形像素化 + 实体边框 */
-        border: 2px solid var(--mp-outline);
-        border-radius: var(--mp-radius-md);
-        box-shadow: var(--mp-neo-drop);
-    }
-
-    .toggle-icon i::before,
-    .toggle-icon .fa-regular::before,
-    .toggle-icon .fa-solid::before {
-        color: var(--mp-outline) !important;
+        border-radius: 0;
+        box-shadow: 2px 2px 0px var(--melody-black);
     }
 
     .toggle-info {
@@ -141,22 +136,23 @@
 
     .toggle-time {
         color: var(--mp-text-title);
-        font-size: 1.15rem;
-        font-family: inherit;
-        /* 继承 VT323 */
-        font-weight: bold;
+        font-size: 1.25rem;
+        font-weight: 600;
         display: flex;
         align-items: center;
         gap: 8px;
+        text-shadow: 2px 2px 0px var(--melody-pink);
+        letter-spacing: 1px;
     }
 
     .toggle-summary {
         color: var(--mp-text-muted);
-        font-size: 0.9rem;
+        font-size: 0.95rem;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
         width: 100%;
+        line-height: 1;
     }
 
     .toggle-actions {
@@ -165,42 +161,43 @@
         gap: 12px;
     }
 
-    /* 顶部图标按钮 */
+    /* 像素方块按钮 */
     .neo-btn-icon {
-        background: var(--mp-bg-base) !important;
-        border: 2px solid var(--mp-outline) !important;
-        color: var(--mp-outline) !important;
+        background: var(--melody-white) !important;
+        border: 2px solid var(--melody-black) !important;
+        color: var(--melody-red) !important;
         width: 38px;
         height: 38px;
-        border-radius: var(--mp-radius-md) !important;
-        box-shadow: var(--mp-neo-drop) !important;
+        border-radius: 0 !important;
+        box-shadow: 2px 2px 0px var(--melody-black) !important;
         cursor: pointer;
+        transition: all 0.1s ease;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         outline: none;
         padding: 0 !important;
-        transition: transform 0.1s, box-shadow 0.1s, background 0.1s;
     }
 
     .neo-btn-icon:hover {
-        background: var(--mp-accent) !important;
-        color: var(--mp-bg-base) !important;
-        transform: translate(1px, 1px);
-        box-shadow: var(--mp-neo-drop-sm) !important;
+        background: var(--melody-light) !important;
+        color: var(--melody-black) !important;
+        transform: translate(-1px, -1px);
+        box-shadow: 3px 3px 0px var(--melody-black) !important;
     }
 
-    .neo-btn-icon:active {
+    .neo-btn-icon:active,
+    .neo-btn-text:active {
         transform: translate(2px, 2px);
-        box-shadow: none !important;
+        box-shadow: 0px 0px 0px var(--melody-black) !important;
     }
 
     .neo-btn-icon:disabled,
     .neo-btn-text:disabled {
         cursor: wait;
-        opacity: 0.5;
-        background: #ccc !important;
-        pointer-events: none;
+        opacity: 0.6;
+        box-shadow: none !important;
+        transform: translate(2px, 2px);
     }
 
     .horae-panel-content {
@@ -213,43 +210,44 @@
         flex-direction: column;
     }
 
-    /* 像素卷轴 (自定义滚动条) */
     .neo-dashboard {
         display: flex;
         flex-direction: column;
         gap: 24px;
         height: var(--mp-dashboard-height);
         flex: 0 0 var(--mp-dashboard-height);
+        min-height: 0;
         overflow-x: hidden;
         overflow-y: auto;
         overscroll-behavior: auto;
         scrollbar-gutter: stable;
-        padding-right: 10px;
+        padding-right: 12px;
         padding-bottom: 16px;
         scrollbar-width: thin;
-        scrollbar-color: var(--mp-accent) var(--mp-bg-base);
+        scrollbar-color: var(--melody-pink) var(--melody-white);
     }
 
+    /* 经典方块滚动条 */
     .neo-dashboard::-webkit-scrollbar {
-        width: 12px;
+        width: 14px;
     }
 
     .neo-dashboard::-webkit-scrollbar-track {
-        background: var(--mp-bg-base);
-        border-left: 2px dashed var(--mp-text-muted);
+        background: var(--melody-white);
+        border-left: 2px solid var(--melody-black);
         border-radius: 0;
+        box-shadow: none;
     }
 
     .neo-dashboard::-webkit-scrollbar-thumb {
-        background: var(--mp-accent);
-        border: 2px solid var(--mp-outline);
+        background: var(--melody-light);
+        border: 2px solid var(--melody-black);
         border-radius: 0;
-        box-shadow: inset 2px 0px 0px rgba(255, 255, 255, 0.4);
-        /* 像素高光 */
+        box-shadow: inset 2px 2px 0px var(--melody-pink);
     }
 
     .neo-dashboard::-webkit-scrollbar-thumb:hover {
-        background: var(--mp-danger);
+        background: var(--melody-pink);
     }
 
     .neo-tags {
@@ -258,14 +256,13 @@
         gap: 12px;
     }
 
-    /* 像素标签 (Chips) */
     .neo-chip {
-        background: var(--mp-bg-alt);
-        border: 2px solid var(--mp-outline);
-        box-shadow: 2px 2px 0px rgba(74, 46, 54, 0.1);
+        background: var(--melody-white);
+        border: 2px solid var(--melody-black);
+        box-shadow: 2px 2px 0px var(--melody-pink);
         padding: 6px 14px;
-        border-radius: var(--mp-radius-md);
-        font-size: 0.95rem;
+        border-radius: 0;
+        font-size: 1rem;
         display: inline-flex;
         align-items: center;
         gap: 8px;
@@ -273,7 +270,8 @@
     }
 
     .neo-chip i {
-        color: var(--mp-danger);
+        color: var(--mp-accent);
+        opacity: 0.85;
     }
 
     .neo-chip-input {
@@ -282,87 +280,80 @@
         background: transparent !important;
         border: none !important;
         box-shadow: none !important;
-        color: var(--mp-text-title) !important;
+        color: var(--mp-text-main) !important;
         padding: 0 !important;
-        font-size: 0.95rem !important;
+        font-size: 1rem !important;
         outline: none !important;
     }
 
-    /* 输入框统一像素风格 */
+    /* 输入框直角像素风格 */
     .neo-input,
     .neo-textarea {
         width: 100%;
-        background: var(--mp-bg-base) !important;
-        border: 2px solid var(--mp-outline) !important;
+        background: var(--melody-white) !important;
+        border: 2px solid var(--melody-black) !important;
         color: var(--mp-text-title) !important;
-        font-size: 1rem !important;
-        box-shadow: var(--mp-neo-inset) !important;
-        /* 内部轻微压印感 */
+        font-size: 1.05rem !important;
+        box-shadow: inset 2px 2px 0px var(--melody-light) !important;
         outline: none !important;
-        border-radius: var(--mp-radius-sm) !important;
+        border-radius: 0 !important;
         font-family: inherit;
+        transition: box-shadow 0.1s;
         line-height: 1.5;
-        transition: outline 0.1s;
     }
 
     .neo-input {
         padding: 6px 10px !important;
-        height: 36px;
+        height: 38px;
     }
 
     .neo-textarea {
-        padding: 10px 12px !important;
+        padding: 8px 12px !important;
         resize: vertical;
-        min-height: 42px;
+        min-height: 44px;
         overflow: hidden;
     }
 
     .neo-textarea.lg {
-        padding: 12px 14px !important;
-        font-size: 1.05rem !important;
+        padding: 12px 16px !important;
+        font-size: 1.15rem !important;
     }
 
-    /* 选中时使用亮粉色边缘高亮，而不是发光 */
     .neo-input:focus,
     .neo-textarea:focus {
-        outline: 2px dashed var(--mp-accent) !important;
-        outline-offset: 2px;
+        box-shadow: inset 2px 2px 0px var(--melody-black), 0 0 0 2px var(--melody-red) !important;
     }
 
-    /* 纯文本按钮 */
     .neo-text-btn {
         background: transparent !important;
         border: none !important;
         color: var(--mp-text-muted) !important;
         cursor: pointer;
-        font-size: 1rem !important;
-        /* 增大一点适配像素字体 */
+        font-size: 0.95rem !important;
         display: flex;
         align-items: center;
         gap: 6px;
-        font-weight: bold;
-        transition: color 0.1s;
+        font-weight: 500;
+        transition: color 0.1s, transform 0.1s;
         outline: none;
         padding: 0 !important;
     }
 
     .neo-text-btn:hover {
-        color: var(--mp-danger) !important;
-        /* 悬停变红色 */
+        color: var(--melody-black) !important;
+        transform: translateY(-1px);
     }
 
     .neo-text-btn.add:hover {
         color: var(--mp-accent) !important;
     }
 
-    /* 二级面板区块 */
     .neo-inset-section {
-        background: #fff0f5;
-        /* 明显的区域背景隔断 */
-        border: 2px dashed var(--mp-accent);
-        border-radius: var(--mp-radius-md);
+        background: var(--melody-light);
+        border: 2px solid var(--melody-black);
+        box-shadow: inset 4px 4px 0px rgba(255, 255, 255, 0.4);
+        border-radius: 0;
         padding: 14px 18px;
-        /* 补偿一点原本没有 border 时的内边距，保持尺寸 */
     }
 
     .neo-section-header {
@@ -378,28 +369,27 @@
     }
 
     .section-title {
-        font-size: 1rem;
+        font-size: 1.1rem;
         color: var(--mp-text-title);
         display: flex;
         align-items: center;
         gap: 8px;
-        font-weight: bold;
+        font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        text-shadow: 1px 1px 0px var(--melody-white);
     }
 
     .section-title i {
-        color: var(--mp-danger);
+        color: var(--mp-accent);
+        opacity: 1;
     }
 
-    /* 操控悬停动作组 */
     .action-group-hover {
         display: flex;
         gap: 4px;
         opacity: 0;
-        transform: translateX(4px);
-        transition: all 0.1s step-end;
-        /* 像素切变 */
+        transform: translateX(6px);
+        transition: all 0.1s ease;
         margin-left: auto;
         flex: 0 0 auto;
         pointer-events: none;
@@ -417,23 +407,28 @@
         font-size: 0.9rem !important;
         color: var(--mp-text-muted) !important;
         background: transparent !important;
+        transition: all 0.1s ease;
         outline: none;
         padding: 0 !important;
     }
 
-    /* Hover 后实体显现 */
     .action-hover-btn.btn-edit:hover {
-        background: #e0f2fe !important;
-        border-color: var(--mp-outline) !important;
-        color: var(--mp-outline) !important;
-        box-shadow: 2px 2px 0px var(--mp-outline) !important;
+        background: var(--melody-white) !important;
+        border: 2px solid var(--melody-black) !important;
+        color: #1b7cf3 !important;
+        box-shadow: 2px 2px 0px var(--melody-black) !important;
     }
 
     .action-hover-btn.btn-del:hover {
-        background: #ffe4e6 !important;
-        border-color: var(--mp-outline) !important;
-        color: var(--mp-outline) !important;
-        box-shadow: 2px 2px 0px var(--mp-outline) !important;
+        background: var(--melody-white) !important;
+        border: 2px solid var(--melody-black) !important;
+        color: var(--mp-danger) !important;
+        box-shadow: 2px 2px 0px var(--melody-black) !important;
+    }
+
+    .action-hover-btn:active {
+        transform: translate(2px, 2px);
+        box-shadow: none !important;
     }
 
     .is-editing .action-group-hover,
@@ -452,7 +447,8 @@
         content: "\f00c";
     }
 
-    .view-mode {
+    .view-mode,
+    .edit-mode {
         display: flex;
         gap: 10px;
         flex: 1;
@@ -462,10 +458,6 @@
 
     .edit-mode {
         display: none;
-        gap: 10px;
-        flex: 1;
-        min-width: 0;
-        align-items: flex-start;
         flex-wrap: wrap;
     }
 
@@ -477,16 +469,13 @@
         display: flex !important;
     }
 
-    /* 事件卡片 */
     .neo-event-card {
-        background: var(--mp-bg-base);
-        border: 2px solid var(--mp-outline);
+        background: var(--melody-white);
+        border: 2px solid var(--melody-black);
+        border-left: 6px solid var(--melody-red);
         box-shadow: var(--mp-neo-drop);
-        border-radius: var(--mp-radius-md);
+        border-radius: 0;
         padding: 16px 18px;
-        /* 调整2px给border腾位置 */
-        border-left: 6px solid var(--mp-danger);
-        /* 强烈的红色警告边 */
         position: relative;
     }
 
@@ -498,16 +487,16 @@
     }
 
     .event-badge {
-        font-size: 0.95rem;
-        color: var(--mp-danger);
-        font-weight: bold;
+        font-size: 1rem;
+        color: var(--mp-warning);
+        font-weight: 600;
         display: flex;
         align-items: center;
         gap: 6px;
     }
 
     .event-body-text {
-        font-size: 1.1rem;
+        font-size: 1.15rem;
         color: var(--mp-text-title);
         line-height: 1.6;
         word-break: break-word;
@@ -515,8 +504,8 @@
 
     .neo-event-card .action-group-hover {
         position: absolute;
-        right: 20px;
-        top: 16px;
+        right: 18px;
+        top: 14px;
         opacity: 1;
     }
 
@@ -530,25 +519,23 @@
         gap: 12px;
     }
 
-    /* 关系/好感度 Chips */
     .aff-chip {
-        background: var(--mp-bg-base);
-        border: 2px solid var(--mp-outline);
-        box-shadow: 2px 2px 0px var(--mp-accent);
-        border-radius: var(--mp-radius-sm);
+        background: var(--melody-white);
+        border: 2px solid var(--melody-black);
+        border-radius: 0;
         padding: 4px 10px;
-        /* 为了border留位 */
         display: inline-flex;
         align-items: center;
-        transition: background 0.1s;
+        transition: all 0.1s ease;
         position: relative;
         min-height: 38px;
+        box-shadow: 2px 2px 0px var(--melody-pink);
     }
 
     .aff-chip:hover {
-        background: var(--mp-bg-alt);
+        background: var(--melody-light);
         transform: translate(-1px, -1px);
-        box-shadow: 3px 3px 0px var(--mp-accent);
+        box-shadow: 3px 3px 0px var(--melody-pink);
     }
 
     .aff-chip .view-mode {
@@ -558,7 +545,7 @@
     }
 
     .aff-chip .t-title {
-        font-weight: bold;
+        font-weight: 600;
         font-size: 1rem;
         color: var(--mp-text-title);
         max-width: 140px;
@@ -568,11 +555,10 @@
     }
 
     .aff-chip .t-val {
-        font-weight: bold;
+        font-weight: 700;
         font-size: 1.1rem;
-        color: var(--mp-danger);
-        /* 粉红数值 */
-        font-family: inherit;
+        color: var(--mp-text-muted);
+        font-family: monospace;
     }
 
     .aff-chip .edit-mode {
@@ -594,10 +580,10 @@
         position: absolute;
         right: -10px;
         top: -16px;
-        background: var(--mp-bg-base);
-        border: 2px solid var(--mp-outline);
+        background: var(--melody-white);
+        border: 2px solid var(--melody-black);
         border-radius: 0;
-        box-shadow: 2px 2px 0px var(--mp-outline);
+        box-shadow: 2px 2px 0px var(--melody-black);
         padding: 2px;
         z-index: 10;
         margin: 0;
@@ -605,9 +591,9 @@
 
     .aff-chip.is-editing .action-group-hover {
         position: static;
-        border: none;
-        box-shadow: none;
         background: transparent;
+        box-shadow: none;
+        border: none;
         padding: 0;
         margin-left: 2px;
     }
@@ -636,7 +622,6 @@
         gap: 12px;
     }
 
-    /* 列表行区块 */
     .rel-row,
     .neo-dict-row {
         display: flex;
@@ -644,8 +629,8 @@
         gap: 10px;
         padding: 8px 10px;
         margin: 0 -10px;
-        border: 2px solid transparent;
-        border-radius: var(--mp-radius-sm);
+        border-radius: 0;
+        transition: background 0.1s;
         position: relative;
     }
 
@@ -657,34 +642,35 @@
 
     .rel-row:hover,
     .neo-dict-row:hover {
-        background: var(--mp-bg-alt);
-        border-color: var(--mp-accent);
-        border-style: dashed;
+        background: var(--melody-light);
+        border-left: 4px solid var(--melody-pink);
+        padding-left: 6px;
     }
 
     .rel-row .view-mode {
         align-items: center;
         gap: 10px;
-        font-size: 0.95rem;
+        font-size: 1.05rem;
         flex-wrap: wrap;
     }
 
     .rel-node {
-        font-weight: bold;
+        font-weight: 600;
         color: var(--mp-text-title);
-        background: #ffd1dc;
-        padding: 2px 8px;
-        border: 2px solid var(--mp-outline);
+        background: var(--melody-white);
+        border: 2px solid var(--melody-black);
+        padding: 0px 6px;
+        border-radius: 0;
     }
 
     .rel-arrow {
         color: var(--mp-accent);
+        opacity: 0.9;
         font-size: 1rem;
     }
 
     .rel-label {
         color: var(--mp-text-main);
-        font-style: italic;
     }
 
     .rel-person {
@@ -697,25 +683,25 @@
     }
 
     .dict-key {
-        color: var(--mp-danger);
-        font-weight: bold;
+        color: var(--mp-accent);
+        font-weight: 600;
         white-space: nowrap;
         flex: 0 0 auto;
         line-height: 1.5;
-        font-size: 1rem;
+        font-size: 1.05rem;
     }
 
     .dict-key::after {
         content: ':';
+        color: var(--melody-black);
         margin-left: 2px;
-        color: var(--mp-outline);
     }
 
     .dict-value {
         color: var(--mp-text-main);
         line-height: 1.5;
         word-break: break-word;
-        font-size: 1rem;
+        font-size: 1.05rem;
     }
 
     .dict-edit-mode {
@@ -727,13 +713,12 @@
         flex: 0 0 100px !important;
     }
 
-    /* 物品与日程卡片 */
     .neo-item-card,
     .agenda-card {
-        background: var(--mp-bg-base);
-        border: 2px solid var(--mp-outline);
-        box-shadow: 2px 2px 0px var(--mp-outline);
-        border-radius: var(--mp-radius-sm);
+        background: var(--melody-white);
+        border: 2px solid var(--melody-black);
+        box-shadow: 2px 2px 0px var(--melody-pink);
+        border-radius: 0;
         padding: 10px 12px;
         display: flex;
         align-items: flex-start;
@@ -745,10 +730,9 @@
         display: inline-flex;
         align-items: center;
         flex: 0 0 auto;
-        font-size: 1.25rem;
+        font-size: 1.4rem;
         line-height: 1;
-        text-shadow: 1px 1px 0px var(--mp-outline);
-        /* 让emoji也有像素感 */
+        text-shadow: 2px 2px 0px var(--melody-light);
     }
 
     .item-info {
@@ -756,7 +740,7 @@
         min-width: 0;
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 4px;
         padding-right: 2px;
     }
 
@@ -765,9 +749,9 @@
         align-items: center;
         flex-wrap: wrap;
         gap: 8px;
-        font-weight: bold;
+        font-weight: 600;
         color: var(--mp-text-title);
-        font-size: 1.1rem;
+        font-size: 1.15rem;
     }
 
     .item-title {
@@ -784,16 +768,17 @@
     }
 
     .item-holder-badge {
-        background: #ffd1dc;
-        border: 2px solid var(--mp-outline);
-        color: var(--mp-outline);
-        font-size: 0.8rem;
+        background: var(--melody-white);
+        border: 2px solid var(--mp-accent);
+        color: var(--mp-accent);
+        font-size: 0.85rem;
         padding: 0px 6px;
-        font-weight: bold;
+        border-radius: 0;
+        font-weight: 600;
     }
 
     .item-meta {
-        font-size: 0.9rem;
+        font-size: 0.95rem;
         color: var(--mp-text-muted);
     }
 
@@ -828,7 +813,7 @@
     .deleted-items-zone {
         margin-top: 10px;
         padding-top: 12px;
-        border-top: 2px dashed #ffd1dc;
+        border-top: 3px dotted var(--melody-pink);
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
@@ -837,18 +822,19 @@
 
     .deleted-chip {
         background: transparent;
-        border: 2px dashed var(--mp-text-muted);
-        padding: 0px 4px 0px 12px;
-        border-radius: var(--mp-radius-round);
+        border: 2px dashed var(--melody-black);
+        padding: 2px 4px 2px 14px;
+        border-radius: 0;
         font-size: 0.95rem;
         display: flex;
         align-items: center;
         gap: 8px;
+        transition: background 0.1s ease;
     }
 
     .deleted-chip:hover {
-        background: var(--mp-bg-alt);
-        border-color: var(--mp-danger);
+        background: var(--melody-pink);
+        color: var(--melody-white);
     }
 
     .deleted-chip span {
@@ -858,6 +844,10 @@
         word-break: break-word;
     }
 
+    .deleted-chip:hover span {
+        color: var(--melody-white);
+    }
+
     .deleted-chip .action-hover-btn {
         width: 24px;
         height: 24px;
@@ -865,7 +855,7 @@
     }
 
     .agenda-card {
-        border-left: 6px solid #8c6e76;
+        border-left: 6px solid var(--melody-black);
     }
 
     .agenda-card.type-suspense {
@@ -873,10 +863,9 @@
     }
 
     .agenda-card.type-suspense .agenda-type {
-        color: var(--mp-danger);
+        color: var(--mp-accent);
     }
 
-    /* 用深粉色强调 */
     .agenda-card.type-plan {
         border-left-color: var(--mp-info);
     }
@@ -890,7 +879,7 @@
         color: var(--mp-text-muted);
         white-space: nowrap;
         padding-top: 2px;
-        font-family: inherit;
+        font-family: monospace;
         width: 80px;
     }
 
@@ -903,12 +892,12 @@
     }
 
     .agenda-type {
-        font-size: 0.85rem;
-        font-weight: bold;
+        font-size: 0.9rem;
+        font-weight: 600;
     }
 
     .agenda-text {
-        font-size: 1rem;
+        font-size: 1.1rem;
         color: var(--mp-text-title);
         word-break: break-word;
     }
@@ -928,7 +917,6 @@
         flex: 0 0 110px !important;
     }
 
-    /* 底部按钮 (大) */
     .neo-footer-actions {
         display: flex;
         justify-content: space-between;
@@ -945,47 +933,35 @@
     }
 
     .neo-btn-text {
-        background: var(--mp-bg-base) !important;
-        border: 2px solid var(--mp-outline) !important;
-        color: var(--mp-outline) !important;
+        background: var(--melody-light) !important;
+        border: 2px solid var(--melody-black) !important;
+        color: var(--melody-black) !important;
         padding: 8px 18px !important;
-        /* 让位 2px 用于 border */
-        border-radius: var(--mp-radius-md) !important;
-        box-shadow: 2px 2px 0px var(--mp-outline) !important;
+        border-radius: 0 !important;
+        box-shadow: 4px 4px 0px var(--melody-black) !important;
         cursor: pointer;
-        font-size: 1.05rem !important;
-        /* 字体加大适配像素风 */
-        font-weight: bold;
+        font-size: 1.1rem !important;
+        font-weight: 500;
         display: flex;
         align-items: center;
         gap: 8px;
-        transition: transform 0.1s, box-shadow 0.1s;
+        transition: all 0.1s ease;
         outline: none;
         white-space: nowrap;
     }
 
     .neo-btn-text:hover {
-        background: #ffd1dc !important;
-        /* 浅粉色 hover */
-        transform: translate(1px, 1px);
-        box-shadow: 1px 1px 0px var(--mp-outline) !important;
+        background: var(--melody-pink) !important;
+        color: var(--melody-white) !important;
+        transform: translate(-1px, -1px);
+        box-shadow: 5px 5px 0px var(--melody-black) !important;
     }
 
-    .neo-btn-text:active {
-        background: var(--mp-accent) !important;
-        color: var(--mp-bg-base) !important;
-        transform: translate(2px, 2px);
-        box-shadow: none !important;
-    }
-
-    /* AI 与 保存特殊按钮色彩修正 */
     .btn-ai-text {
         color: var(--mp-danger) !important;
     }
 
-    /* 美乐蒂粉 */
     .btn-save-apply {
-        border-color: var(--mp-success) !important;
         color: var(--mp-success) !important;
     }
 
@@ -995,29 +971,28 @@
     }
 
     .horae-sideplay-badge {
-        background: var(--mp-danger);
-        color: var(--mp-bg-base);
+        background: var(--melody-black);
+        color: var(--melody-white);
         font-size: 11px;
-        padding: 0px 6px;
-        border: 2px solid var(--mp-outline);
+        padding: 1px 6px;
         border-radius: 0;
-        font-weight: bold;
+        font-weight: 700;
     }
 
     /* 手机端全局紧凑化调整 */
     @media (max-width: 768px) {
         .horae-message-panel-vue {
-            /* 依然维持方形和更细的复合边框阴影 */
-            box-shadow: 1px 1px 0px #fffbfb, 2px 2px 0px #ff9eac, 4px 4px 0px #4a2e36 !important;
+            --mp-radius-md: 0px;
+            --mp-radius-sm: 0px;
         }
 
         .horae-panel-top {
-            padding: 6px 10px;
+            padding: 8px 12px;
             gap: 8px;
         }
 
         .horae-panel-content {
-            padding: 10px;
+            padding: 12px;
         }
 
         .neo-dashboard {
@@ -1032,7 +1007,7 @@
         .toggle-icon {
             width: 28px;
             height: 28px;
-            font-size: 0.95rem;
+            font-size: 0.85rem;
         }
 
         .toggle-info {
@@ -1041,7 +1016,7 @@
         }
 
         .toggle-time {
-            font-size: 0.95rem;
+            font-size: 1rem;
             line-height: 1.2;
             min-width: 0;
             white-space: nowrap;
@@ -1060,34 +1035,34 @@
         .neo-btn-icon {
             width: 28px;
             height: 28px;
-            font-size: 0.9rem !important;
+            font-size: 0.85rem !important;
         }
 
         .horae-sideplay-badge {
-            font-size: 10px;
-            padding: 0px 5px;
+            font-size: 9px;
+            padding: 1px 5px;
         }
 
         .section-title {
-            font-size: 0.85rem;
+            font-size: 0.95rem;
         }
 
         .neo-inset-section {
-            padding: 8px 10px;
+            padding: 10px 12px;
         }
 
         .neo-event-card {
-            padding: 8px 10px;
+            padding: 10px 12px;
         }
 
         .event-body-text {
-            font-size: 0.95rem;
+            font-size: 1.05rem;
             line-height: 1.5;
         }
 
         .neo-chip {
-            padding: 2px 8px;
-            font-size: 0.85rem;
+            padding: 4px 10px;
+            font-size: 0.9rem;
         }
 
         .neo-tags,
@@ -1097,12 +1072,13 @@
 
         .aff-chip {
             min-height: 30px;
-            padding: 2px 6px;
+            padding: 4px 8px;
+            box-shadow: 1px 1px 0px var(--melody-pink);
         }
 
         .aff-chip .t-title,
         .aff-chip .t-val {
-            font-size: 0.9rem;
+            font-size: 0.95rem;
         }
 
         .neo-item-list,
@@ -1112,23 +1088,23 @@
 
         .neo-item-card,
         .agenda-card {
-            padding: 6px 8px;
+            padding: 8px 10px;
             gap: 8px;
         }
 
         .item-line-top,
         .agenda-text {
-            font-size: 0.95rem;
+            font-size: 1.05rem;
         }
 
         .item-desc,
         .item-meta,
         .agenda-date {
-            font-size: 0.85rem;
+            font-size: 0.9rem;
         }
 
         .item-emoji {
-            font-size: 1.1rem;
+            font-size: 1.2rem;
         }
 
         .dict-view,
@@ -1178,7 +1154,7 @@
             width: 100%;
             justify-content: center;
             padding: 6px 8px !important;
-            font-size: 0.9rem !important;
+            font-size: 1rem !important;
         }
 
         .btn-drawer {
@@ -1187,17 +1163,13 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-
-        .horae-panel-content,
-        .neo-btn-icon,
-        .neo-btn-text,
-        .action-group-hover {
+        .horae-panel-content {
             transition: none !important;
             transform: none !important;
         }
     }
 
-    /* Input Controls Integration 样式穿透覆盖 */
+    /* 像素化的表单控件重置 */
     input.neo-input,
     select.neo-input,
     textarea.neo-textarea {
@@ -1206,58 +1178,58 @@
         width: 100% !important;
         max-width: none !important;
         margin: 0 !important;
-        border: 2px solid var(--mp-outline) !important;
+        border: 2px solid var(--melody-black) !important;
         border-radius: 0 !important;
-        background: var(--mp-bg-base) !important;
+        background: var(--melody-white) !important;
         color: var(--mp-text-title) !important;
         font-family: inherit !important;
-        font-size: 1rem !important;
-        font-weight: normal !important;
+        font-size: 1.05rem !important;
+        font-weight: 400 !important;
         line-height: 1.5 !important;
         letter-spacing: 0 !important;
-        box-shadow: inset 2px 2px 0px rgba(74, 46, 54, 0.1) !important;
+        box-shadow: inset 2px 2px 0px var(--melody-light) !important;
         text-shadow: none !important;
         outline: none !important;
     }
 
     input.neo-input,
     select.neo-input {
-        height: 36px !important;
-        min-height: 36px !important;
+        height: 38px !important;
+        min-height: 38px !important;
         padding: 6px 10px !important;
     }
 
     textarea.neo-textarea {
-        min-height: 42px !important;
-        padding: 10px 12px !important;
+        min-height: 44px !important;
+        padding: 8px 12px !important;
         resize: vertical !important;
         overflow: hidden !important;
     }
 
     textarea.neo-textarea.lg {
-        padding: 12px 14px !important;
-        font-size: 1.05rem !important;
+        padding: 12px 16px !important;
+        font-size: 1.15rem !important;
     }
 
     @media (max-width: 768px) {
 
         input.neo-input,
         select.neo-input {
-            height: 30px !important;
-            min-height: 30px !important;
+            height: 34px !important;
+            min-height: 34px !important;
             padding: 4px 8px !important;
             font-size: 0.95rem !important;
         }
 
         textarea.neo-textarea {
-            min-height: 36px !important;
+            min-height: 38px !important;
             padding: 6px 8px !important;
             font-size: 0.95rem !important;
         }
 
         textarea.neo-textarea.lg {
-            padding: 8px 10px !important;
-            font-size: 1rem !important;
+            padding: 8px 12px !important;
+            font-size: 1.05rem !important;
         }
     }
 
@@ -1273,8 +1245,25 @@
         background: transparent !important;
         color: var(--mp-text-main) !important;
         font-family: inherit !important;
-        font-size: 0.95rem !important;
+        font-size: 1rem !important;
+        font-weight: 400 !important;
+        line-height: 1.5 !important;
+        letter-spacing: 0 !important;
         box-shadow: none !important;
+        text-shadow: none !important;
         outline: none !important;
+    }
+
+    .toggle-icon i::before,
+    .toggle-icon .fa-regular::before,
+    .toggle-icon .fa-solid::before {
+        color: var(--melody-white) !important;
+        text-shadow: none !important;
+    }
+
+    .section-title i::before,
+    .neo-chip i::before {
+        color: var(--mp-accent) !important;
+        text-shadow: none !important;
     }
 }

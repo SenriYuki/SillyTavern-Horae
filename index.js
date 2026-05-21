@@ -44,9 +44,15 @@ const MESSAGE_PANEL_BUILTIN_THEMES = [
         path: 'src/messagePanel/theme/夜间.css',
         format: 'css',
     },
+    {
+        id: '复古粉',
+        nameKey: '复古粉',
+        path: 'src/messagePanel/theme/复古粉.css',
+        format: 'css',
+    },
     // {
-    //     id: '粉色主题',
-    //     nameKey: '粉色主题',
+    //     id: 'new',
+    //     nameKey: 'new',
     //     path: 'src/messagePanel/theme/new.css',
     //     format: 'css',
     // },
