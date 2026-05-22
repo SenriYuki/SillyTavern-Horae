@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki，柏柏
- * 版本: 1.14B
+ * 版本: 1.14.1B
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -17,7 +17,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 import { t, tForLang, initI18n, getLanguage, isZhLocale, setLanguage, detectEffectiveAiLangIsZh, detectEffectiveAiLang } from './core/i18n.js';
 import { initPromptDefaults, ensurePromptDefaults, getPromptDefaultSync } from './core/promptDefaults.js';
 import { installSaveRequestGzipFetchHook } from './utils/saveRequestGzip.js';
-import { mountMessagePanel as mountVueMessagePanel } from './dist/messagePanel.js?v=1.14B';
+import { mountMessagePanel as mountVueMessagePanel } from './dist/messagePanel.js?v=1.14.1B';
 
 // ============================================
 // 常量定义
@@ -25,7 +25,7 @@ import { mountMessagePanel as mountVueMessagePanel } from './dist/messagePanel.j
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.14B';
+const VERSION = '1.14.1B';
 const DEFAULT_VECTOR_STRIP_TAGS = 'dream_status,Episode,details,think,thinking,Thinking';
 const MESSAGE_PANEL_THEME_TYPE = 'horae-message-panel-theme';
 const MESSAGE_PANEL_THEME_DAY = 'day';
@@ -19517,19 +19517,134 @@ function _resolveSkipLastBeforeMessage(messageIndex) {
  * This path intentionally bypasses generateCompactPrompt timeline filtering rules.
  */
 function _buildRawTimelinePromptBySkipLast(skipLast) {
-    const events = horaeManager.getEvents(0, 'all', skipLast) || [];
-    if (!events.length) return '';
+    const chat = horaeManager.getChat();
+    const cutoff = Math.max(0, (chat?.length || 0) - Math.max(0, skipLast));
+    if (!cutoff) return '';
+
+    const rows = [];
+    const seen = new Set();
+    const coveredMsgIndices = new Set();
+    const includedSummaryIds = new Set();
+    const firstMeta = chat?.[0]?.horae_meta;
+    const summaries = Array.isArray(firstMeta?.autoSummaries) ? [...firstMeta.autoSummaries] : [];
+
+    const pushRow = (row) => {
+        if (!row?.summary) return;
+        const summary = String(row.summary).replace(/\s+/g, ' ').trim();
+        if (!summary) return;
+        const level = row.level || '一般';
+        const msgIdx = Number.isInteger(row.msgIdx) ? row.msgIdx : -1;
+        const key = `${row.isSummary ? 'summary' : 'event'}|${row.summaryId || ''}|${msgIdx}|${level}|${summary}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        rows.push({
+            ...row,
+            summary,
+            level,
+            msgIdx,
+        });
+    };
+
+    const normalizedSummaries = summaries
+        .filter(s => s?.id && s.active !== false)
+        .map(s => {
+            const range = _getSummaryEntryRange(s);
+            if (!range) return null;
+            const [start, end] = range;
+            return {
+                id: s.id,
+                depth: _normalizeSummaryDepth(s.depth),
+                start,
+                end,
+                entry: s,
+            };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.start - b.start || a.end - b.end || a.depth - b.depth);
+
+    for (const s of normalizedSummaries) {
+        if (s.end >= cutoff) continue;
+
+        const summaryText = (typeof s.entry?.summaryText === 'string' && s.entry.summaryText.trim())
+            ? s.entry.summaryText.trim()
+            : (s.entry?.summary || s.entry?.title || '');
+        if (!summaryText) continue;
+
+        const indices = getSummaryMsgIndices(s.entry)
+            .filter(idx => Number.isInteger(idx) && idx >= 0 && idx < cutoff && chat?.[idx] && !chat[idx]?.horae_meta?._skipHorae);
+        const anchorIdx = indices.find(idx => idx >= s.start && idx <= s.end) ?? indices[0];
+        if (!Number.isInteger(anchorIdx) || !chat?.[anchorIdx]) continue;
+
+        for (const idx of indices) coveredMsgIndices.add(idx);
+        includedSummaryIds.add(s.id);
+
+        pushRow({
+            isSummary: true,
+            summaryId: s.id,
+            msgIdx: anchorIdx,
+            date: chat[anchorIdx]?.horae_meta?.timestamp?.story_date || '?',
+            time: chat[anchorIdx]?.horae_meta?.timestamp?.story_time || '',
+            level: `摘要L${s.depth}`,
+            summary: summaryText,
+        });
+    }
+
+    for (let msgIdx = 0; msgIdx < cutoff; msgIdx++) {
+        const meta = chat?.[msgIdx]?.horae_meta;
+        if (!meta || meta._skipHorae) continue;
+
+        const events = meta.events || (meta.event ? [meta.event] : []);
+        if (!Array.isArray(events)) continue;
+
+        const date = meta.timestamp?.story_date || '?';
+        const time = meta.timestamp?.story_time || '';
+        for (let evtIdx = 0; evtIdx < events.length; evtIdx++) {
+            const evt = events[evtIdx];
+            if (!evt?.summary || evt._carryoverSeed) continue;
+
+            const isSummaryEvent = !!(evt.isSummary || evt.level === '摘要' || evt._summaryId);
+            if (isSummaryEvent) {
+                if (evt._summaryId) continue;
+                pushRow({
+                    isSummary: true,
+                    msgIdx,
+                    date,
+                    time,
+                    level: '摘要',
+                    summary: evt.summary,
+                });
+                continue;
+            }
+
+            if (coveredMsgIndices.has(msgIdx)) continue;
+            if (evt._compressedBy && includedSummaryIds.has(evt._compressedBy)) continue;
+
+            pushRow({
+                isSummary: false,
+                msgIdx,
+                date,
+                time,
+                level: evt.level || '一般',
+                summary: evt.summary,
+            });
+        }
+    }
+
+    rows.sort((a, b) => a.msgIdx - b.msgIdx || Number(b.isSummary) - Number(a.isSummary));
+    if (!rows.length) return '';
 
     const lines = ['[剧情轨迹]'];
-    for (const row of events) {
-        const summary = String(row?.event?.summary || '').replace(/\s+/g, ' ').trim();
-        if (!summary) continue;
-
-        const msgNum = Number.isInteger(row?.messageIndex) ? `#${row.messageIndex}` : '#?';
-        const date = row?.timestamp?.story_date || '?';
-        const time = row?.timestamp?.story_time || '';
+    for (const row of rows) {
+        const date = row.date || '?';
+        const time = row.time || '';
         const timeStr = time ? `${date} ${time}` : date;
-        lines.push(`● ${msgNum} ${timeStr}: ${summary}`);
+        if (row.isSummary) {
+            lines.push(`● [${row.level}] ${timeStr}: ${row.summary}`);
+        } else {
+            const msgNum = Number.isInteger(row.msgIdx) ? `#${row.msgIdx}` : '#?';
+            const levelTag = row.level && row.level !== '一般' ? `[${row.level}] ` : '';
+            lines.push(`● ${levelTag}${msgNum} ${timeStr}: ${row.summary}`);
+        }
     }
 
     return lines.length > 1 ? lines.join('\n').trim() : '';
