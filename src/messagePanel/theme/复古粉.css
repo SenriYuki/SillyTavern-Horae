@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
 
 .horae-message-panel.horae-message-panel-vue {
+    width: 100%;
     /* 主体使用暖白，避免全粉导致眼花 */
     background: #fffbfb !important;
 

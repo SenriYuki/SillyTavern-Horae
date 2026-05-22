@@ -1,75 +1,76 @@
 @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
 
 .horae-message-panel.horae-message-panel-vue {
-    /* 像素美乐蒂核心配色变量 */
-    --melody-white: #fffbfb;
-    --melody-pink: #ff9eac;
-    --melody-light: #ffd1dc;
-    --melody-red: #e86a7a;
-    --melody-black: #4a2e36;
+    width: 100%;
+    /* 主体彻底改为纯黑，完全实心，绝不通透，没有任何半透明 rgba */
+    background: #000000 !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
 
-    /* 替换原生系统变量为像素风 */
-    --mp-bg-base: var(--melody-white);
-    --mp-text-title: var(--melody-black);
-    --mp-text-main: var(--melody-black);
-    --mp-text-muted: var(--melody-red);
-    --mp-accent: var(--melody-red);
-    --mp-danger: #ea3323;
-    --mp-success: #3b8c2a;
-    --mp-warning: var(--melody-red);
-    --mp-info: #1b7cf3;
-    --mp-pink: var(--melody-pink);
+    /* 1:1 保留强硬的深色像素粗边框 */
+    border: 2px solid #333333 !important;
+    border-radius: 0 !important;
 
-    /* 重写阴影规则，去除所有的模糊渐变 */
-    --mp-light-shadow: transparent;
-    --mp-dark-shadow: var(--melody-black);
-    --mp-neo-drop: 4px 4px 0px var(--melody-black);
-    --mp-neo-drop-sm: 2px 2px 0px var(--melody-black);
-    --mp-neo-inset: inset 0 0 0 2px var(--melody-black);
-    --mp-neo-inset-sm: inset 0 0 0 2px var(--melody-pink);
+    /* 1:1 复合三层不透明立体像素阴影: 纯黑 -> 暗灰 -> 深炭灰，死死锁住外层框架 */
+    box-shadow: 2px 2px 0px #000000, 4px 4px 0px #2a2a2a, 6px 6px 0px #1a1a1a !important;
 
-    /* 严格关闭所有的圆角 */
+    /* 核心文字使用清晰的亮灰白 */
+    color: #cccccc !important;
+    margin-top: 10px !important;
+    margin-bottom: 18px !important;
+    overflow: hidden !important;
+
+    /* 1:1 完美保留像素风字体 */
+    font-family: 'VT323', monospace, sans-serif !important;
+
+    /* --- 📥 核心变量树：1:1 对齐，全面清洗彩色，平替为实心纯黑灰阶 --- */
+    --mp-bg-base: #121212;
+    /* 扎实的实心深黑灰色 */
+    --mp-bg-alt: #1a1a1a;
+    /* 区块隔断背景，完全不透明 */
+    --mp-text-title: #ffffff;
+    /* 纯白 */
+    --mp-text-main: #cccccc;
+    /* 亮灰 */
+    --mp-text-muted: #777777;
+    /* 暗灰 */
+    --mp-accent: #444444;
+    /* 强调线改为暗中性灰 */
+    --mp-danger: #999999;
+    /* 警告等颜色全部向纯中性灰靠拢 */
+    --mp-success: #888888;
+    --mp-warning: #555555;
+    --mp-info: #666666;
+    --mp-pink: #1a1a1a;
+    --mp-outline: #333333;
+    /* 实体像素线使用扎实的深灰 */
+
+    /* 1:1 完美继承原本强硬的硬直像素投影逻辑 */
+    --mp-neo-drop: 2px 2px 0px var(--mp-outline);
+    --mp-neo-drop-sm: 1px 1px 0px var(--mp-outline);
+    --mp-neo-inset: inset 2px 2px 0px rgba(0, 0, 0, 0.4);
+    --mp-neo-inset-sm: inset 1px 1px 0px rgba(0, 0, 0, 0.4);
+
+    /* 🚨 严格死守大直角变量：全为 0px，保住像素核心 */
     --mp-radius-md: 0px;
     --mp-radius-sm: 0px;
     --mp-radius-round: 0px;
     --mp-dashboard-height: 500px;
 
-    /* 面板主框架：利用阴影模拟不改变尺寸的多色复合边框 */
-    background: var(--mp-bg-base) !important;
-    border: 4px solid var(--melody-black) !important;
-    border-radius: 0 !important;
-    box-shadow:
-        inset 0 0 0 2px var(--melody-pink),
-        4px 4px 0px var(--melody-pink),
-        8px 8px 0px var(--melody-black) !important;
-
-    color: var(--mp-text-main) !important;
-    margin-top: 10px !important;
-    margin-bottom: 22px !important;
-    /* 预留些许下阴影空间 */
-    overflow: hidden !important;
-    font-family: 'VT323', monospace !important;
-    image-rendering: pixelated;
-
-    /* 暗色模式反转配色 */
+    /* 暗黑模式同质化为实心纯黑变体 */
     &.horae-dark {
-        --melody-white: #2b1f24;
-        --melody-pink: #7a3a46;
-        --melody-light: #4a2e36;
-        --melody-red: #ff9eac;
-        --melody-black: #fffbfb;
-
-        --mp-bg-base: var(--melody-white);
-        --mp-text-title: var(--melody-black);
-        --mp-text-main: var(--melody-black);
-        --mp-text-muted: var(--melody-red);
-        --mp-dark-shadow: var(--melody-black);
+        background: #000000 !important;
+        --mp-bg-base: #121212;
+        --mp-bg-alt: #1a1a1a;
+        --mp-text-title: #ffffff;
+        --mp-text-main: #dddddd;
+        --mp-text-muted: #888888;
+        --mp-outline: #333333;
         color: var(--mp-text-main) !important;
     }
 
     &.horae-sideplay {
-        opacity: 0.85;
-        /* 加重一下透明度以免像素风看不清 */
+        opacity: 0.95;
     }
 
     *,
@@ -82,25 +83,24 @@
         -webkit-appearance: none !important;
         appearance: none !important;
         background-image: none !important;
-        box-shadow: none;
-        text-shadow: none !important;
         font: inherit !important;
     }
 
     .horae-panel-top {
-        padding: 18px 24px;
+        padding: 16px 24px;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 16px;
-        border-bottom: 4px dashed var(--melody-pink);
+        border-bottom: 2px dashed var(--mp-accent);
         cursor: pointer;
-        transition: background 0.2s;
+        transition: background 0.1s;
         user-select: none;
+        background: var(--mp-bg-alt);
     }
 
     .horae-panel-top:hover {
-        background: var(--melody-light);
+        background: #222222;
     }
 
     .toggle-left {
@@ -113,17 +113,23 @@
 
     .toggle-icon {
         flex: 0 0 auto;
-        font-size: 1.1rem;
-        color: var(--melody-white) !important;
-        background: var(--melody-pink);
-        border: 2px solid var(--melody-black);
+        font-size: 1.2rem;
+        color: var(--mp-bg-base) !important;
+        background: var(--mp-accent);
         display: flex;
         align-items: center;
         justify-content: center;
         width: 40px;
         height: 40px;
-        border-radius: 0;
-        box-shadow: 2px 2px 0px var(--melody-black);
+        border: 2px solid var(--mp-outline);
+        border-radius: var(--mp-radius-md);
+        box-shadow: var(--mp-neo-drop);
+    }
+
+    .toggle-icon i::before,
+    .toggle-icon .fa-regular::before,
+    .toggle-icon .fa-solid::before {
+        color: var(--mp-outline) !important;
     }
 
     .toggle-info {
@@ -136,23 +142,21 @@
 
     .toggle-time {
         color: var(--mp-text-title);
-        font-size: 1.25rem;
-        font-weight: 600;
+        font-size: 1.15rem;
+        font-family: inherit;
+        font-weight: bold;
         display: flex;
         align-items: center;
         gap: 8px;
-        text-shadow: 2px 2px 0px var(--melody-pink);
-        letter-spacing: 1px;
     }
 
     .toggle-summary {
         color: var(--mp-text-muted);
-        font-size: 0.95rem;
+        font-size: 0.9rem;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
         width: 100%;
-        line-height: 1;
     }
 
     .toggle-actions {
@@ -161,43 +165,41 @@
         gap: 12px;
     }
 
-    /* 像素方块按钮 */
     .neo-btn-icon {
-        background: var(--melody-white) !important;
-        border: 2px solid var(--melody-black) !important;
-        color: var(--melody-red) !important;
+        background: var(--mp-bg-base) !important;
+        border: 2px solid var(--mp-outline) !important;
+        color: var(--mp-outline) !important;
         width: 38px;
         height: 38px;
-        border-radius: 0 !important;
-        box-shadow: 2px 2px 0px var(--melody-black) !important;
+        border-radius: var(--mp-radius-md) !important;
+        box-shadow: var(--mp-neo-drop) !important;
         cursor: pointer;
-        transition: all 0.1s ease;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         outline: none;
         padding: 0 !important;
+        transition: transform 0.1s, box-shadow 0.1s, background 0.1s;
     }
 
     .neo-btn-icon:hover {
-        background: var(--melody-light) !important;
-        color: var(--melody-black) !important;
-        transform: translate(-1px, -1px);
-        box-shadow: 3px 3px 0px var(--melody-black) !important;
+        background: var(--mp-accent) !important;
+        color: var(--mp-bg-base) !important;
+        transform: translate(1px, 1px);
+        box-shadow: var(--mp-neo-drop-sm) !important;
     }
 
-    .neo-btn-icon:active,
-    .neo-btn-text:active {
+    .neo-btn-icon:active {
         transform: translate(2px, 2px);
-        box-shadow: 0px 0px 0px var(--melody-black) !important;
+        box-shadow: none !important;
     }
 
     .neo-btn-icon:disabled,
     .neo-btn-text:disabled {
         cursor: wait;
-        opacity: 0.6;
-        box-shadow: none !important;
-        transform: translate(2px, 2px);
+        opacity: 0.5;
+        background: #222 !important;
+        pointer-events: none;
     }
 
     .horae-panel-content {
@@ -216,38 +218,35 @@
         gap: 24px;
         height: var(--mp-dashboard-height);
         flex: 0 0 var(--mp-dashboard-height);
-        min-height: 0;
         overflow-x: hidden;
         overflow-y: auto;
         overscroll-behavior: auto;
         scrollbar-gutter: stable;
-        padding-right: 12px;
+        padding-right: 10px;
         padding-bottom: 16px;
         scrollbar-width: thin;
-        scrollbar-color: var(--melody-pink) var(--melody-white);
+        scrollbar-color: var(--mp-accent) var(--mp-bg-base);
     }
 
-    /* 经典方块滚动条 */
     .neo-dashboard::-webkit-scrollbar {
-        width: 14px;
+        width: 12px;
     }
 
     .neo-dashboard::-webkit-scrollbar-track {
-        background: var(--melody-white);
-        border-left: 2px solid var(--melody-black);
+        background: var(--mp-bg-base);
+        border-left: 2px dashed var(--mp-text-muted);
         border-radius: 0;
-        box-shadow: none;
     }
 
     .neo-dashboard::-webkit-scrollbar-thumb {
-        background: var(--melody-light);
-        border: 2px solid var(--melody-black);
+        background: var(--mp-accent);
+        border: 2px solid var(--mp-outline);
         border-radius: 0;
-        box-shadow: inset 2px 2px 0px var(--melody-pink);
+        box-shadow: inset 2px 0px 0px rgba(255, 255, 255, 0.05);
     }
 
     .neo-dashboard::-webkit-scrollbar-thumb:hover {
-        background: var(--melody-pink);
+        background: var(--mp-danger);
     }
 
     .neo-tags {
@@ -257,12 +256,12 @@
     }
 
     .neo-chip {
-        background: var(--melody-white);
-        border: 2px solid var(--melody-black);
-        box-shadow: 2px 2px 0px var(--melody-pink);
+        background: var(--mp-bg-alt);
+        border: 2px solid var(--mp-outline);
+        box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.3);
         padding: 6px 14px;
-        border-radius: 0;
-        font-size: 1rem;
+        border-radius: var(--mp-radius-md);
+        font-size: 0.95rem;
         display: inline-flex;
         align-items: center;
         gap: 8px;
@@ -270,8 +269,7 @@
     }
 
     .neo-chip i {
-        color: var(--mp-accent);
-        opacity: 0.85;
+        color: var(--mp-danger);
     }
 
     .neo-chip-input {
@@ -280,48 +278,48 @@
         background: transparent !important;
         border: none !important;
         box-shadow: none !important;
-        color: var(--mp-text-main) !important;
+        color: var(--mp-text-title) !important;
         padding: 0 !important;
-        font-size: 1rem !important;
+        font-size: 0.95rem !important;
         outline: none !important;
     }
 
-    /* 输入框直角像素风格 */
     .neo-input,
     .neo-textarea {
         width: 100%;
-        background: var(--melody-white) !important;
-        border: 2px solid var(--melody-black) !important;
+        background: var(--mp-bg-base) !important;
+        border: 2px solid var(--mp-outline) !important;
         color: var(--mp-text-title) !important;
-        font-size: 1.05rem !important;
-        box-shadow: inset 2px 2px 0px var(--melody-light) !important;
+        font-size: 1rem !important;
+        box-shadow: var(--mp-neo-inset) !important;
         outline: none !important;
-        border-radius: 0 !important;
+        border-radius: var(--mp-radius-sm) !important;
         font-family: inherit;
-        transition: box-shadow 0.1s;
         line-height: 1.5;
+        transition: outline 0.1s;
     }
 
     .neo-input {
         padding: 6px 10px !important;
-        height: 38px;
+        height: 36px;
     }
 
     .neo-textarea {
-        padding: 8px 12px !important;
+        padding: 10px 12px !important;
         resize: vertical;
-        min-height: 44px;
+        min-height: 42px;
         overflow: hidden;
     }
 
     .neo-textarea.lg {
-        padding: 12px 16px !important;
-        font-size: 1.15rem !important;
+        padding: 12px 14px !important;
+        font-size: 1.05rem !important;
     }
 
     .neo-input:focus,
     .neo-textarea:focus {
-        box-shadow: inset 2px 2px 0px var(--melody-black), 0 0 0 2px var(--melody-red) !important;
+        outline: 2px dashed var(--mp-accent) !important;
+        outline-offset: 2px;
     }
 
     .neo-text-btn {
@@ -329,19 +327,18 @@
         border: none !important;
         color: var(--mp-text-muted) !important;
         cursor: pointer;
-        font-size: 0.95rem !important;
+        font-size: 1rem !important;
         display: flex;
         align-items: center;
         gap: 6px;
-        font-weight: 500;
-        transition: color 0.1s, transform 0.1s;
+        font-weight: bold;
+        transition: color 0.1s;
         outline: none;
         padding: 0 !important;
     }
 
     .neo-text-btn:hover {
-        color: var(--melody-black) !important;
-        transform: translateY(-1px);
+        color: var(--mp-danger) !important;
     }
 
     .neo-text-btn.add:hover {
@@ -349,10 +346,9 @@
     }
 
     .neo-inset-section {
-        background: var(--melody-light);
-        border: 2px solid var(--melody-black);
-        box-shadow: inset 4px 4px 0px rgba(255, 255, 255, 0.4);
-        border-radius: 0;
+        background: #161616;
+        border: 2px dashed var(--mp-accent);
+        border-radius: var(--mp-radius-md);
         padding: 14px 18px;
     }
 
@@ -369,27 +365,26 @@
     }
 
     .section-title {
-        font-size: 1.1rem;
+        font-size: 1rem;
         color: var(--mp-text-title);
         display: flex;
         align-items: center;
         gap: 8px;
-        font-weight: 600;
+        font-weight: bold;
         text-transform: uppercase;
-        text-shadow: 1px 1px 0px var(--melody-white);
+        letter-spacing: 1px;
     }
 
     .section-title i {
-        color: var(--mp-accent);
-        opacity: 1;
+        color: var(--mp-danger);
     }
 
     .action-group-hover {
         display: flex;
         gap: 4px;
         opacity: 0;
-        transform: translateX(6px);
-        transition: all 0.1s ease;
+        transform: translateX(4px);
+        transition: all 0.1s step-end;
         margin-left: auto;
         flex: 0 0 auto;
         pointer-events: none;
@@ -407,28 +402,22 @@
         font-size: 0.9rem !important;
         color: var(--mp-text-muted) !important;
         background: transparent !important;
-        transition: all 0.1s ease;
         outline: none;
         padding: 0 !important;
     }
 
     .action-hover-btn.btn-edit:hover {
-        background: var(--melody-white) !important;
-        border: 2px solid var(--melody-black) !important;
-        color: #1b7cf3 !important;
-        box-shadow: 2px 2px 0px var(--melody-black) !important;
+        background: #222222 !important;
+        border-color: var(--mp-outline) !important;
+        color: var(--mp-outline) !important;
+        box-shadow: 2px 2px 0px var(--mp-outline) !important;
     }
 
     .action-hover-btn.btn-del:hover {
-        background: var(--melody-white) !important;
-        border: 2px solid var(--melody-black) !important;
-        color: var(--mp-danger) !important;
-        box-shadow: 2px 2px 0px var(--melody-black) !important;
-    }
-
-    .action-hover-btn:active {
-        transform: translate(2px, 2px);
-        box-shadow: none !important;
+        background: #2d1a1a !important;
+        border-color: var(--mp-outline) !important;
+        color: var(--mp-outline) !important;
+        box-shadow: 2px 2px 0px var(--mp-outline) !important;
     }
 
     .is-editing .action-group-hover,
@@ -447,8 +436,7 @@
         content: "\f00c";
     }
 
-    .view-mode,
-    .edit-mode {
+    .view-mode {
         display: flex;
         gap: 10px;
         flex: 1;
@@ -458,6 +446,10 @@
 
     .edit-mode {
         display: none;
+        gap: 10px;
+        flex: 1;
+        min-width: 0;
+        align-items: flex-start;
         flex-wrap: wrap;
     }
 
@@ -470,12 +462,12 @@
     }
 
     .neo-event-card {
-        background: var(--melody-white);
-        border: 2px solid var(--melody-black);
-        border-left: 6px solid var(--melody-red);
+        background: var(--mp-bg-base);
+        border: 2px solid var(--mp-outline);
         box-shadow: var(--mp-neo-drop);
-        border-radius: 0;
+        border-radius: var(--mp-radius-md);
         padding: 16px 18px;
+        border-left: 6px solid var(--mp-danger);
         position: relative;
     }
 
@@ -487,16 +479,16 @@
     }
 
     .event-badge {
-        font-size: 1rem;
-        color: var(--mp-warning);
-        font-weight: 600;
+        font-size: 0.95rem;
+        color: var(--mp-danger);
+        font-weight: bold;
         display: flex;
         align-items: center;
         gap: 6px;
     }
 
     .event-body-text {
-        font-size: 1.15rem;
+        font-size: 1.1rem;
         color: var(--mp-text-title);
         line-height: 1.6;
         word-break: break-word;
@@ -504,13 +496,37 @@
 
     .neo-event-card .action-group-hover {
         position: absolute;
-        right: 18px;
-        top: 14px;
+        right: 20px;
+        top: 16px;
         opacity: 1;
     }
 
+    /* 🔒 死死锁住底层核心框架宽度，一像素都不改，彻底杜绝变形 */
     .event-level-select {
         flex: 0 0 110px;
+    }
+
+    .aff-name {
+        width: 76px !important;
+    }
+
+    .aff-value {
+        width: 58px !important;
+    }
+
+    .rel-person {
+        width: 82px !important;
+        flex: 0 0 82px !important;
+    }
+
+    .item-holder-input {
+        width: 90px !important;
+        flex: 0 0 90px !important;
+    }
+
+    .agenda-date-input {
+        width: 110px !important;
+        flex: 0 0 110px !important;
     }
 
     .aff-grid {
@@ -520,22 +536,22 @@
     }
 
     .aff-chip {
-        background: var(--melody-white);
-        border: 2px solid var(--melody-black);
-        border-radius: 0;
+        background: var(--mp-bg-base);
+        border: 2px solid var(--mp-outline);
+        box-shadow: 2px 2px 0px var(--mp-accent);
+        border-radius: var(--mp-radius-sm);
         padding: 4px 10px;
         display: inline-flex;
         align-items: center;
-        transition: all 0.1s ease;
+        transition: background 0.1s;
         position: relative;
         min-height: 38px;
-        box-shadow: 2px 2px 0px var(--melody-pink);
     }
 
     .aff-chip:hover {
-        background: var(--melody-light);
+        background: var(--mp-bg-alt);
         transform: translate(-1px, -1px);
-        box-shadow: 3px 3px 0px var(--melody-pink);
+        box-shadow: 3px 3px 0px var(--mp-accent);
     }
 
     .aff-chip .view-mode {
@@ -545,7 +561,7 @@
     }
 
     .aff-chip .t-title {
-        font-weight: 600;
+        font-weight: bold;
         font-size: 1rem;
         color: var(--mp-text-title);
         max-width: 140px;
@@ -555,10 +571,10 @@
     }
 
     .aff-chip .t-val {
-        font-weight: 700;
+        font-weight: bold;
         font-size: 1.1rem;
-        color: var(--mp-text-muted);
-        font-family: monospace;
+        color: var(--mp-danger);
+        font-family: inherit;
     }
 
     .aff-chip .edit-mode {
@@ -566,24 +582,14 @@
         gap: 6px;
     }
 
-    .aff-name {
-        width: 76px !important;
-        min-width: 76px;
-    }
-
-    .aff-value {
-        width: 58px !important;
-        min-width: 58px;
-    }
-
     .aff-chip .action-group-hover {
         position: absolute;
         right: -10px;
         top: -16px;
-        background: var(--melody-white);
-        border: 2px solid var(--melody-black);
+        background: var(--mp-bg-base);
+        border: 2px solid var(--mp-outline);
         border-radius: 0;
-        box-shadow: 2px 2px 0px var(--melody-black);
+        box-shadow: 2px 2px 0px var(--mp-outline);
         padding: 2px;
         z-index: 10;
         margin: 0;
@@ -591,9 +597,9 @@
 
     .aff-chip.is-editing .action-group-hover {
         position: static;
-        background: transparent;
-        box-shadow: none;
         border: none;
+        box-shadow: none;
+        background: transparent;
         padding: 0;
         margin-left: 2px;
     }
@@ -629,8 +635,8 @@
         gap: 10px;
         padding: 8px 10px;
         margin: 0 -10px;
-        border-radius: 0;
-        transition: background 0.1s;
+        border: 2px solid transparent;
+        border-radius: var(--mp-radius-sm);
         position: relative;
     }
 
@@ -642,40 +648,34 @@
 
     .rel-row:hover,
     .neo-dict-row:hover {
-        background: var(--melody-light);
-        border-left: 4px solid var(--melody-pink);
-        padding-left: 6px;
+        background: var(--mp-bg-alt);
+        border-color: var(--mp-accent);
+        border-style: dashed;
     }
 
     .rel-row .view-mode {
         align-items: center;
         gap: 10px;
-        font-size: 1.05rem;
+        font-size: 0.95rem;
         flex-wrap: wrap;
     }
 
     .rel-node {
-        font-weight: 600;
+        font-weight: bold;
         color: var(--mp-text-title);
-        background: var(--melody-white);
-        border: 2px solid var(--melody-black);
-        padding: 0px 6px;
-        border-radius: 0;
+        background: #222222;
+        padding: 2px 8px;
+        border: 2px solid var(--mp-outline);
     }
 
     .rel-arrow {
         color: var(--mp-accent);
-        opacity: 0.9;
         font-size: 1rem;
     }
 
     .rel-label {
         color: var(--mp-text-main);
-    }
-
-    .rel-person {
-        width: 82px !important;
-        flex: 0 0 82px !important;
+        font-style: italic;
     }
 
     .dict-view {
@@ -683,25 +683,25 @@
     }
 
     .dict-key {
-        color: var(--mp-accent);
-        font-weight: 600;
+        color: var(--mp-danger);
+        font-weight: bold;
         white-space: nowrap;
         flex: 0 0 auto;
         line-height: 1.5;
-        font-size: 1.05rem;
+        font-size: 1rem;
     }
 
     .dict-key::after {
         content: ':';
-        color: var(--melody-black);
         margin-left: 2px;
+        color: var(--mp-outline);
     }
 
     .dict-value {
         color: var(--mp-text-main);
         line-height: 1.5;
         word-break: break-word;
-        font-size: 1.05rem;
+        font-size: 1rem;
     }
 
     .dict-edit-mode {
@@ -715,10 +715,10 @@
 
     .neo-item-card,
     .agenda-card {
-        background: var(--melody-white);
-        border: 2px solid var(--melody-black);
-        box-shadow: 2px 2px 0px var(--melody-pink);
-        border-radius: 0;
+        background: var(--mp-bg-base);
+        border: 2px solid var(--mp-outline);
+        box-shadow: 2px 2px 0px var(--mp-outline);
+        border-radius: var(--mp-radius-sm);
         padding: 10px 12px;
         display: flex;
         align-items: flex-start;
@@ -730,9 +730,9 @@
         display: inline-flex;
         align-items: center;
         flex: 0 0 auto;
-        font-size: 1.4rem;
+        font-size: 1.25rem;
         line-height: 1;
-        text-shadow: 2px 2px 0px var(--melody-light);
+        text-shadow: 1px 1px 0px var(--mp-outline);
     }
 
     .item-info {
@@ -740,7 +740,7 @@
         min-width: 0;
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 6px;
         padding-right: 2px;
     }
 
@@ -749,9 +749,9 @@
         align-items: center;
         flex-wrap: wrap;
         gap: 8px;
-        font-weight: 600;
+        font-weight: bold;
         color: var(--mp-text-title);
-        font-size: 1.15rem;
+        font-size: 1.1rem;
     }
 
     .item-title {
@@ -768,17 +768,16 @@
     }
 
     .item-holder-badge {
-        background: var(--melody-white);
-        border: 2px solid var(--mp-accent);
-        color: var(--mp-accent);
-        font-size: 0.85rem;
+        background: #222222;
+        border: 2px solid var(--mp-outline);
+        color: var(--mp-outline);
+        font-size: 0.8rem;
         padding: 0px 6px;
-        border-radius: 0;
-        font-weight: 600;
+        font-weight: bold;
     }
 
     .item-meta {
-        font-size: 0.95rem;
+        font-size: 0.9rem;
         color: var(--mp-text-muted);
     }
 
@@ -802,18 +801,12 @@
     .item-icon-input {
         width: 52px !important;
         flex: 0 0 52px !important;
-        text-align: center;
-    }
-
-    .item-holder-input {
-        width: 90px !important;
-        flex: 0 0 90px !important;
     }
 
     .deleted-items-zone {
         margin-top: 10px;
         padding-top: 12px;
-        border-top: 3px dotted var(--melody-pink);
+        border-top: 2px dashed #222222;
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
@@ -822,19 +815,18 @@
 
     .deleted-chip {
         background: transparent;
-        border: 2px dashed var(--melody-black);
-        padding: 2px 4px 2px 14px;
-        border-radius: 0;
+        border: 2px dashed var(--mp-text-muted);
+        padding: 0px 4px 0px 12px;
+        border-radius: var(--mp-radius-round);
         font-size: 0.95rem;
         display: flex;
         align-items: center;
         gap: 8px;
-        transition: background 0.1s ease;
     }
 
     .deleted-chip:hover {
-        background: var(--melody-pink);
-        color: var(--melody-white);
+        background: var(--mp-bg-alt);
+        border-color: var(--mp-danger);
     }
 
     .deleted-chip span {
@@ -844,10 +836,6 @@
         word-break: break-word;
     }
 
-    .deleted-chip:hover span {
-        color: var(--melody-white);
-    }
-
     .deleted-chip .action-hover-btn {
         width: 24px;
         height: 24px;
@@ -855,7 +843,7 @@
     }
 
     .agenda-card {
-        border-left: 6px solid var(--melody-black);
+        border-left: 6px solid #444444;
     }
 
     .agenda-card.type-suspense {
@@ -863,7 +851,7 @@
     }
 
     .agenda-card.type-suspense .agenda-type {
-        color: var(--mp-accent);
+        color: var(--mp-danger);
     }
 
     .agenda-card.type-plan {
@@ -879,7 +867,7 @@
         color: var(--mp-text-muted);
         white-space: nowrap;
         padding-top: 2px;
-        font-family: monospace;
+        font-family: inherit;
         width: 80px;
     }
 
@@ -892,12 +880,12 @@
     }
 
     .agenda-type {
-        font-size: 0.9rem;
-        font-weight: 600;
+        font-size: 0.85rem;
+        font-weight: bold;
     }
 
     .agenda-text {
-        font-size: 1.1rem;
+        font-size: 1rem;
         color: var(--mp-text-title);
         word-break: break-word;
     }
@@ -912,87 +900,94 @@
         width: 100%;
     }
 
-    .agenda-date-input {
-        width: 110px !important;
-        flex: 0 0 110px !important;
-    }
-
+    /* 🛠️ 底部动作区域重构：完美复刻截图2的“两个一组，两两并排”网格 */
     .neo-footer-actions {
         display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-top: 12px;
+        flex-direction: column;
+        margin-top: 16px;
         gap: 12px;
-        flex: 0 0 auto;
     }
 
     .action-group {
-        display: flex;
-        gap: 12px;
-        align-items: center;
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        /* 核心：完美切分为左右两个等宽格子 */
+        gap: 12px !important;
+        width: 100% !important;
     }
 
+    /* 让原本落单的抽屉按钮直接变为并列格，完美融于整体 */
+    .btn-drawer {
+        grid-column: span 1 !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    /* 硬核不透像素大按钮 */
     .neo-btn-text {
-        background: var(--melody-light) !important;
-        border: 2px solid var(--melody-black) !important;
-        color: var(--melody-black) !important;
-        padding: 8px 18px !important;
-        border-radius: 0 !important;
-        box-shadow: 4px 4px 0px var(--melody-black) !important;
+        background: var(--mp-bg-base) !important;
+        border: 2px solid var(--mp-outline) !important;
+        color: var(--mp-outline) !important;
+        padding: 10px 16px !important;
+        border-radius: var(--mp-radius-md) !important;
+        box-shadow: 2px 2px 0px var(--mp-outline) !important;
         cursor: pointer;
-        font-size: 1.1rem !important;
-        font-weight: 500;
+        font-size: 1.05rem !important;
+        font-weight: bold;
         display: flex;
         align-items: center;
-        gap: 8px;
-        transition: all 0.1s ease;
+        width: 100% !important;
+        justify-content: center !important;
+        transition: transform 0.1s, box-shadow 0.1s;
         outline: none;
         white-space: nowrap;
     }
 
     .neo-btn-text:hover {
-        background: var(--melody-pink) !important;
-        color: var(--melody-white) !important;
-        transform: translate(-1px, -1px);
-        box-shadow: 5px 5px 0px var(--melody-black) !important;
+        background: #222222 !important;
+        transform: translate(1px, 1px);
+        box-shadow: 1px 1px 0px var(--mp-outline) !important;
+    }
+
+    .neo-btn-text:active {
+        background: var(--mp-accent) !important;
+        color: var(--mp-bg-base) !important;
+        transform: translate(2px, 2px);
+        box-shadow: none !important;
     }
 
     .btn-ai-text {
-        color: var(--mp-danger) !important;
+        color: var(--mp-text-title) !important;
     }
 
     .btn-save-apply {
+        border-color: var(--mp-success) !important;
         color: var(--mp-success) !important;
     }
 
-    .btn-drawer {
-        padding-left: 11px !important;
-        padding-right: 11px !important;
-    }
-
     .horae-sideplay-badge {
-        background: var(--melody-black);
-        color: var(--melody-white);
+        background: var(--mp-text-muted);
+        color: #ffffff;
         font-size: 11px;
-        padding: 1px 6px;
+        padding: 0px 6px;
+        border: 2px solid var(--mp-outline);
         border-radius: 0;
-        font-weight: 700;
+        font-weight: bold;
     }
 
-    /* 手机端全局紧凑化调整 */
+    /* 手机端全局紧凑化纯黑像素适配 */
     @media (max-width: 768px) {
         .horae-message-panel-vue {
-            --mp-radius-md: 0px;
-            --mp-radius-sm: 0px;
+            box-shadow: 1px 1px 0px rgba(0, 0, 0, 0.3), 2px 2px 0px rgba(255, 255, 255, 0.04), 4px 4px 0px rgba(255, 255, 255, 0.1) !important;
         }
 
         .horae-panel-top {
-            padding: 8px 12px;
+            padding: 6px 10px;
             gap: 8px;
         }
 
         .horae-panel-content {
-            padding: 12px;
+            padding: 10px;
         }
 
         .neo-dashboard {
@@ -1005,9 +1000,10 @@
         }
 
         .toggle-icon {
-            width: 28px;
-            height: 28px;
-            font-size: 0.85rem;
+            width: 25px;
+            height: 25px;
+            font-size: 0.95rem;
+            border-radius: var(--mp-radius-sm);
         }
 
         .toggle-info {
@@ -1016,7 +1012,7 @@
         }
 
         .toggle-time {
-            font-size: 1rem;
+            font-size: 0.95rem;
             line-height: 1.2;
             min-width: 0;
             white-space: nowrap;
@@ -1035,34 +1031,34 @@
         .neo-btn-icon {
             width: 28px;
             height: 28px;
-            font-size: 0.85rem !important;
+            font-size: 0.9rem !important;
         }
 
         .horae-sideplay-badge {
-            font-size: 9px;
-            padding: 1px 5px;
+            font-size: 10px;
+            padding: 0px 5px;
         }
 
         .section-title {
-            font-size: 0.95rem;
+            font-size: 0.85rem;
         }
 
         .neo-inset-section {
-            padding: 10px 12px;
+            padding: 8px 10px;
         }
 
         .neo-event-card {
-            padding: 10px 12px;
+            padding: 8px 10px;
         }
 
         .event-body-text {
-            font-size: 1.05rem;
+            font-size: 0.95rem;
             line-height: 1.5;
         }
 
         .neo-chip {
-            padding: 4px 10px;
-            font-size: 0.9rem;
+            padding: 2px 8px;
+            font-size: 0.85rem;
         }
 
         .neo-tags,
@@ -1072,13 +1068,12 @@
 
         .aff-chip {
             min-height: 30px;
-            padding: 4px 8px;
-            box-shadow: 1px 1px 0px var(--melody-pink);
+            padding: 2px 6px;
         }
 
         .aff-chip .t-title,
         .aff-chip .t-val {
-            font-size: 0.95rem;
+            font-size: 0.9rem;
         }
 
         .neo-item-list,
@@ -1088,23 +1083,23 @@
 
         .neo-item-card,
         .agenda-card {
-            padding: 8px 10px;
+            padding: 6px 8px;
             gap: 8px;
         }
 
         .item-line-top,
         .agenda-text {
-            font-size: 1.05rem;
+            font-size: 0.95rem;
         }
 
         .item-desc,
         .item-meta,
         .agenda-date {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
         }
 
         .item-emoji {
-            font-size: 1.2rem;
+            font-size: 1.1rem;
         }
 
         .dict-view,
@@ -1138,38 +1133,32 @@
 
         .neo-footer-actions {
             flex-direction: column;
-            align-items: stretch;
             gap: 10px;
             margin-top: 6px;
         }
 
         .action-group {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            width: 100%;
+            gap: 10px !important;
         }
 
         .neo-btn-text {
-            width: 100%;
-            justify-content: center;
             padding: 6px 8px !important;
-            font-size: 1rem !important;
-        }
-
-        .btn-drawer {
-            grid-column: 1 / -1;
+            font-size: 0.9rem !important;
         }
     }
 
     @media (prefers-reduced-motion: reduce) {
-        .horae-panel-content {
+
+        .horae-panel-content,
+        .neo-btn-icon,
+        .neo-btn-text,
+        .action-group-hover {
             transition: none !important;
             transform: none !important;
         }
     }
 
-    /* 像素化的表单控件重置 */
+    /* Input Controls 穿透覆盖 (1:1 实心像素骨架对齐) */
     input.neo-input,
     select.neo-input,
     textarea.neo-textarea {
@@ -1178,58 +1167,58 @@
         width: 100% !important;
         max-width: none !important;
         margin: 0 !important;
-        border: 2px solid var(--melody-black) !important;
+        border: 2px solid var(--mp-outline) !important;
         border-radius: 0 !important;
-        background: var(--melody-white) !important;
+        background: var(--mp-bg-base) !important;
         color: var(--mp-text-title) !important;
         font-family: inherit !important;
-        font-size: 1.05rem !important;
-        font-weight: 400 !important;
+        font-size: 1rem !important;
+        font-weight: normal !important;
         line-height: 1.5 !important;
         letter-spacing: 0 !important;
-        box-shadow: inset 2px 2px 0px var(--melody-light) !important;
+        box-shadow: inset 2px 2px 0px rgba(0, 0, 0, 0.4) !important;
         text-shadow: none !important;
         outline: none !important;
     }
 
     input.neo-input,
     select.neo-input {
-        height: 38px !important;
-        min-height: 38px !important;
+        height: 36px !important;
+        min-height: 36px !important;
         padding: 6px 10px !important;
     }
 
     textarea.neo-textarea {
-        min-height: 44px !important;
-        padding: 8px 12px !important;
+        min-height: 42px !important;
+        padding: 10px 12px !important;
         resize: vertical !important;
         overflow: hidden !important;
     }
 
     textarea.neo-textarea.lg {
-        padding: 12px 16px !important;
-        font-size: 1.15rem !important;
+        padding: 12px 14px !important;
+        font-size: 1.05rem !important;
     }
 
     @media (max-width: 768px) {
 
         input.neo-input,
         select.neo-input {
-            height: 34px !important;
-            min-height: 34px !important;
+            height: 30px !important;
+            min-height: 30px !important;
             padding: 4px 8px !important;
             font-size: 0.95rem !important;
         }
 
         textarea.neo-textarea {
-            min-height: 38px !important;
+            min-height: 36px !important;
             padding: 6px 8px !important;
             font-size: 0.95rem !important;
         }
 
         textarea.neo-textarea.lg {
-            padding: 8px 12px !important;
-            font-size: 1.05rem !important;
+            padding: 8px 10px !important;
+            font-size: 1rem !important;
         }
     }
 
@@ -1245,25 +1234,8 @@
         background: transparent !important;
         color: var(--mp-text-main) !important;
         font-family: inherit !important;
-        font-size: 1rem !important;
-        font-weight: 400 !important;
-        line-height: 1.5 !important;
-        letter-spacing: 0 !important;
+        font-size: 0.95rem !important;
         box-shadow: none !important;
-        text-shadow: none !important;
         outline: none !important;
-    }
-
-    .toggle-icon i::before,
-    .toggle-icon .fa-regular::before,
-    .toggle-icon .fa-solid::before {
-        color: var(--melody-white) !important;
-        text-shadow: none !important;
-    }
-
-    .section-title i::before,
-    .neo-chip i::before {
-        color: var(--mp-accent) !important;
-        text-shadow: none !important;
     }
 }
