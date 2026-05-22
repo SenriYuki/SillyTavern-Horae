@@ -1226,12 +1226,7 @@ class HoraeManager {
         }
 
         // 自定义表格数据（合并全局、角色和本地）
-        const chat = this.getChat();
-        const firstMsg = chat?.[0];
-        const localTables = firstMsg?.horae_meta?.customTables || [];
-        const resolvedCharacter = this._getResolvedCharacterTables();
-        const resolvedGlobal = this._getResolvedGlobalTables();
-        const allTables = [...resolvedGlobal, ...resolvedCharacter, ...localTables];
+        const { localTables, resolvedCharacter, resolvedGlobal, allTables } = this._getResolvedTablesAt(skipLast);
         const tableDebug = [];
         let tableEmittedCount = 0;
         for (const table of allTables) {
@@ -1470,12 +1465,11 @@ class HoraeManager {
     parseHoraeTag(message) {
         if (!message) return null;
 
-        // 剥离 <think>/<thinking> 块，防止思维链内的 horae 标签污染解析
-        message = message.replace(/<think(?:ing)?[\s>][\s\S]*?<\/think(?:ing)?>/gi, '');
-
         // 提取所有 <horae> 块；多块时优先选最靠后的有效块（正文末尾的才是真正输出）
         let match = null;
-        const allHoraeMatches = [...message.matchAll(/<horae>([\s\S]*?)<\/horae>/gi)];
+        const parseSource = String(message || '')
+            .replace(/<think(?:ing)?[\s>][\s\S]*?<\/think(?:ing)?>/gi, '');
+        const allHoraeMatches = [...parseSource.matchAll(/<horae>([\s\S]*?)<\/horae>/gi)];
         const horaeFieldPattern = /^(time|timestamp|location|atmosphere|scene_desc|characters|costume|item[!]*|item-|event|affection|npc|agenda|agenda-|hold|hold-|rel|mood):/m;
         if (allHoraeMatches.length > 1) {
             match = [...allHoraeMatches].reverse().find(m => horaeFieldPattern.test(m[1]))
@@ -1484,15 +1478,15 @@ class HoraeManager {
             match = allHoraeMatches[0];
         }
         if (!match) {
-            match = message.match(/<!--horae([\s\S]*?)-->/i);
+            match = parseSource.match(/<!--horae([\s\S]*?)-->/i);
         }
 
-        const allEventMatches = [...message.matchAll(/<horaeevent>([\s\S]*?)<\/horaeevent>/gi)];
+        const allEventMatches = [...parseSource.matchAll(/<horaeevent>([\s\S]*?)<\/horaeevent>/gi)];
         const eventMatch = allEventMatches.length > 1
             ? ([...allEventMatches].reverse().find(m => /^event:/m.test(m[1])) || allEventMatches[allEventMatches.length - 1])
             : allEventMatches[0] || null;
-        const tableMatches = [...message.matchAll(/<horaetable[:：]\s*(.+?)>([\s\S]*?)<\/horaetable(?:[:：][^>]*)?>/gi)];
-        const rpgMatches = [...message.matchAll(/<horaerpg>([\s\S]*?)<\/horaerpg>/gi)];
+        const tableMatches = [...parseSource.matchAll(/<horaetable[:：]\s*(.+?)>([\s\S]*?)<\/horaetable(?:[:：][^>]*)?>/gi)];
+        const rpgMatches = [...parseSource.matchAll(/<horaerpg>([\s\S]*?)<\/horaerpg>/gi)];
 
         if (!match && !eventMatch && tableMatches.length === 0 && rpgMatches.length === 0) return null;
 
@@ -3142,6 +3136,132 @@ class HoraeManager {
         return result;
     }
 
+    _getResolvedTablesAt(skipLast = 0) {
+        const chat = this.getChat();
+        const firstMsg = chat?.[0];
+        if (!firstMsg) {
+            return { localTables: [], resolvedCharacter: [], resolvedGlobal: [], allTables: [] };
+        }
+
+        const localTables = JSON.parse(JSON.stringify(firstMsg.horae_meta?.customTables || []));
+        const resolvedCharacter = JSON.parse(JSON.stringify(this._getResolvedCharacterTables()));
+        const resolvedGlobal = JSON.parse(JSON.stringify(this._getResolvedGlobalTables()));
+        const allTables = [...resolvedGlobal, ...resolvedCharacter, ...localTables];
+        const limit = Math.max(0, (chat?.length || 0) - Math.max(0, skipLast));
+
+        const resetTable = (table) => {
+            if (table.baseData) {
+                table.data = JSON.parse(JSON.stringify(table.baseData));
+            } else {
+                if (!table.data) {
+                    table.data = {};
+                    return;
+                }
+                const keysToDelete = [];
+                for (const key of Object.keys(table.data)) {
+                    const [r, c] = key.split('-').map(Number);
+                    if (r >= 1 && c >= 1) keysToDelete.push(key);
+                }
+                for (const key of keysToDelete) delete table.data[key];
+            }
+            if (table.baseRows !== undefined) {
+                table.rows = table.baseRows;
+            } else if (table.baseData) {
+                let calcRows = 2;
+                let calcCols = 2;
+                for (const key of Object.keys(table.baseData)) {
+                    const [r, c] = key.split('-').map(Number);
+                    if (r === 0 && c + 1 > calcCols) calcCols = c + 1;
+                    if (c === 0 && r + 1 > calcRows) calcRows = r + 1;
+                }
+                table.rows = calcRows;
+                table.cols = calcCols;
+            }
+            if (table.baseCols !== undefined) {
+                table.cols = table.baseCols;
+            }
+        };
+
+        const applyToSnapshot = (tableUpdates) => {
+            if (!Array.isArray(tableUpdates) || tableUpdates.length === 0) return;
+
+            for (const update of tableUpdates) {
+                const updateName = (update.name || '').trim();
+                let table = localTables.find(t => (t.name || '').trim() === updateName);
+                if (!table) {
+                    table = resolvedCharacter.find(t => (t.name || '').trim() === updateName);
+                }
+                if (!table) {
+                    table = resolvedGlobal.find(t => (t.name || '').trim() === updateName);
+                }
+                if (!table) continue;
+
+                if (!table.data) table.data = {};
+                const lockedRows = new Set(table.lockedRows || []);
+                const lockedCols = new Set(table.lockedCols || []);
+                const lockedCells = new Set(table.lockedCells || []);
+
+                if (update._isUserEdit) {
+                    for (const key of Object.keys(table.data)) {
+                        const [r, c] = key.split('-').map(Number);
+                        if (r >= 1 && c >= 1) delete table.data[key];
+                    }
+                }
+
+                for (const [key, value] of Object.entries(update.updates || {})) {
+                    const [r, c] = key.split('-').map(Number);
+
+                    if (!update._isUserEdit) {
+                        if (r === 0 || c === 0) {
+                            const existing = table.data[key];
+                            if (existing && String(existing).trim()) continue;
+                        }
+
+                        if (lockedRows.has(r) || lockedCols.has(c) || lockedCells.has(key)) {
+                            continue;
+                        }
+                    }
+
+                    table.data[key] = value;
+                    if (r + 1 > (table.rows || 2)) table.rows = r + 1;
+                    if (c + 1 > (table.cols || 2)) table.cols = c + 1;
+                }
+            }
+        };
+
+        for (const table of allTables) {
+            resetTable(table);
+        }
+
+        const lastUserEditIdx = new Map();
+        for (let i = 0; i < limit; i++) {
+            const meta = chat[i]?.horae_meta;
+            if (!meta?.tableContributions) continue;
+            for (const tc of meta.tableContributions) {
+                if (tc?._isUserEdit) {
+                    lastUserEditIdx.set((tc.name || '').trim(), i);
+                }
+            }
+        }
+
+        for (let i = 0; i < limit; i++) {
+            const meta = chat[i]?.horae_meta;
+            if (!meta?.tableContributions?.length) continue;
+            const filtered = meta.tableContributions.filter(tc => {
+                if (tc._isUserEdit) return true;
+                const name = (tc.name || '').trim();
+                const ueIdx = lastUserEditIdx.get(name);
+                if (ueIdx !== undefined && i <= ueIdx) return false;
+                return true;
+            });
+            if (filtered.length > 0) {
+                applyToSnapshot(filtered);
+            }
+        }
+
+        return { localTables, resolvedCharacter, resolvedGlobal, allTables };
+    }
+
     /** 处理AI回复，解析标签并存储元数据 */
     processAIResponse(messageIndex, messageContent) {
         // 根据用户配置的剔除标签，整块移除小剧场等自定义区块，防止其内部的 horae 标签污染正文解析
@@ -3665,13 +3785,10 @@ class HoraeManager {
         return '\n' + this.getDefaultLocationPrompt();
     }
 
-    generateCustomTablesPrompt() {
-        const chat = this.getChat();
-        const firstMsg = chat?.[0];
-        const localTables = firstMsg?.horae_meta?.customTables || [];
-        const resolvedCharacter = this._getResolvedCharacterTables();
-        const resolvedGlobal = this._getResolvedGlobalTables();
-        const allTables = [...resolvedGlobal, ...resolvedCharacter, ...localTables];
+    generateCustomTablesPrompt(options = {}) {
+        const rawSkipLast = Number(options?.skipLast || 0);
+        const skipLast = Number.isFinite(rawSkipLast) ? Math.max(0, Math.floor(rawSkipLast)) : 0;
+        const { localTables, resolvedCharacter, resolvedGlobal, allTables } = this._getResolvedTablesAt(skipLast);
         const normalizeValue = (value) => {
             if (value == null) return '';
             return typeof value === 'string' ? value.trim() : String(value).trim();
@@ -3700,7 +3817,7 @@ class HoraeManager {
             ...localTables.map((table, index) => describeTable(table, 'local', index)),
         ];
         console.log(
-            `[Horae][TableDebug] generateCustomTablesPrompt input: global=${resolvedGlobal.length}, character=${resolvedCharacter.length}, local=${localTables.length}, total=${allTables.length}`
+            `[Horae][TableDebug] generateCustomTablesPrompt input: global=${resolvedGlobal.length}, character=${resolvedCharacter.length}, local=${localTables.length}, total=${allTables.length}, skipLast=${skipLast}`
         );
         if (debugTables.length > 0) {
             console.log(`[Horae][TableDebug] generateCustomTablesPrompt tables: ${JSON.stringify(debugTables)}`);
@@ -4492,6 +4609,9 @@ RPG 모드가 켜져 있으면 최종 출력은 반드시 세 개의 태그로 �
 
     /** 宽松正则解析（不需要标签包裹） */
     parseLooseFormat(message) {
+        message = String(message || '')
+            .replace(/<think(?:ing)?[\s>][\s\S]*?<\/think(?:ing)?>/gi, '');
+
         const result = {
             timestamp: {},
             costumes: {},

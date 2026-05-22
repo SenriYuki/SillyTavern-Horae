@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki，柏柏
- * 版本: 1.13.13B
+ * 版本: 1.14B
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -17,7 +17,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 import { t, tForLang, initI18n, getLanguage, isZhLocale, setLanguage, detectEffectiveAiLangIsZh, detectEffectiveAiLang } from './core/i18n.js';
 import { initPromptDefaults, ensurePromptDefaults, getPromptDefaultSync } from './core/promptDefaults.js';
 import { installSaveRequestGzipFetchHook } from './utils/saveRequestGzip.js';
-import { mountMessagePanel as mountVueMessagePanel } from './dist/messagePanel.js?v=1.13.13B';
+import { mountMessagePanel as mountVueMessagePanel } from './dist/messagePanel.js?v=1.14B';
 
 // ============================================
 // 常量定义
@@ -25,7 +25,7 @@ import { mountMessagePanel as mountVueMessagePanel } from './dist/messagePanel.j
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.13.13B';
+const VERSION = '1.14B';
 const DEFAULT_VECTOR_STRIP_TAGS = 'dream_status,Episode,details,think,thinking,Thinking';
 const MESSAGE_PANEL_THEME_TYPE = 'horae-message-panel-theme';
 const MESSAGE_PANEL_THEME_DAY = 'day';
@@ -10465,16 +10465,7 @@ async function _saveMessagePanelMetaFromVue(messageId, meta) {
     if (existingMeta?.deletedItems && !nextMeta.deletedItems) nextMeta.deletedItems = _cloneMessagePanelData(existingMeta.deletedItems);
     if (existingMeta?.deletedAgenda && !nextMeta.deletedAgenda) nextMeta.deletedAgenda = _cloneMessagePanelData(existingMeta.deletedAgenda);
 
-    horaeManager.setMessageMeta(messageId, nextMeta);
-
-    if (nextMeta.relationships?.length > 0) {
-        horaeManager._mergeRelationships(nextMeta.relationships);
-    }
-    if (nextMeta.scene?.scene_desc && nextMeta.scene?.location) {
-        horaeManager._updateLocationMemory(nextMeta.scene.location, nextMeta.scene.scene_desc);
-    }
-
-    injectHoraeTagToMessage(messageId, nextMeta);
+    _commitMessageMetaAndRebuild(messageId, nextMeta);
     await getContext().saveChat();
     refreshAllDisplays();
     showToast(t('toast.saveSuccess'), 'success');
@@ -10499,21 +10490,10 @@ async function _quickScanMessagePanelMetaForVue(messageId) {
 
     const existingMeta = horaeManager.getMessageMeta(messageId) || createEmptyMeta();
     const newMeta = horaeManager.mergeParsedToMeta(existingMeta, parsed);
-    if (newMeta._tableUpdates) {
-        horaeManager.applyTableUpdates(newMeta._tableUpdates);
-        delete newMeta._tableUpdates;
-    }
     if (parsed.deletedAgenda?.length > 0) {
         horaeManager.removeCompletedAgenda(parsed.deletedAgenda);
     }
-    if (parsed.relationships?.length > 0) {
-        horaeManager._mergeRelationships(parsed.relationships);
-    }
-    if (parsed.scene?.scene_desc && parsed.scene?.location) {
-        horaeManager._updateLocationMemory(parsed.scene.location, parsed.scene.scene_desc);
-    }
-
-    horaeManager.setMessageMeta(messageId, newMeta);
+    _commitMessageMetaAndRebuild(messageId, newMeta);
     await getContext().saveChat();
     refreshAllDisplays();
     showToast(t('toast.saveSuccess'), 'success');
@@ -10529,8 +10509,8 @@ async function _rescanMessagePanelMetaForVue(messageId) {
     }
 
     const existingMeta = horaeManager.getMessageMeta(messageId) || createEmptyMeta();
-    const shouldRebuild = _hasTimelineSummary(existingMeta);
-    if (shouldRebuild && !confirm(t('confirm.rescanExistingTimeline'))) {
+    const hasTimeline = _hasTimelineSummary(existingMeta);
+    if (hasTimeline && !confirm(t('confirm.rescanExistingTimeline'))) {
         return null;
     }
 
@@ -10538,45 +10518,14 @@ async function _rescanMessagePanelMetaForVue(messageId) {
     let newMeta;
     if (parsed) {
         newMeta = horaeManager.mergeParsedToMeta(createEmptyMeta(), parsed);
-        if (shouldRebuild) {
-            _preserveRebuildControlFlags(newMeta, existingMeta);
-        } else {
-            if ((!parsed.npcs || Object.keys(parsed.npcs).length === 0) && existingMeta?.npcs) {
-                newMeta.npcs = existingMeta.npcs;
-            }
-            if ((!newMeta.agenda || newMeta.agenda.length === 0) && existingMeta?.agenda?.length > 0) {
-                newMeta.agenda = existingMeta.agenda;
-            }
-            if ((!newMeta.deletedAgenda || newMeta.deletedAgenda.length === 0) && existingMeta?.deletedAgenda?.length > 0) {
-                newMeta.deletedAgenda = existingMeta.deletedAgenda;
-            }
-        }
-        if (shouldRebuild && newMeta._tableUpdates) {
-            newMeta.tableContributions = newMeta._tableUpdates;
-            delete newMeta._tableUpdates;
-        } else if (newMeta._tableUpdates) {
-            horaeManager.applyTableUpdates(newMeta._tableUpdates);
-            delete newMeta._tableUpdates;
-        }
+        _preserveRebuildControlFlags(newMeta, existingMeta);
         if (parsed.deletedAgenda?.length > 0) horaeManager.removeCompletedAgenda(parsed.deletedAgenda);
     } else {
         newMeta = createEmptyMeta();
-        if (shouldRebuild) {
-            _preserveRebuildControlFlags(newMeta, existingMeta);
-        } else if (existingMeta?.npcs) {
-            newMeta.npcs = existingMeta.npcs;
-        }
+        _preserveRebuildControlFlags(newMeta, existingMeta);
     }
 
-    horaeManager.setMessageMeta(messageId, newMeta);
-    if (shouldRebuild) {
-        _rebuildDerivedMetaCaches();
-    } else if (parsed) {
-        if (parsed.relationships?.length > 0) horaeManager._mergeRelationships(parsed.relationships);
-        if (parsed.scene?.scene_desc && parsed.scene?.location) {
-            horaeManager._updateLocationMemory(parsed.scene.location, parsed.scene.scene_desc);
-        }
-    }
+    _commitMessageMetaAndRebuild(messageId, newMeta);
 
     await getContext().saveChat();
     refreshAllDisplays();
@@ -10601,32 +10550,12 @@ async function _aiAnalyzeMessagePanelMetaForVue(messageId) {
         }
 
         const existingMeta = horaeManager.getMessageMeta(messageId) || createEmptyMeta();
-        const shouldRebuild = _hasTimelineSummary(existingMeta);
-        const baseMeta = shouldRebuild ? createEmptyMeta() : existingMeta;
-        const newMeta = horaeManager.mergeParsedToMeta(baseMeta, result);
-        if (shouldRebuild) {
-            _preserveRebuildControlFlags(newMeta, existingMeta);
-            if (newMeta._tableUpdates) {
-                newMeta.tableContributions = newMeta._tableUpdates;
-                delete newMeta._tableUpdates;
-            }
-        } else if (newMeta._tableUpdates) {
-            horaeManager.applyTableUpdates(newMeta._tableUpdates);
-            delete newMeta._tableUpdates;
-        }
+        const newMeta = horaeManager.mergeParsedToMeta(createEmptyMeta(), result);
+        _preserveRebuildControlFlags(newMeta, existingMeta);
         if (result.deletedAgenda?.length > 0) {
             horaeManager.removeCompletedAgenda(result.deletedAgenda);
         }
-        horaeManager.setMessageMeta(messageId, newMeta);
-        if (shouldRebuild) {
-            _rebuildDerivedMetaCaches();
-        } else {
-            if (result.relationships?.length > 0) horaeManager._mergeRelationships(result.relationships);
-            if (result.scene?.scene_desc && result.scene?.location) {
-                horaeManager._updateLocationMemory(result.scene.location, result.scene.scene_desc);
-            }
-        }
-        injectHoraeTagToMessage(messageId, newMeta);
+        _commitMessageMetaAndRebuild(messageId, newMeta);
         await getContext().saveChat();
         refreshAllDisplays();
         showToast(t('toast.saveSuccess'), 'success');
@@ -11147,6 +11076,25 @@ function _rebuildDerivedMetaCaches() {
     horaeManager.rebuildRpgData();
 }
 
+function _materializeMessageTableContributions(meta) {
+    if (Array.isArray(meta?.tableContributions)) {
+        meta.tableContributions = _normalizeMessageTableContributions(meta.tableContributions);
+    }
+    if (!meta?._tableUpdates) return meta;
+    meta.tableContributions = _normalizeMessageTableContributions(meta._tableUpdates);
+    delete meta._tableUpdates;
+    return meta;
+}
+
+function _commitMessageMetaAndRebuild(messageId, meta, options = {}) {
+    const { injectTags = true } = options;
+    _materializeMessageTableContributions(meta);
+    horaeManager.setMessageMeta(messageId, meta);
+    _rebuildDerivedMetaCaches();
+    if (injectTags) injectHoraeTagToMessage(messageId, meta);
+    return meta;
+}
+
 function autoResizePanelTextarea(textarea) {
     if (!(textarea instanceof HTMLTextAreaElement)) return;
     textarea.style.height = 'auto';
@@ -11357,23 +11305,11 @@ function bindPanelEvents(panelEl) {
             // 获取现有元数据并合并
             const existingMeta = horaeManager.getMessageMeta(messageId) || createEmptyMeta();
             const newMeta = horaeManager.mergeParsedToMeta(existingMeta, parsed);
-            // 处理表格更新
-            if (newMeta._tableUpdates) {
-                horaeManager.applyTableUpdates(newMeta._tableUpdates);
-                delete newMeta._tableUpdates;
-            }
             // 处理已完成待办
             if (parsed.deletedAgenda && parsed.deletedAgenda.length > 0) {
                 horaeManager.removeCompletedAgenda(parsed.deletedAgenda);
             }
-            // 全局同步
-            if (parsed.relationships?.length > 0) {
-                horaeManager._mergeRelationships(parsed.relationships);
-            }
-            if (parsed.scene?.scene_desc && parsed.scene?.location) {
-                horaeManager._updateLocationMemory(parsed.scene.location, parsed.scene.scene_desc);
-            }
-            horaeManager.setMessageMeta(messageId, newMeta);
+            _commitMessageMetaAndRebuild(messageId, newMeta);
 
             const contentEl = panelEl.querySelector('.horae-panel-content');
             if (contentEl) {
@@ -11411,36 +11347,13 @@ function bindPanelEvents(panelEl) {
 
             if (result) {
                 const existingMeta = horaeManager.getMessageMeta(messageId) || createEmptyMeta();
-                const shouldRebuild = _hasTimelineSummary(existingMeta);
-                const baseMeta = shouldRebuild ? createEmptyMeta() : existingMeta;
-                const newMeta = horaeManager.mergeParsedToMeta(baseMeta, result);
-                if (shouldRebuild) {
-                    _preserveRebuildControlFlags(newMeta, existingMeta);
-                    if (newMeta._tableUpdates) {
-                        newMeta.tableContributions = newMeta._tableUpdates;
-                        delete newMeta._tableUpdates;
-                    }
-                } else if (newMeta._tableUpdates) {
-                    horaeManager.applyTableUpdates(newMeta._tableUpdates);
-                    delete newMeta._tableUpdates;
-                }
+                const newMeta = horaeManager.mergeParsedToMeta(createEmptyMeta(), result);
+                _preserveRebuildControlFlags(newMeta, existingMeta);
                 // 处理已完成待办
                 if (result.deletedAgenda && result.deletedAgenda.length > 0) {
                     horaeManager.removeCompletedAgenda(result.deletedAgenda);
                 }
-                horaeManager.setMessageMeta(messageId, newMeta);
-                if (shouldRebuild) {
-                    _rebuildDerivedMetaCaches();
-                } else {
-                    // 全局同步（增量模式）
-                    if (result.relationships?.length > 0) {
-                        horaeManager._mergeRelationships(result.relationships);
-                    }
-                    if (result.scene?.scene_desc && result.scene?.location) {
-                        horaeManager._updateLocationMemory(result.scene.location, result.scene.scene_desc);
-                    }
-                }
-                injectHoraeTagToMessage(messageId, newMeta);
+                _commitMessageMetaAndRebuild(messageId, newMeta);
 
                 const contentEl = panelEl.querySelector('.horae-panel-content');
                 if (contentEl) {
@@ -11610,8 +11523,8 @@ function rescanMessageMeta(messageId, panelEl) {
     }
 
     const existingMeta = horaeManager.getMessageMeta(messageId) || createEmptyMeta();
-    const shouldRebuild = _hasTimelineSummary(existingMeta);
-    if (shouldRebuild && !confirm(t('confirm.rescanExistingTimeline'))) {
+    const hasTimeline = _hasTimelineSummary(existingMeta);
+    if (hasTimeline && !confirm(t('confirm.rescanExistingTimeline'))) {
         return;
     }
 
@@ -11620,51 +11533,14 @@ function rescanMessageMeta(messageId, panelEl) {
     if (parsed) {
         // 用 mergeParsedToMeta 以空 meta 为基础，确保所有字段一致处理
         const newMeta = horaeManager.mergeParsedToMeta(createEmptyMeta(), parsed);
-
-        if (shouldRebuild) {
-            _preserveRebuildControlFlags(newMeta, existingMeta);
-        } else {
-            // 只保留原有的NPC数据（如果新解析中没有）
-            if ((!parsed.npcs || Object.keys(parsed.npcs).length === 0) && existingMeta?.npcs) {
-                newMeta.npcs = existingMeta.npcs;
-            }
-
-            // 无新agenda则保留旧数据
-            if ((!newMeta.agenda || newMeta.agenda.length === 0) && existingMeta?.agenda?.length > 0) {
-                newMeta.agenda = existingMeta.agenda;
-            }
-            if ((!newMeta.deletedAgenda || newMeta.deletedAgenda.length === 0) && existingMeta?.deletedAgenda?.length > 0) {
-                newMeta.deletedAgenda = existingMeta.deletedAgenda;
-            }
-        }
-
-        // 处理表格更新
-        if (shouldRebuild && newMeta._tableUpdates) {
-            newMeta.tableContributions = newMeta._tableUpdates;
-            delete newMeta._tableUpdates;
-        } else if (newMeta._tableUpdates) {
-            horaeManager.applyTableUpdates(newMeta._tableUpdates);
-            delete newMeta._tableUpdates;
-        }
+        _preserveRebuildControlFlags(newMeta, existingMeta);
 
         // 处理已完成待办
         if (parsed.deletedAgenda && parsed.deletedAgenda.length > 0) {
             horaeManager.removeCompletedAgenda(parsed.deletedAgenda);
         }
 
-        horaeManager.setMessageMeta(messageId, newMeta);
-        if (shouldRebuild) {
-            _rebuildDerivedMetaCaches();
-        } else {
-            // 全局同步：关系网络合并到 chat[0]
-            if (parsed.relationships?.length > 0) {
-                horaeManager._mergeRelationships(parsed.relationships);
-            }
-            // 全局同步：场景记忆更新
-            if (parsed.scene?.scene_desc && parsed.scene?.location) {
-                horaeManager._updateLocationMemory(parsed.scene.location, parsed.scene.scene_desc);
-            }
-        }
+        _commitMessageMetaAndRebuild(messageId, newMeta);
         getContext().saveChat();
 
         panelEl.remove();
@@ -11675,17 +11551,10 @@ function rescanMessageMeta(messageId, panelEl) {
 
         showToast(t('toast.saveSuccess'), 'success');
     } else {
-        // 无标签，清空数据（保留NPC）
+        // 无标签，清空数据，仅保留控制标记
         const newMeta = createEmptyMeta();
-        if (shouldRebuild) {
-            _preserveRebuildControlFlags(newMeta, existingMeta);
-        } else if (existingMeta?.npcs) {
-            newMeta.npcs = existingMeta.npcs;
-        }
-        horaeManager.setMessageMeta(messageId, newMeta);
-        if (shouldRebuild) {
-            _rebuildDerivedMetaCaches();
-        }
+        _preserveRebuildControlFlags(newMeta, existingMeta);
+        _commitMessageMetaAndRebuild(messageId, newMeta);
 
         panelEl.remove();
         addMessagePanel(messageEl, messageId);
@@ -11846,18 +11715,8 @@ function savePanelData(panelEl, messageId) {
         meta.agenda = existingMeta.agenda;
     }
 
-    horaeManager.setMessageMeta(messageId, meta);
-
-    // 全局同步
-    if (meta.relationships?.length > 0) {
-        horaeManager._mergeRelationships(meta.relationships);
-    }
-    if (meta.scene?.scene_desc && meta.scene?.location) {
-        horaeManager._updateLocationMemory(meta.scene.location, meta.scene.scene_desc);
-    }
-
-    // 同步写入正文标签
-    injectHoraeTagToMessage(messageId, meta);
+    _preserveRebuildControlFlags(meta, existingMeta);
+    _commitMessageMetaAndRebuild(messageId, meta);
 
     getContext().saveChat();
 
@@ -12029,6 +11888,62 @@ function buildHoraeEventTagFromMeta(meta) {
 
     if (lines.length === 0) return '';
     return `<horaeevent>\n${lines.join('\n')}\n</horaeevent>`;
+}
+
+function _normalizeMessageTableContributions(tables) {
+    if (!Array.isArray(tables) || tables.length === 0) return [];
+
+    const merged = [];
+    const byName = new Map();
+    for (const table of tables) {
+        const tableName = String(table?.name || '').trim();
+        const updates = table?.updates;
+        if (!tableName || !updates || typeof updates !== 'object') continue;
+
+        const existing = byName.get(tableName);
+        if (!existing) {
+            const normalized = {
+                ...table,
+                name: tableName,
+                updates: { ...updates },
+            };
+            byName.set(tableName, normalized);
+            merged.push(normalized);
+            continue;
+        }
+
+        Object.assign(existing.updates, updates);
+        if (table._isUserEdit) existing._isUserEdit = true;
+    }
+
+    return merged;
+}
+
+function buildHoraeTableTagsFromMeta(meta) {
+    const tables = _normalizeMessageTableContributions(meta?.tableContributions || meta?._tableUpdates);
+    if (tables.length === 0) return '';
+
+    const blocks = [];
+    for (const table of tables) {
+        const tableName = String(table?.name || '').trim();
+        const updates = table?.updates;
+        if (!tableName || !updates || typeof updates !== 'object') continue;
+
+        const lines = Object.entries(updates)
+            .map(([key, value]) => {
+                const [row, col] = String(key).split('-').map((part) => Number(part));
+                if (!Number.isFinite(row) || !Number.isFinite(col)) return null;
+                return { row, col, value: value == null ? '' : String(value).replace(/\r?\n/g, ' ') };
+            })
+            .filter(Boolean)
+            .sort((a, b) => (a.row - b.row) || (a.col - b.col))
+            .map(({ row, col, value }) => `${row},${col}:${value}`);
+
+        if (lines.length === 0) continue;
+        blocks.push(`<horaetable:${tableName}>\n${lines.join('\n')}\n</horaetable>`);
+    }
+
+    return blocks.join('\n');
 }
 
 function buildHoraeRpgTagFromMeta(meta) {
@@ -12214,6 +12129,17 @@ function injectHoraeTagToMessage(messageId, meta) {
                 : mes.replace(/<horaeevent>[\s\S]*?<\/horaeevent>/gi, '').trim();
         } else if (newEventTag) {
             mes = mes.trimEnd() + '\n' + newEventTag;
+        }
+
+        // === 处理 <horaetable> 标签 ===
+        const newTableTags = buildHoraeTableTagsFromMeta(meta);
+        const hasTableTags = /<horaetable[:：][\s\S]*?<\/horaetable(?:[:：][^>]*)?>/i.test(mes);
+
+        if (hasTableTags) {
+            mes = mes.replace(/<horaetable[:：][\s\S]*?<\/horaetable(?:[:：][^>]*)?>/gi, '').trimEnd();
+        }
+        if (newTableTags) {
+            mes = mes ? `${mes}\n${newTableTags}` : newTableTags;
         }
 
         // === 处理 <horaerpg> 标签 ===
@@ -16248,29 +16174,18 @@ async function generateWithDirectApi(prompt, options = {}) {
    - 无变动则明确说"无物品变动"。
 
 3. 悬念簿清算（分两步，先计划后悬念）
-
-   【第一步：计划型清算】
    - 列出参考状态悬念簿里所有"计划"条目。
    - 逐条判断：当前时间是否已越过其截止时间？是否被执行/取消？
    - 需核销的，只把待核销条目的正文部分逐字抄下来准备 hold-。
    - 新产生的计划，检查是否与现存条目重复或需要合并。
-
-   【第二步：悬念型清算】
    - 列出参考状态悬念簿里所有"悬念"条目。
-   - 逐条判断：本楼文本中，该悬念是否已被解决、揭露、推翻、或彻底不可能再发生？
-   - 🔴 只有"已经发生了"才能核销。"觉得该发生了""悬太久了"不是核销理由。
-   - 不确定 → 明确写"保留，不动"。
-   - 如果某条悬念有了新进展但未完全解决 → 准备 hold- 旧条目 + hold 更新后的条目。
-
-   【第三步：新增检查】
-   - 本楼是否出现了新的计划/承诺/约定？→ 考虑 hold:计划
-   - 本楼是否出现了以下任一情况？→ 考虑 hold:悬念
-     • 外部威胁/警告/倒计时
-     • 未解之谜/异常线索/可疑现象
-     • 某角色知道了什么但没说破（信息不对称）
-     • 他人对{{user}}的承诺/{{user}}对他人的亏欠
-     • 伏笔/预兆/不祥之兆
-   - 新条目是否与现存条目重复？重复则不写。
+   - 逐条判断：该悬念是否已被解决、揭露、推翻、或彻底不可能再发生？
+   - 只有完全解决/失效才能核销；有新进展但未解决时，用 hold- 旧条目 + hold 新条目。
+   - 检查本回合是否产生新悬念，对每条候选悬念执行三问检验：
+     ① 它是"悬而未决"的吗？（存在未解答的疑问/未兑现的承诺/未解除的威胁？如果只是"知道了一个事实"→ 否）
+     ② 它会影响未来剧情走向吗？（移除此信息后未来剧情是否完全不变？不变→ 否）
+     ③ 它需要被"解决"或"揭晓"吗？（是否存在读者期待的后续答案？信息本身已完整→ 否）
+   - 三问全"是"才写入 hold:悬念。任一为"否"则丢弃（角色属性记在npc、已完结事件记在event、关系变化记在affection）。
 
 4. NPC 与好感度
    - 有无新角色首次登场？
@@ -16285,7 +16200,11 @@ async function generateWithDirectApi(prompt, options = {}) {
    - 我准备写的 event 最后一句，是否超出了原文最后一句的范围？
    - 若超出，裁掉多余部分。
 
-7. 格式自检
+7. 表格数据和RPG数据
+   - 是否存在表格数据和RPG数据
+   - 如果存在，该如何填写
+
+8. 格式自检
    - 所有必填字段（time/location/characters/costume）是否齐全？
    - hold- 的文本是否逐字复制而非改写？
    - event 是否控制在 80-150 字、监控视角、无文学修饰？
@@ -17231,6 +17150,7 @@ function _stripHoraeReplyTags(text) {
     return String(text)
         .replace(/<horae>[\s\S]*?<\/horae>/gi, '')
         .replace(/<horaeevent>[\s\S]*?<\/horaeevent>/gi, '')
+        .replace(/<horaetable[:：][\s\S]*?<\/horaetable(?:[:：][^>]*)?>/gi, '')
         .replace(/<horaerpg>[\s\S]*?<\/horaerpg>/gi, '');
 }
 
@@ -17532,7 +17452,7 @@ event:重要程度|事件描述
                     }
                     chatRef[0].horae_meta._pendingScanReview.msgIndices.push(...batchWritten);
                 }
-                horaeManager.rebuildTableData();
+                _rebuildDerivedMetaCaches();
                 try { await context.saveChat(); } catch (_) { }
             }
         } catch (err) {
@@ -18833,7 +18753,11 @@ async function _generateForAiTasks(prompt, opts = {}) {
    - 我准备写的 event 最后一句，是否超出了原文最后一句的范围？
    - 若超出，裁掉多余部分。
 
-7. 格式自检
+7. 表格数据和RPG数据
+   - 是否存在表格数据和RPG数据
+   - 如果存在，该如何填写
+
+8. 格式自检
    - 所有必填字段（time/location/characters/costume）是否齐全？
    - hold- 的文本是否逐字复制而非改写？
    - event 是否控制在 80-150 字、监控视角、无文学修饰？
@@ -18903,7 +18827,7 @@ async function analyzeMessageWithAI(messageContent, opts = {}) {
     const analysisLocationRules = settings.sendLocationMemory ? (horaeManager.generateLocationMemoryPrompt() || '') : '';
     const analysisRelationshipRules = settings.sendRelationships ? (horaeManager.generateRelationshipPrompt() || '') : '';
     const analysisEmotionRules = settings.sendMood ? (horaeManager.generateMoodPrompt() || '') : '';
-    const analysisTableRules = horaeManager.generateCustomTablesPrompt() || '';
+    const analysisTableRules = horaeManager.generateCustomTablesPrompt({ skipLast: analysisSkipLast }) || '';
     const analysisRpgRules = settings.rpgMode ? (horaeManager.generateAnalysisRpgPrompt({ skipLast: analysisSkipLast }) || '') : '';
     const hasAnalysisRpgPlaceholder = /\{\{analysis_rpg_rules\}\}/i.test(template);
     let analysisPrompt = template
@@ -19116,22 +19040,10 @@ async function _autoFillPreviousAiTimelineBeforeInjection(chat) {
         return;
     }
 
-    if (mergedMeta._tableUpdates) {
-        horaeManager.applyTableUpdates(mergedMeta._tableUpdates);
-        delete mergedMeta._tableUpdates;
-    }
     if (parsed.deletedAgenda?.length > 0) {
         horaeManager.removeCompletedAgenda(parsed.deletedAgenda);
     }
-    if (parsed.relationships?.length > 0) {
-        horaeManager._mergeRelationships(parsed.relationships);
-    }
-    if (parsed.scene?.scene_desc && parsed.scene?.location) {
-        horaeManager._updateLocationMemory(parsed.scene.location, parsed.scene.scene_desc);
-    }
-
-    horaeManager.setMessageMeta(targetIndex, mergedMeta);
-    injectHoraeTagToMessage(targetIndex, mergedMeta);
+    _commitMessageMetaAndRebuild(targetIndex, mergedMeta);
 
     // 仅刷新目标楼层面板，避免全局刷新带来的卡顿
     try {
