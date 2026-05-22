@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki，柏柏
- * 版本: 1.13.12B
+ * 版本: 1.13.13B
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -17,7 +17,7 @@ import { calculateRelativeTime, calculateDetailedRelativeTime, formatRelativeTim
 import { t, tForLang, initI18n, getLanguage, isZhLocale, setLanguage, detectEffectiveAiLangIsZh, detectEffectiveAiLang } from './core/i18n.js';
 import { initPromptDefaults, ensurePromptDefaults, getPromptDefaultSync } from './core/promptDefaults.js';
 import { installSaveRequestGzipFetchHook } from './utils/saveRequestGzip.js';
-import { mountMessagePanel as mountVueMessagePanel } from './dist/messagePanel.js?v=1.13.12B';
+import { mountMessagePanel as mountVueMessagePanel } from './dist/messagePanel.js?v=1.13.13B';
 
 // ============================================
 // 常量定义
@@ -25,7 +25,7 @@ import { mountMessagePanel as mountVueMessagePanel } from './dist/messagePanel.j
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.13.12B';
+const VERSION = '1.13.13B';
 const DEFAULT_VECTOR_STRIP_TAGS = 'dream_status,Episode,details,think,thinking,Thinking';
 const MESSAGE_PANEL_THEME_TYPE = 'horae-message-panel-theme';
 const MESSAGE_PANEL_THEME_DAY = 'day';
@@ -2680,10 +2680,10 @@ async function compressSelectedTimelineEvents() {
             return;
         }
 
-        const cleanedText = response.trim()
-            .replace(/<think(?:ing)?[\s>][\s\S]*?<\/think(?:ing)?>/gi, '')
-            .replace(/<horae>[\s\S]*?<\/horae>/gi, '')
-            .replace(/<horaeevent>[\s\S]*?<\/horaeevent>/gi, '')
+        const cleanedText = _stripHoraeReplyTags(
+            response.trim()
+                .replace(/<think(?:ing)?[\s>][\s\S]*?<\/think(?:ing)?>/gi, '')
+        )
             .replace(/<!--horae[\s\S]*?-->/gi, '')
             .trim();
         const hasOpenSummaryTag = /<horaesummary>/i.test(cleanedText);
@@ -12031,6 +12031,158 @@ function buildHoraeEventTagFromMeta(meta) {
     return `<horaeevent>\n${lines.join('\n')}\n</horaeevent>`;
 }
 
+function buildHoraeRpgTagFromMeta(meta) {
+    const rpg = meta?._rpgChanges;
+    if (!_rpgPayloadHasContent(rpg)) return '';
+
+    const userName = getContext()?.name1 || horaeManager?.context?.name1 || t('ui.protagonist');
+    const uoBars = !!settings.rpgBarsUserOnly;
+    const uoSkills = !!settings.rpgSkillsUserOnly;
+    const uoAttrs = !!settings.rpgAttrsUserOnly;
+    const uoRep = !!settings.rpgReputationUserOnly;
+    const uoEq = !!settings.rpgEquipmentUserOnly;
+    const uoLvl = !!settings.rpgLevelUserOnly;
+    const uoCur = !!settings.rpgCurrencyUserOnly;
+    const lines = [];
+
+    const useOwnerless = (owner, userOnly) => userOnly && owner === userName;
+    const shouldSkipOwner = (owner, userOnly) => userOnly && owner !== userName;
+
+    for (const [owner, bars] of Object.entries(rpg.bars || {})) {
+        if (shouldSkipOwner(owner, uoBars)) continue;
+        const ownerless = useOwnerless(owner, uoBars);
+        for (const [key, value] of Object.entries(bars || {})) {
+            if (!Array.isArray(value) || value.length < 2) continue;
+            const current = value[0];
+            const max = value[1];
+            const label = value[2] != null && value[2] !== '' ? `(${value[2]})` : '';
+            lines.push(ownerless
+                ? `${key}:${current}/${max}${label}`
+                : `${key}:${owner}=${current}/${max}${label}`);
+        }
+    }
+
+    for (const [owner, effects] of Object.entries(rpg.status || {})) {
+        if (shouldSkipOwner(owner, uoBars)) continue;
+        const ownerless = useOwnerless(owner, uoBars);
+        const effectText = Array.isArray(effects) && effects.length > 0 ? effects.join('/') : '正常';
+        lines.push(ownerless ? `status:${effectText}` : `status:${owner}=${effectText}`);
+    }
+
+    for (const skill of (rpg.skills || [])) {
+        if (!skill?.name) continue;
+        if (shouldSkipOwner(skill.owner, uoSkills)) continue;
+        const ownerless = useOwnerless(skill.owner, uoSkills);
+        if (!ownerless && !skill.owner) continue;
+        const parts = ownerless
+            ? [skill.name, skill.level || '', skill.desc || '']
+            : [skill.owner, skill.name, skill.level || '', skill.desc || ''];
+        const minParts = ownerless ? 1 : 2;
+        while (parts.length > minParts && !parts[parts.length - 1]) parts.pop();
+        lines.push(`skill:${parts.join('|')}`);
+    }
+
+    for (const skill of (rpg.removedSkills || [])) {
+        if (!skill?.name) continue;
+        if (shouldSkipOwner(skill.owner, uoSkills)) continue;
+        const ownerless = useOwnerless(skill.owner, uoSkills);
+        if (!ownerless && !skill.owner) continue;
+        lines.push(ownerless
+            ? `skill-:${skill.name}`
+            : `skill-:${skill.owner}|${skill.name}`);
+    }
+
+    for (const [owner, attrs] of Object.entries(rpg.attributes || {})) {
+        if (shouldSkipOwner(owner, uoAttrs)) continue;
+        const attrEntries = Object.entries(attrs || {})
+            .filter(([key, value]) => key && value != null && value !== '');
+        if (attrEntries.length === 0) continue;
+        const attrText = attrEntries.map(([key, value]) => `${key}=${value}`).join('|');
+        lines.push(useOwnerless(owner, uoAttrs)
+            ? `attr:${attrText}`
+            : `attr:${owner}|${attrText}`);
+    }
+
+    for (const [owner, reps] of Object.entries(rpg.reputation || {})) {
+        if (shouldSkipOwner(owner, uoRep)) continue;
+        for (const [name, rawValue] of Object.entries(reps || {})) {
+            const value = typeof rawValue === 'object' ? rawValue?.value : rawValue;
+            if (name == null || value == null || value === '') continue;
+            lines.push(useOwnerless(owner, uoRep)
+                ? `rep:${name}=${value}`
+                : `rep:${owner}|${name}=${value}`);
+        }
+    }
+
+    for (const equip of (rpg.equipment || [])) {
+        if (!equip?.slot || !equip?.name) continue;
+        if (shouldSkipOwner(equip.owner, uoEq)) continue;
+        const ownerless = useOwnerless(equip.owner, uoEq);
+        if (!ownerless && !equip.owner) continue;
+        const attrText = Object.entries(equip.attrs || {})
+            .filter(([key, value]) => key && value != null && value !== '')
+            .map(([key, value]) => `${key}=${value}`)
+            .join(',');
+        const parts = ownerless
+            ? [equip.slot, equip.name, attrText]
+            : [equip.owner, equip.slot, equip.name, attrText];
+        const minParts = ownerless ? 2 : 3;
+        while (parts.length > minParts && !parts[parts.length - 1]) parts.pop();
+        lines.push(`equip:${parts.join('|')}`);
+    }
+
+    for (const equip of (rpg.unequip || [])) {
+        if (!equip?.slot || !equip?.name) continue;
+        if (shouldSkipOwner(equip.owner, uoEq)) continue;
+        const ownerless = useOwnerless(equip.owner, uoEq);
+        if (!ownerless && !equip.owner) continue;
+        lines.push(ownerless
+            ? `unequip:${equip.slot}|${equip.name}`
+            : `unequip:${equip.owner}|${equip.slot}|${equip.name}`);
+    }
+
+    for (const [owner, level] of Object.entries(rpg.levels || {})) {
+        if (shouldSkipOwner(owner, uoLvl)) continue;
+        if (level == null || level === '') continue;
+        lines.push(useOwnerless(owner, uoLvl)
+            ? `level:${level}`
+            : `level:${owner}=${level}`);
+    }
+
+    for (const [owner, xp] of Object.entries(rpg.xp || {})) {
+        if (shouldSkipOwner(owner, uoLvl)) continue;
+        if (!Array.isArray(xp) || xp.length < 2) continue;
+        lines.push(useOwnerless(owner, uoLvl)
+            ? `xp:${xp[0]}/${xp[1]}`
+            : `xp:${owner}=${xp[0]}/${xp[1]}`);
+    }
+
+    for (const currency of (rpg.currency || [])) {
+        if (!currency?.name || currency.value == null || currency.value === '') continue;
+        if (shouldSkipOwner(currency.owner, uoCur)) continue;
+        const ownerless = useOwnerless(currency.owner, uoCur);
+        if (!ownerless && !currency.owner) continue;
+        const value = currency.isDelta && Number(currency.value) > 0
+            ? `+${currency.value}`
+            : String(currency.value);
+        lines.push(ownerless
+            ? `currency:${currency.name}=${value}`
+            : `currency:${currency.owner}|${currency.name}=${value}`);
+    }
+
+    for (const change of (rpg.baseChanges || [])) {
+        if (!change?.path || !change.field) continue;
+        if (change.field === 'level') {
+            lines.push(`base:${change.path}|level=${change.value}`);
+        } else if (change.field === 'desc') {
+            lines.push(`base:${change.path}|desc=${change.value}`);
+        }
+    }
+
+    if (lines.length === 0) return '';
+    return `<horaerpg>\n${lines.join('\n')}\n</horaerpg>`;
+}
+
 /** 同步注入正文标签 */
 function injectHoraeTagToMessage(messageId, meta) {
     try {
@@ -12062,6 +12214,17 @@ function injectHoraeTagToMessage(messageId, meta) {
                 : mes.replace(/<horaeevent>[\s\S]*?<\/horaeevent>/gi, '').trim();
         } else if (newEventTag) {
             mes = mes.trimEnd() + '\n' + newEventTag;
+        }
+
+        // === 处理 <horaerpg> 标签 ===
+        const newRpgTag = buildHoraeRpgTagFromMeta(meta);
+        const hasRpgTag = /<horaerpg>[\s\S]*?<\/horaerpg>/i.test(mes);
+
+        if (hasRpgTag) {
+            mes = mes.replace(/<horaerpg>[\s\S]*?<\/horaerpg>/gi, '').trimEnd();
+        }
+        if (newRpgTag) {
+            mes = mes ? `${mes}\n${newRpgTag}` : newRpgTag;
         }
 
         message.mes = mes;
@@ -14953,10 +15116,10 @@ function _buildAutoResummaryPrompt(userName, eventText, count) {
 
 function _cleanSummaryText(raw) {
     if (!raw || !String(raw).trim()) return '';
-    return String(raw).trim()
-        .replace(/<think(?:ing)?[\s>][\s\S]*?<\/think(?:ing)?>/gi, '')
-        .replace(/<horae>[\s\S]*?<\/horae>/gi, '')
-        .replace(/<horaeevent>[\s\S]*?<\/horaeevent>/gi, '')
+    return _stripHoraeReplyTags(
+        String(raw).trim()
+            .replace(/<think(?:ing)?[\s>][\s\S]*?<\/think(?:ing)?>/gi, '')
+    )
         .replace(/<!--horae[\s\S]*?-->/gi, '')
         .trim();
 }
@@ -17063,6 +17226,14 @@ function _stripConfiguredTags(text) {
     return text.trim();
 }
 
+function _stripHoraeReplyTags(text) {
+    if (!text) return text;
+    return String(text)
+        .replace(/<horae>[\s\S]*?<\/horae>/gi, '')
+        .replace(/<horaeevent>[\s\S]*?<\/horaeevent>/gi, '')
+        .replace(/<horaerpg>[\s\S]*?<\/horaerpg>/gi, '');
+}
+
 /** 判断消息是否为空层（同层系统等代码渲染的无实际叙事内容楼层） */
 function isEmptyOrCodeLayer(mes) {
     if (!mes) return true;
@@ -18715,10 +18886,7 @@ async function analyzeMessageWithAI(messageContent, opts = {}) {
 
             for (let i = messageIndex - 1; i >= Math.max(0, messageIndex - 3); i--) {
                 if (chat[i]?.is_user) {
-                    previousUserMessage = _stripConfiguredTags(chat[i].mes || '')
-                        .replace(/<horae>[\s\S]*?<\/horae>/gi, '')
-                        .replace(/<horaeevent>[\s\S]*?<\/horaeevent>/gi, '')
-                        .trim();
+                    previousUserMessage = _stripHoraeReplyTags(_stripConfiguredTags(chat[i].mes || '')).trim();
                     if (previousUserMessage.length > 2000) previousUserMessage = previousUserMessage.slice(0, 2000) + '…';
                     break;
                 }
@@ -18727,9 +18895,7 @@ async function analyzeMessageWithAI(messageContent, opts = {}) {
     }
 
     // 去除正文里面的horae标签，避免AI照抄
-    messageContent = messageContent
-        .replace(/<horae>[\s\S]*?<\/horae>/gi, '')
-        .replace(/<horaeevent>[\s\S]*?<\/horaeevent>/gi, '')
+    messageContent = _stripHoraeReplyTags(messageContent)
         .replace(/<safe>/g, '')
         .replace(/[\r\n]+/g, '');
 
@@ -18906,10 +19072,7 @@ async function _autoFillPreviousAiTimelineBeforeInjection(chat) {
     const sourceText = typeof targetMsg?.mes === 'string' ? targetMsg.mes.trim() : '';
     if (!sourceText) return;
 
-    const cleanedTargetText = _stripConfiguredTags(sourceText)
-        .replace(/<horae>[\s\S]*?<\/horae>/gi, '')
-        .replace(/<horaeevent>[\s\S]*?<\/horaeevent>/gi, '')
-        .trim();
+    const cleanedTargetText = _stripHoraeReplyTags(_stripConfiguredTags(sourceText)).trim();
     const targetTextForAnalysis = cleanedTargetText || sourceText;
 
     console.log(`[Horae] 前置补全：检测到上一条AI楼层 #${targetIndex} 缺少时间线或RPG数据，尝试上下文增强分析`);
@@ -19881,7 +20044,7 @@ async function onPromptReady(eventData) {
         if (settings.antiParaphraseMode && chat?.length) {
             for (let i = chat.length - 1; i >= 0; i--) {
                 if (chat[i].is_user && chat[i].mes) {
-                    const cleaned = chat[i].mes.replace(/<horae>[\s\S]*?<\/horae>/gi, '').replace(/<horaeevent>[\s\S]*?<\/horaeevent>/gi, '').trim();
+                    const cleaned = _stripHoraeReplyTags(chat[i].mes).trim();
                     if (cleaned) {
                         const truncated = cleaned.length > 2000 ? cleaned.slice(0, 2000) + '…' : cleaned;
                         antiParaRef = `\n【反转述参考 - USER上一条消息内容】\n${truncated}\n（请将以上USER行为一并纳入本条<horae>结算）`;
