@@ -8,10 +8,12 @@
 import { calculateDetailedRelativeTime, getRelativeTimeMeta } from '../utils/timeUtils.js';
 import { t2s } from '../utils/zhConvert.js';
 import { tNodeForLang, detectEffectiveAiLang } from './i18n.js';
+import { getPromptDefaultSync } from './promptDefaults.js';
 
 const DB_NAME = 'HoraeVectors';
 const DB_VERSION = 1;
 const STORE_NAME = 'vectors';
+const RECALL_CACHE_LIMIT = 16;
 
 const MODEL_CONFIG = {
     'Xenova/bge-small-zh-v1.5': { dimensions: 512, prefix: null },
@@ -58,6 +60,9 @@ export class VectorManager {
         this._pendingCallbacks = new Map();
         this._callId = 0;
         this._debugLog = false;
+        // 召回结果 LRU 缓存：相同查询条件下避免重复 embedding/rerank 调用
+        this._recallCache = new Map();
+        this._recallCacheLimit = RECALL_CACHE_LIMIT;
     }
 
     /**
@@ -78,6 +83,7 @@ export class VectorManager {
         this.isLoading = true;
         this.isReady = false;
         this.modelName = model;
+        this.clearRecallCache('embedding-model-reinit');
 
         try {
             await this._disposeWorker();
@@ -142,6 +148,7 @@ export class VectorManager {
         if (this.isLoading) return;
         this.isLoading = true;
         this.isReady = false;
+        this.clearRecallCache('embedding-api-reinit');
 
         try {
             await this._disposeWorker();
@@ -176,6 +183,39 @@ export class VectorManager {
         this._apiUrl = '';
         this._apiKey = '';
         this._apiModel = '';
+        this.clearRecallCache('dispose');
+    }
+
+    /**
+     * 召回缓存清理。索引或核心配置变化时调用，确保下一次召回重算。
+     */
+    clearRecallCache(reason = '') {
+        if (this._recallCache.size === 0) return;
+        if (this._debugLog && reason) {
+            console.log(`[Horae Vector] 清空召回缓存（${this._recallCache.size}条）：${reason}`);
+        }
+        this._recallCache.clear();
+    }
+
+    _getRecallCache(key) {
+        if (!this._recallCache.has(key)) return null;
+        const value = this._recallCache.get(key);
+        // 访问命中后挪到尾部，维持 LRU 顺序
+        this._recallCache.delete(key);
+        this._recallCache.set(key, value);
+        return value;
+    }
+
+    _setRecallCache(key, value) {
+        if (this._recallCache.has(key)) {
+            this._recallCache.delete(key);
+        }
+        this._recallCache.set(key, value);
+        while (this._recallCache.size > this._recallCacheLimit) {
+            const oldestKey = this._recallCache.keys().next().value;
+            if (oldestKey === undefined) break;
+            this._recallCache.delete(oldestKey);
+        }
     }
 
     async _disposeWorker() {
@@ -198,6 +238,7 @@ export class VectorManager {
         this.vectors.clear();
         this.termCounts.clear();
         this.totalDocuments = 0;
+        this.clearRecallCache('loadChat');
 
         if (!chatId) return;
 
@@ -206,17 +247,19 @@ export class VectorManager {
             const stored = await this._loadAllVectors();
             const staleKeys = [];
             for (const item of stored) {
-                if (item.messageIndex >= chat.length) {
+                // IndexedDB 反序列化偶发返回字符串型 messageIndex，统一为整数避免与 chat 索引比较失效
+                const normalizedIdx = this._normalizeMessageIndex(item.messageIndex);
+                if (normalizedIdx === null || normalizedIdx >= chat.length) {
                     staleKeys.push(item.messageIndex);
                     continue;
                 }
-                const meta = chat[item.messageIndex]?.horae_meta;
+                const meta = chat[normalizedIdx]?.horae_meta;
                 const doc = this.buildVectorDocument(meta);
                 if (!doc || this._hashString(doc) !== item.hash) {
                     staleKeys.push(item.messageIndex);
                     continue;
                 }
-                this.vectors.set(item.messageIndex, {
+                this.vectors.set(normalizedIdx, {
                     vector: item.vector,
                     hash: item.hash,
                     document: item.document,
@@ -308,11 +351,14 @@ export class VectorManager {
         if (!this.isReady || !this.chatId) return;
         if (meta?._skipHorae) return;
 
+        const idx = this._normalizeMessageIndex(messageIndex);
+        if (idx === null) return;
+
         const doc = this.buildVectorDocument(meta);
         if (!doc) return;
 
         const hash = this._hashString(doc);
-        const existing = this.vectors.get(messageIndex);
+        const existing = this.vectors.get(idx);
         if (existing && existing.hash === hash) return;
 
         const text = this._prepareText(doc, false);
@@ -327,19 +373,23 @@ export class VectorManager {
             this.totalDocuments++;
         }
 
-        this.vectors.set(messageIndex, { vector, hash, document: doc });
+        this.vectors.set(idx, { vector, hash, document: doc });
         this._updateTermCounts(doc, 1);
-        await this._saveVector(messageIndex, { vector, hash, document: doc });
+        await this._saveVector(idx, { vector, hash, document: doc });
+        this.clearRecallCache('addMessage');
     }
 
     async removeMessage(messageIndex) {
-        const existing = this.vectors.get(messageIndex);
+        const idx = this._normalizeMessageIndex(messageIndex);
+        if (idx === null) return;
+        const existing = this.vectors.get(idx);
         if (!existing) return;
 
         this._updateTermCounts(existing.document, -1);
         this.totalDocuments--;
-        this.vectors.delete(messageIndex);
-        await this._deleteVector(messageIndex);
+        this.vectors.delete(idx);
+        await this._deleteVector(idx);
+        this.clearRecallCache('removeMessage');
     }
 
     /**
@@ -400,6 +450,7 @@ export class VectorManager {
             }
         }
 
+        if (indexed > 0) this.clearRecallCache('batchIndex');
         return { indexed, skipped: chat.length - tasks.length };
     }
 
@@ -408,6 +459,7 @@ export class VectorManager {
         this.termCounts.clear();
         this.totalDocuments = 0;
         if (this.chatId) await this._clearVectors();
+        this.clearRecallCache('clearIndex');
     }
 
     // ========================================
@@ -495,7 +547,7 @@ export class VectorManager {
         let searchedCount = 0;
 
         for (const [msgIdx, entry] of this.vectors) {
-            if (excludeIndices.has(msgIdx)) continue;
+            if (this._isExcludedMessageIndex(excludeIndices, msgIdx)) continue;
             searchedCount++;
             const sim = this._dotProduct(queryVec, entry.vector);
             allScored.push({ messageIndex: msgIdx, similarity: sim, document: entry.document });
@@ -586,7 +638,7 @@ export class VectorManager {
     /**
      * 智能召回：结构化查询 + 向量搜索并行，合并结果
      */
-    async generateRecallPrompt(horaeManager, skipLast, settings, extraExcludeIndices = new Set()) {
+    async generateRecallPrompt(horaeManager, skipLast, settings, extraExcludeIndices = new Set(), aiTaskFn = null) {
         // 同步详细调试日志开关（每次召回入口刷新一次）
         this._debugLog = !!settings?.vectorDebugLog;
 
@@ -623,27 +675,107 @@ export class VectorManager {
             }
         }
         const stateQueryForRecall = this.buildStateQuery(state, lastMetaForQuery);
-        const mergedRecallQuery = this.buildMergedRecallQuery(stateQueryForRecall, userQuery);
+        let mergedRecallQuery = this.buildMergedRecallQuery(stateQueryForRecall, userQuery);
 
         const EXCLUDE_RECENT = 5;
+        const effectiveEnd = Math.max(0, chat.length - Math.max(0, skipLast));
         const excludeIndices = new Set();
-        for (let i = Math.max(0, chat.length - EXCLUDE_RECENT); i < chat.length; i++) {
+        // 所有未隐藏的 AI 楼层默认视为「prompt 内已可见」，避免召回与正文重复
+        // is_hidden=true 的楼层 ST 不会发送，仍允许被召回作为历史记忆
+        let visibleExcludedCount = 0;
+        for (let i = 0; i < effectiveEnd; i++) {
+            const msg = chat[i];
+            if (!msg || msg.is_user || msg.is_hidden) continue;
+            if (!msg.horae_meta || msg.horae_meta._skipHorae) continue;
+            excludeIndices.add(i);
+            visibleExcludedCount++;
+        }
+        for (let i = Math.max(0, effectiveEnd - EXCLUDE_RECENT); i < effectiveEnd; i++) {
             excludeIndices.add(i);
         }
+        // skipLast 区间（swipe 中的尾部楼层）一并排除，避免召回到上一次 swipe 的内容
+        for (let i = effectiveEnd; i < chat.length; i++) {
+            excludeIndices.add(i);
+        }
+        let extraPromptExcludedCount = 0;
         if (extraExcludeIndices && typeof extraExcludeIndices[Symbol.iterator] === 'function') {
             for (const idx of extraExcludeIndices) {
                 if (Number.isInteger(idx) && idx >= 0 && idx < chat.length) {
+                    if (!excludeIndices.has(idx)) extraPromptExcludedCount++;
                     excludeIndices.add(idx);
                 }
             }
         }
-        if (excludeIndices.size > EXCLUDE_RECENT) {
-            this._debug(`[Horae Vector] 额外排除已在Prompt中的楼层: +${excludeIndices.size - EXCLUDE_RECENT}`);
+        if (visibleExcludedCount > 0) {
+            this._debug(`[Horae Vector] 排除未隐藏 AI 楼层: ${visibleExcludedCount} 条`);
+        }
+        if (extraPromptExcludedCount > 0) {
+            this._debug(`[Horae Vector] 额外排除已在 Prompt 中的楼层: ${extraPromptExcludedCount}`);
+        }
+
+        const pureMode = !!settings.vectorPureMode;
+
+        // 召回结果缓存：同样的查询条件 + 同样的索引状态直接返回上次的 recallText
+        // 索引/模型变化时由 clearRecallCache 主动清空，故 key 不需带 indexHash
+        // 查 cache 放在 Query 重写之前——命中就完全跳过 LLM 重写调用，节省每次 500 token
+        const queryRewriteEnabled = !!settings.vectorQueryRewriteEnabled;
+        const queryRewriteSysHash = queryRewriteEnabled
+            ? this._hashString(this._getQueryRewriteSystemPrompt(settings))
+            : '';
+        const cacheKey = JSON.stringify({
+            c: this.chatId || '',
+            e: effectiveEnd,
+            n: this.vectors.size,
+            q: this._hashString(`${mergedRecallQuery || ''}\x1f${userQuery || ''}\x1f${stateQueryForRecall || ''}`),
+            x: this._hashString([...excludeIndices].sort((a, b) => a - b).join(',')),
+            s: this._hashString(JSON.stringify({
+                topK,
+                threshold,
+                recallTopK,
+                recallThreshold,
+                useRerank,
+                pureMode,
+                rerankModel: settings.vectorRerankModel || '',
+                rerankFullText: !!settings.vectorRerankFullText,
+                rerankCandidates: settings.vectorRerankCandidates,
+                rerankRecallThreshold: settings.vectorRerankRecallThreshold,
+                rerankMinScore: this._effectiveRerankMinScore(settings),
+                fullTextCount: settings.vectorFullTextCount,
+                fullTextThreshold: settings.vectorFullTextThreshold,
+                stripTags: settings.vectorStripTags || '',
+                keywordLang: this._activeKeywordLang || '',
+            })),
+            qr: queryRewriteEnabled ? `1|${queryRewriteSysHash}` : '0',
+            m: this._hashString(`${this.modelName || ''}|${this.isApiMode ? this._apiUrl : ''}|${this.isApiMode ? this._apiModel : ''}`),
+        });
+        const cached = this._getRecallCache(cacheKey);
+        if (cached) {
+            this._debug(`[Horae Vector] 召回缓存命中 (key=${this._hashString(cacheKey)})`);
+            this._lastDebugInfo = {
+                ...cached.debug,
+                timestamp: Date.now(),
+                cacheHit: true,
+            };
+            return cached.recallText;
+        }
+
+        // Query 重写：让辅助 API 产出 INTENT + 5 条多角度查询，对短问句/代词多的场景效果最好
+        // INTENT 替换原 merged query 作为 rerank query，5 条 Q 各跑一次 embedding 召回参与 RRF
+        let rewriteResult = null;
+        if (queryRewriteEnabled && typeof aiTaskFn === 'function') {
+            try {
+                rewriteResult = await this._performQueryRewrite(chat, skipLast, settings, aiTaskFn);
+            } catch (err) {
+                console.warn('[Horae Vector] Query 重写失败：', err?.message || err);
+            }
+        }
+        if (rewriteResult?.intent) {
+            mergedRecallQuery = rewriteResult.intent;
+            this._debug(`[Horae Vector] Query 重写 INTENT: ${rewriteResult.intent}`);
         }
 
         const merged = new Map();
 
-        const pureMode = !!settings.vectorPureMode;
         if (pureMode) this._debug('[Horae Vector] 纯向量模式已启用，跳过关键词启发式');
         if (useRerank) this._debug(`[Horae Vector] Rerank 模式：embedding 召回阈值=${recallThreshold} / 候选=${recallTopK}`);
 
@@ -659,6 +791,26 @@ export class VectorManager {
             if (!merged.has(r.messageIndex)) {
                 merged.set(r.messageIndex, r);
             }
+        }
+
+        // Query 重写产出的 5 条独立查询：各跑一次 search，结果并入 merged 后续走 RRF
+        const rewriteHits = [];
+        if (rewriteResult?.queries?.length) {
+            for (let qi = 0; qi < rewriteResult.queries.length; qi++) {
+                const q = rewriteResult.queries[qi];
+                if (!q) continue;
+                try {
+                    const subResults = await this.search(q, recallTopK, recallThreshold, excludeIndices, pureMode);
+                    for (const r of subResults) {
+                        const tagged = { ...r, source: `rewrite#${qi + 1}` };
+                        rewriteHits.push(tagged);
+                        if (!merged.has(r.messageIndex)) merged.set(r.messageIndex, tagged);
+                    }
+                } catch (err) {
+                    this._debug(`[Horae Vector] Query 重写第 ${qi + 1} 条召回失败：${err?.message || err}`);
+                }
+            }
+            this._debug(`[Horae Vector] Query 重写召回: ${rewriteHits.length} 条命中（去重前）`);
         }
 
         // 相关角色 = 用户消息提及 + 当前在场；只用于 RRF 加分，不改 cosine
@@ -688,6 +840,11 @@ export class VectorManager {
         };
         addRanker(structuredResults, 1.0);
         addRanker(hybridResults, 1.0);
+        if (rewriteHits.length > 0) {
+            // 重写查询的总权重与单路 embedding 持平，避免 5 路堆叠后挤掉原始召回
+            const perQueryWeight = 1.0 / Math.max(1, rewriteResult?.queries?.length || 1);
+            addRanker(rewriteHits, perQueryWeight);
+        }
         if (relevantChars.size > 0) {
             for (const r of results) {
                 const meta = chat[r.messageIndex]?.horae_meta;
@@ -791,12 +948,8 @@ export class VectorManager {
                         const passed = reranked.filter(rr => (rr.relevance_score ?? 0) >= minScore);
                         const dropped = reranked.length - passed.length;
                         console.log(`[Horae Vector] Rerank 完成: ${reranked.length} 条 → 阈值=${minScore.toFixed(2)} 通过=${passed.length} 丢弃=${dropped}`);
-                        // 全部被阈值砍光、但最高分仍 ≥ 0.35 时保留 Top1，避免完全静默
-                        let finalReranked = passed;
-                        if (passed.length === 0 && reranked[0] && (reranked[0].relevance_score ?? 0) >= 0.35) {
-                            finalReranked = [reranked[0]];
-                            console.log(`[Horae Vector] Rerank 全部被阈值过滤，但最高分=${reranked[0].relevance_score?.toFixed(3)} 仍过保底线，保留 Top1`);
-                        }
+                        // 阈值未过即整体丢弃；避免低相关度的 Top1 污染最终召回
+                        const finalReranked = passed;
                         results = finalReranked.map(rr => {
                             const original = rerankCandidates[rr.index];
                             return {
@@ -823,7 +976,7 @@ export class VectorManager {
                             })),
                             passedCount: passed.length,
                             droppedCount: dropped,
-                            retainedTop1: passed.length === 0 && finalReranked.length > 0,
+                            retainedTop1: false,
                             batching: rerankPlan ? {
                                 contextLimit: rerankPlan.contextLimit,
                                 budgetTokens: rerankPlan.docBudget,
@@ -896,15 +1049,103 @@ export class VectorManager {
             })),
             relevantChars: [...relevantChars],
             rerank: rerankDebug,
+            queryRewrite: rewriteResult ? {
+                intent: rewriteResult.intent || '',
+                queries: rewriteResult.queries || [],
+                hits: rewriteHits.length,
+            } : null,
             final: results.map(r => ({
                 messageIndex: r.messageIndex,
                 similarity: r.similarity,
                 source: r.source,
             })),
             recallText,
+            cacheHit: false,
         };
 
+        this._setRecallCache(cacheKey, { recallText, debug: this._lastDebugInfo });
+
         return recallText;
+    }
+
+    /**
+     * 取出 Query 重写的 system prompt：优先用户自定义，回落语言默认
+     */
+    _getQueryRewriteSystemPrompt(settings) {
+        const custom = (settings?.vectorQueryRewriteSystemPrompt || '').trim();
+        if (custom) return custom;
+        let lang = 'en';
+        try { lang = detectEffectiveAiLang(settings); } catch { /* ignore */ }
+        const defaultPrompt = getPromptDefaultSync(lang, 'vectorQueryRewriteSystemPrompt')
+            || getPromptDefaultSync('en', 'vectorQueryRewriteSystemPrompt');
+        return defaultPrompt || '';
+    }
+
+    /**
+     * 调用辅助 API 生成 INTENT + 5 条多角度查询。
+     * @returns {{ intent: string, queries: string[] } | null}
+     */
+    async _performQueryRewrite(chat, skipLast, settings, aiTaskFn) {
+        const systemPrompt = this._getQueryRewriteSystemPrompt(settings);
+        if (!systemPrompt) return null;
+
+        // 取最近若干轮上下文作为重写依据；只用文本片段，避免超长
+        const RECENT_TURNS = 6;
+        const effectiveEnd = Math.max(0, chat.length - Math.max(0, skipLast));
+        const startIdx = Math.max(0, effectiveEnd - RECENT_TURNS);
+        const recent = [];
+        for (let i = startIdx; i < effectiveEnd; i++) {
+            const m = chat[i];
+            if (!m) continue;
+            const role = m.is_user ? 'user' : 'assistant';
+            const raw = (m.mes || '').replace(/<think(?:ing)?\b[\s\S]*?<\/think(?:ing)?>/gi, '');
+            const clean = this._stripVolatileHoraeLines(raw).trim();
+            if (!clean) continue;
+            // 长消息保留首尾各 600 字，中间省略
+            const trimmed = clean.length > 1500
+                ? `${clean.slice(0, 600)}\n...（中间省略）...\n${clean.slice(-600)}`
+                : clean;
+            recent.push(`[${role}] ${trimmed}`);
+        }
+        if (recent.length === 0) return null;
+
+        const fullPrompt = `${systemPrompt}\n\n---\n\n对话背景：\n${recent.join('\n\n')}`;
+
+        const raw = await aiTaskFn(fullPrompt);
+        if (typeof raw !== 'string' || !raw.trim()) return null;
+        return this._parseQueryRewriteResponse(raw);
+    }
+
+    _parseQueryRewriteResponse(raw) {
+        const text = String(raw || '').replace(/\r\n?/g, '\n');
+        let intent = '';
+        const queries = [];
+        for (const line of text.split('\n')) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            const intentMatch = trimmed.match(/^INTENT\s*[:：]\s*(.+)$/i);
+            if (intentMatch) {
+                intent = intentMatch[1].trim();
+                continue;
+            }
+            const qMatch = trimmed.match(/^Q\s*[:：]\s*(.+)$/i);
+            if (qMatch) {
+                const q = qMatch[1].trim();
+                if (q) queries.push(q);
+            }
+        }
+        // 去重 + 最多 5 条
+        const dedup = [];
+        const seen = new Set();
+        for (const q of queries) {
+            const k = q.replace(/\s+/g, '').toLowerCase();
+            if (seen.has(k)) continue;
+            seen.add(k);
+            dedup.push(q);
+            if (dedup.length >= 5) break;
+        }
+        if (!intent && dedup.length === 0) return null;
+        return { intent, queries: dedup };
     }
 
     // 索引规模越大，噪声越多；非 rerank 路径下随之略提阈值，最多 +0.05
@@ -1644,14 +1885,14 @@ export class VectorManager {
     }
 
     _stripVolatileHoraeLines(text) {
-        return text.replace(/<horae\b[^>]*>([\s\S]*?)<\/horae>/gi, (match, body) => {
-            const kept = String(body || '')
-                .split(/\r?\n/)
-                .filter(line => !/^\s*agenda-?\s*[:：]/i.test(line))
-                .join('\n')
-                .trim();
-            return kept ? `<horae>\n${kept}\n</horae>` : '';
-        });
+        // rerank/全文召回与 Query 重写阶段移除 horae 系列结构化标签：
+        // - 内部数据已通过状态注入单独送达，留下来只会与 prompt 重复
+        // - agenda / scene_desc / rpg / table 等字段对历史召回无信号价值
+        let out = text.replace(/<horaeevent\b[^>]*>[\s\S]*?<\/horaeevent>/gi, '');
+        out = out.replace(/<horae\b[^>]*>[\s\S]*?<\/horae>/gi, '');
+        out = out.replace(/<horaerpg\b[^>]*>[\s\S]*?<\/horaerpg>/gi, '');
+        out = out.replace(/<horaetable[:：][\s\S]*?<\/horaetable(?:[:：][^>]*)?>/gi, '');
+        return out;
     }
 
     _extractCleanText(mes, stripTags) {
@@ -2079,13 +2320,15 @@ export class VectorManager {
 
     async _saveVector(messageIndex, data) {
         await this._openDB();
-        const key = `${this.chatId}_${messageIndex}`;
+        const normalizedIdx = this._normalizeMessageIndex(messageIndex);
+        if (normalizedIdx === null) return;
+        const key = `${this.chatId}_${normalizedIdx}`;
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction(STORE_NAME, 'readwrite');
             tx.objectStore(STORE_NAME).put({
                 key,
                 chatId: this.chatId,
-                messageIndex,
+                messageIndex: normalizedIdx,
                 vector: data.vector,
                 hash: data.hash,
                 document: data.document,
@@ -2108,7 +2351,9 @@ export class VectorManager {
 
     async _deleteVector(messageIndex) {
         await this._openDB();
-        const key = `${this.chatId}_${messageIndex}`;
+        const normalizedIdx = this._normalizeMessageIndex(messageIndex);
+        if (normalizedIdx === null) return;
+        const key = `${this.chatId}_${normalizedIdx}`;
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction(STORE_NAME, 'readwrite');
             tx.objectStore(STORE_NAME).delete(key);
@@ -2144,6 +2389,27 @@ export class VectorManager {
         if (meta?._skipHorae) return false;
         if (!meta?.events?.length) return false;
         return meta.events.some(e => !e.isSummary && e.level !== '摘要' && !e._summaryId);
+    }
+
+    /**
+     * 规范化 messageIndex：兼容 IndexedDB 反序列化的字符串型 key
+     * 召回时若不规范化，excludeIndices.has(number) 会漏掉 string 型旧索引，导致召回到 swipe 前的正文
+     */
+    _normalizeMessageIndex(messageIndex) {
+        if (messageIndex == null) return null;
+        const n = typeof messageIndex === 'number' ? messageIndex : parseInt(messageIndex, 10);
+        return Number.isInteger(n) && n >= 0 ? n : null;
+    }
+
+    /**
+     * Set 内部混用 number/string 时 has() 会失效；统一以规范化 key 判断排除
+     */
+    _isExcludedMessageIndex(excludeIndices, messageIndex) {
+        if (!excludeIndices) return false;
+        if (excludeIndices.has(messageIndex)) return true;
+        const idx = this._normalizeMessageIndex(messageIndex);
+        if (idx === null) return false;
+        return excludeIndices.has(idx) || excludeIndices.has(String(idx));
     }
 
     _dotProduct(a, b) {

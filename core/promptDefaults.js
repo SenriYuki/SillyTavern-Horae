@@ -21,6 +21,7 @@ const _promptFileMap = Object.freeze({
     customRelationshipPrompt: 'customRelationshipPrompt.txt',
     customMoodPrompt: 'customMoodPrompt.txt',
     customRpgPrompt: 'customRpgPrompt.txt',
+    vectorQueryRewriteSystemPrompt: 'vectorQueryRewriteSystemPrompt.txt',
 });
 
 const _PRESET_FILE_KEYS = Object.freeze([

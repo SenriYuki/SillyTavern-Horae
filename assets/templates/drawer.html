@@ -10,7 +10,7 @@
                 <i class="fa-regular fa-clock"></i>
                 Horae 时光记忆
             </div>
-            <span class="horae-version">1.14.1</span>
+            <span class="horae-version">1.14.2</span>
         </div>
         
         <!-- 标签页导航 -->
@@ -582,8 +582,15 @@
                         </div>
                         <div class="horae-setting-item">
                             <label data-i18n="settings.auxApiKey">API 密钥</label>
-                            <input type="password" id="horae-setting-aux-api-key" class="horae-edit-field"
-                                placeholder="sk-...">
+                            <div style="display:flex; gap:4px; align-items:center;">
+                                <input type="password" id="horae-setting-aux-api-key" class="horae-edit-field"
+                                    placeholder="sk-..." style="flex:1; min-width:0;">
+                                <button id="horae-btn-toggle-aux-api-key" class="horae-btn" type="button"
+                                    style="white-space:nowrap; padding:4px 8px;"
+                                    data-i18n-title="tooltip.toggleSecret" title="">
+                                    <i class="fa-solid fa-eye"></i>
+                                </button>
+                            </div>
                             <span class="horae-setting-sub-hint" data-i18n="settings.auxApiSecretHint">不会随 Horae 配置档导出。</span>
                         </div>
                         <div class="horae-setting-item">
@@ -651,6 +658,19 @@
                         外观设置
                     </div>
                     
+                    <div class="horae-setting-item">
+                        <label data-i18n="settings.panelLayoutStyle">
+                            面板布局
+                            <select id="horae-setting-panel-layout-style" class="horae-select">
+                                <option value="classic" data-i18n="settings.panelLayoutClassic">默认布局</option>
+                                <option value="glass" data-i18n="settings.panelLayoutGlass">玻璃布局</option>
+                                <option value="obsidian" data-i18n="settings.panelLayoutObsidian">曜石简约</option>
+                                <option value="cyber" data-i18n="settings.panelLayoutCyber">赛博朋克</option>
+                            </select>
+                        </label>
+                        <span class="horae-setting-sub-hint" data-i18n="settings.panelLayoutStyleHint">同时切换楼层信息面板与 Horae 抽屉主面板的视觉风格，不影响数据与功能。玻璃布局使用半透明背景与柔光描边；抽屉内数据密集页（时间线/角色/物品/场景/RPG）保持经典清晰排版。</span>
+                    </div>
+
                     <div class="horae-setting-item">
                         <label data-i18n="settings.pluginTheme">
                             插件主题
@@ -824,6 +844,20 @@
                             角色信息
                         </label>
                         <span class="horae-setting-sub-hint" data-i18n="settings.sendCharactersHint">在场角色、服装描述、好感度、角色信息。关闭后AI可能描写错误的服装。</span>
+                        <div style="margin-top: 6px; padding-left: 22px;">
+                            <label data-i18n="settings.sendCharacterAffection" style="font-size: 12px; color: var(--horae-text-muted);">
+                                <input type="checkbox" id="horae-setting-send-character-affection" checked>
+                                好感度
+                            </label>
+                            <span class="horae-setting-sub-hint" data-i18n="settings.sendCharacterAffectionHint" style="padding-left: 22px;">关闭后所有角色的好感度数值不再注入；不影响其他角色信息。</span>
+                        </div>
+                        <div style="margin-top: 6px; padding-left: 22px;">
+                            <label data-i18n="settings.sendMainCharacterPersonality" style="font-size: 12px; color: var(--horae-text-muted);">
+                                <input type="checkbox" id="horae-setting-send-main-character-personality" checked>
+                                主要角色性格
+                            </label>
+                            <span class="horae-setting-sub-hint" data-i18n="settings.sendMainCharacterPersonalityHint" style="padding-left: 22px;">关闭后，主要角色（卡片本体 + 置顶 NPC）的性格简述不再注入；不影响其他 NPC。</span>
+                        </div>
                     </div>
                     
                     <div class="horae-setting-item">
@@ -1026,7 +1060,14 @@
                                     <input type="number" id="horae-setting-auto-summary-resummary-threshold" min="0" max="999" value="10">
                                 </label>
                                 <span class="horae-setting-sub-hint" data-i18n="settings.resummaryThresholdHint">同层总结达到该数量后会合并为更高层总结；二次总结达到数量后继续三次总结，以此类推。</span>
-                            </div>                        
+                            </div>
+                            <div class="horae-setting-item">
+                                <label data-i18n="settings.resummaryMinChars">
+                                    二次总结最低字数
+                                    <input type="number" id="horae-setting-auto-summary-resummary-min-chars" min="0" max="100000" step="100" value="800">
+                                </label>
+                                <span class="horae-setting-sub-hint" data-i18n="settings.resummaryMinCharsHint">待二次总结的摘要总字数低于此值时跳过本轮，避免反复压缩造成质量损失。设为 0 关闭限制。</span>
+                            </div>
                             <div class="horae-setting-item" style="border-top: 1px solid var(--horae-border); padding-top: 8px; margin-top: 4px;">
                                 <label data-i18n="settings.batchMaxMessages">
                                     单次最大消息条数
@@ -1309,6 +1350,20 @@
                                     </div>
                                 </div>
                             </div>
+                            <div class="horae-vector-setting-group">
+                                <div class="horae-vector-setting-group-title" data-i18n="vector.queryRewriteSettings">Query 重写</div>
+                                <div class="horae-setting-item">
+                                    <label data-i18n="vector.enableQueryRewrite">
+                                        <input type="checkbox" id="horae-setting-vector-query-rewrite-enabled">
+                                        启用 Query 重写
+                                    </label>
+                                    <span class="horae-setting-hint" data-i18n="vector.queryRewriteHint" style="margin-top: 4px;">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        让辅助 API 把当前对话改写为 1 段场景描述 + 5 条多角度检索查询，提升「短问题/代词多」场景下的召回精度。
+⚠️ 开启前请先配置辅助 API。会增加 1-3 秒延迟，每次额外消耗约 500 token。
+                                    </span>
+                                </div>
+                            </div>
                             <div class="horae-vector-status">
                                 <span id="horae-vector-status-text" data-i18n="vector.modelNotLoaded">模型未加载</span>
                                 <span id="horae-vector-index-count"></span>
@@ -1570,7 +1625,7 @@
                 </div>
                 
                 <div class="horae-about">
-                    <p>Horae v1.14.1 | 作者: SenriYuki</p>
+                    <p>Horae v1.14.2 | 作者: SenriYuki</p>
                     <p>基于时间锚点的AI记忆增强系统</p>
                 </div>
             </div>

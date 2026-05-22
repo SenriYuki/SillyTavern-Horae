@@ -582,7 +582,33 @@ class HoraeManager {
         
         const sendTimeline = this.settings?.sendTimeline !== false;
         const sendCharacters = this.settings?.sendCharacters !== false;
+        const sendCharacterAffection = this.settings?.sendCharacterAffection !== false;
+        const sendMainCharacterPersonality = this.settings?.sendMainCharacterPersonality !== false;
         const sendItems = this.settings?.sendItems !== false;
+
+        // 主要角色判定：卡片本体 + 置顶 NPC，含别名匹配以兼容 NPC 改名
+        const mainCharName = this.context?.name2 || '';
+        const pinnedNpcs = Array.isArray(this.settings?.pinnedNpcs) ? this.settings.pinnedNpcs : [];
+        const _aliasesOf = (npcName) => {
+            const npc = state.npcs?.[npcName];
+            const arr = (npc && Array.isArray(npc._aliases)) ? npc._aliases : [];
+            return new Set([npcName, ...arr]);
+        };
+        const isMainCharacter = (name) => {
+            if (!name) return false;
+            if (mainCharName) {
+                const aliases = _aliasesOf(name);
+                if (aliases.has(mainCharName)) return true;
+            }
+            if (pinnedNpcs.length > 0) {
+                if (pinnedNpcs.includes(name)) return true;
+                const aliases = _aliasesOf(name);
+                for (const p of pinnedNpcs) {
+                    if (aliases.has(p)) return true;
+                }
+            }
+            return false;
+        };
         
         // 时间
         if (state.timestamp.story_date) {
@@ -704,21 +730,26 @@ class HoraeManager {
         }
         
         // 好感度
-        if (sendCharacters) {
+        if (sendCharacterAffection) {
             const affections = Object.entries(state.affection).filter(([_, v]) => v !== 0);
             if (affections.length > 0) {
                 const affStr = affections.map(([k, v]) => `${k}:${v > 0 ? '+' : ''}${v}`).join('|');
                 lines.push(`[${L('好感','Affection','好感度','호감도','Расположение')}|${affStr}]`);
             }
-            
-            // NPC信息
+        }
+
+        // NPC信息
+        if (sendCharacters) {
             const npcs = Object.entries(state.npcs);
             if (npcs.length > 0) {
                 lines.push(`\n[${L('已知NPC','Known NPCs','既知NPC','알려진 NPC','Известные NPC')}]`);
                 for (const [name, info] of npcs) {
                     const id = info._id || '?';
                     const app = info.appearance || '';
-                    const per = info.personality || '';
+                    // 关闭主要角色性格注入时，仅抑制主要角色（卡片本体 + 置顶 NPC）的 personality
+                    const per = (!sendMainCharacterPersonality && isMainCharacter(name))
+                        ? ''
+                        : (info.personality || '');
                     const rel = info.relationship || '';
                     // 主体：N编号 名｜外貌=性格@关系
                     let npcStr = `N${id} ${name}`;
@@ -1327,11 +1358,18 @@ class HoraeManager {
             // costume:爱丽丝=白色连衣裙
             else if (trimmedLine.startsWith('costume:')) {
                 const costumeStr = trimmedLine.substring(8).trim();
-                const eqIndex = costumeStr.indexOf('=');
-                if (eqIndex > 0) {
-                    const char = costumeStr.substring(0, eqIndex).trim();
-                    const costume = costumeStr.substring(eqIndex + 1).trim();
-                    result.costumes[char] = costume;
+                // 仅当 ; ； | ｜ 拆出的每一段都形如「角色=值」才视为多条记录；
+                // 否则原样保留，避免误吃描述里的 / 、 等分隔符
+                const cand = costumeStr.split(/\s*[;；|｜]\s*/);
+                const segs = cand.length > 1 && cand.every(s => /^[^=]+=[^=]/.test(s))
+                    ? cand : [costumeStr];
+                for (const seg of segs) {
+                    const eqIndex = seg.indexOf('=');
+                    if (eqIndex > 0) {
+                        const char = seg.substring(0, eqIndex).trim();
+                        const costume = seg.substring(eqIndex + 1).trim();
+                        if (char && costume) result.costumes[char] = costume;
+                    }
                 }
             }
             // item-:物品名 表示物品已消耗/删除
@@ -1503,15 +1541,18 @@ class HoraeManager {
                     }
                 }
             }
-            // mood:角色名=情绪状态
+            // mood:角色名=情绪状态（兼容 ; ； | ｜ 多条同行；/ 、 仍视为描述内字符）
             else if (trimmedLine.startsWith('mood:')) {
                 const moodStr = trimmedLine.substring(5).trim();
-                const eqIdx = moodStr.indexOf('=');
-                if (eqIdx > 0) {
-                    const charName = moodStr.substring(0, eqIdx).trim();
-                    const emotion = moodStr.substring(eqIdx + 1).trim();
-                    if (charName && emotion) {
-                        result.mood[charName] = emotion;
+                const cand = moodStr.split(/\s*[;；|｜]\s*/);
+                const segs = cand.length > 1 && cand.every(s => /^[^=]+=[^=]/.test(s))
+                    ? cand : [moodStr];
+                for (const seg of segs) {
+                    const eqIdx = seg.indexOf('=');
+                    if (eqIdx > 0) {
+                        const charName = seg.substring(0, eqIdx).trim();
+                        const emotion = seg.substring(eqIdx + 1).trim();
+                        if (charName && emotion) result.mood[charName] = emotion;
                     }
                 }
             }
@@ -4278,15 +4319,22 @@ class HoraeManager {
             hasAnyData = true;
         }
 
-        // costume
+        // costume：同 parseHoraeTag，兼容 ; ； | ｜ 多条同行
         while ((match = patterns.costume.exec(message)) !== null) {
             const costumeStr = match[1].trim();
-            const eqIndex = costumeStr.indexOf('=');
-            if (eqIndex > 0) {
-                const char = costumeStr.substring(0, eqIndex).trim();
-                const costume = costumeStr.substring(eqIndex + 1).trim();
-                result.costumes[char] = costume;
-                hasAnyData = true;
+            const cand = costumeStr.split(/\s*[;；|｜]\s*/);
+            const segs = cand.length > 1 && cand.every(s => /^[^=]+=[^=]/.test(s))
+                ? cand : [costumeStr];
+            for (const seg of segs) {
+                const eqIndex = seg.indexOf('=');
+                if (eqIndex > 0) {
+                    const char = seg.substring(0, eqIndex).trim();
+                    const costume = seg.substring(eqIndex + 1).trim();
+                    if (char && costume) {
+                        result.costumes[char] = costume;
+                        hasAnyData = true;
+                    }
+                }
             }
         }
 

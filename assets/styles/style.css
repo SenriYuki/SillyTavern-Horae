@@ -1501,6 +1501,1810 @@ body > .horae-port-bottom-bar {
     font-size: 14px;
 }
 
+/* === 楼层面板：玻璃布局（liquid glass × neumorphism） ===
+   仅作用于带 .horae-layout-glass 类的实例，沿用现有 HTML 结构（不动 render），
+   通过 CSS 重排各 panel-row 为 section 凹陷容器 + chip 流式 + 卡片化字段。
+   所有颜色统一走插件 CSS 变量，跟随主题设计师与日夜模式联动；
+   选择器全部以 .horae-message-panel.horae-layout-glass 限定，避免外溢污染酒馆。 */
+.horae-message-panel.horae-layout-glass {
+    --hg-bg: color-mix(in srgb, var(--horae-bg) 60%, transparent);
+    --hg-bg-strong: color-mix(in srgb, var(--horae-bg) 78%, transparent);
+    --hg-bg-sunk: color-mix(in srgb, var(--horae-bg) 88%, transparent);
+    --hg-stroke: color-mix(in srgb, var(--horae-primary-light) 22%, transparent);
+    --hg-stroke-strong: color-mix(in srgb, var(--horae-primary-light) 38%, transparent);
+    --hg-glow: color-mix(in srgb, var(--horae-primary) 18%, transparent);
+    --hg-shadow-drop: 0 6px 14px -6px rgba(0, 0, 0, 0.42), 0 -1px 1px 0 rgba(255, 255, 255, 0.04);
+    --hg-shadow-drop-sm: 0 3px 8px -4px rgba(0, 0, 0, 0.35), 0 -1px 1px 0 rgba(255, 255, 255, 0.03);
+    --hg-shadow-inset: inset 3px 3px 6px rgba(0, 0, 0, 0.32), inset -2px -2px 5px rgba(255, 255, 255, 0.04);
+    --hg-shadow-inset-sm: inset 2px 2px 4px rgba(0, 0, 0, 0.26), inset -1px -1px 3px rgba(255, 255, 255, 0.035);
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--horae-bg) 70%, transparent) 0%,
+        color-mix(in srgb, var(--horae-bg) 45%, transparent) 100%);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border: 1px solid var(--hg-stroke);
+    box-shadow:
+        0 6px 24px -8px var(--hg-glow),
+        inset 0 1px 0 0 color-mix(in srgb, #ffffff 18%, transparent);
+    border-radius: 16px;
+    overflow: hidden;
+}
+/* 日间模式：阴影减淡、高光增强，避免拟物在浅底过黑 */
+.horae-message-panel.horae-layout-glass.horae-light {
+    --hg-shadow-drop: 0 4px 12px -6px rgba(0, 0, 0, 0.16), 0 -1px 1px 0 rgba(255, 255, 255, 0.7);
+    --hg-shadow-drop-sm: 0 2px 6px -3px rgba(0, 0, 0, 0.12), 0 -1px 1px 0 rgba(255, 255, 255, 0.6);
+    --hg-shadow-inset: inset 3px 3px 6px rgba(0, 0, 0, 0.08), inset -2px -2px 5px rgba(255, 255, 255, 0.55);
+    --hg-shadow-inset-sm: inset 2px 2px 4px rgba(0, 0, 0, 0.06), inset -1px -1px 3px rgba(255, 255, 255, 0.45);
+}
+/* 浏览器不支持 color-mix 时的降级方案：保持可读，但失去主题随动 */
+@supports not (background: color-mix(in srgb, white 50%, transparent)) {
+    .horae-message-panel.horae-layout-glass {
+        background: rgba(40, 40, 50, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .horae-message-panel.horae-layout-glass.horae-light {
+        background: rgba(255, 255, 255, 0.55);
+        border: 1px solid rgba(0, 0, 0, 0.08);
+    }
+}
+
+/* ---------- 头部：大圆形图标 + 紧凑摘要 + 圆形操作按钮 ---------- */
+.horae-message-panel.horae-layout-glass .horae-panel-toggle {
+    padding: 14px 18px;
+    background: transparent;
+    border-bottom: 1px solid color-mix(in srgb, var(--horae-border) 60%, transparent);
+}
+.horae-message-panel.horae-layout-glass .horae-panel-toggle:hover {
+    background: color-mix(in srgb, var(--horae-primary) 6%, transparent);
+}
+.horae-message-panel.horae-layout-glass .horae-panel-icon {
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 15px;
+    color: var(--horae-primary-light);
+    background: color-mix(in srgb, var(--horae-bg) 55%, transparent);
+    box-shadow: var(--hg-shadow-drop);
+    flex-shrink: 0;
+}
+/* 摘要竖排；divider 与在场人数仅经典横排需要 */
+.horae-message-panel.horae-layout-glass .horae-panel-summary {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 2px;
+    overflow: hidden;
+}
+.horae-message-panel.horae-layout-glass .horae-summary-time {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--horae-text);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.horae-message-panel.horae-layout-glass .horae-summary-event {
+    color: var(--horae-text-muted);
+    font-size: 12px;
+    flex: 0 1 auto;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.horae-message-panel.horae-layout-glass .horae-summary-divider,
+.horae-message-panel.horae-layout-glass .horae-summary-chars {
+    display: none;
+}
+.horae-message-panel.horae-layout-glass .horae-panel-actions {
+    gap: 8px;
+}
+.horae-message-panel.horae-layout-glass .horae-panel-actions button {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--horae-bg) 55%, transparent);
+    border: none;
+    box-shadow: var(--hg-shadow-drop-sm);
+    transition: box-shadow 0.18s ease, color 0.18s ease;
+}
+.horae-message-panel.horae-layout-glass .horae-panel-actions button:hover {
+    color: var(--horae-primary-light);
+    box-shadow: var(--hg-shadow-drop);
+    background: color-mix(in srgb, var(--horae-bg) 55%, transparent);
+}
+.horae-message-panel.horae-layout-glass .horae-panel-actions button:active {
+    box-shadow: var(--hg-shadow-inset-sm);
+}
+
+/* ---------- 内容区：拉宽间距、每个 full-width row 视为凹陷 section ---------- */
+.horae-message-panel.horae-layout-glass .horae-panel-content {
+    padding: 18px 20px 22px;
+    background: var(--hg-bg-strong);
+    border-top: 1px solid color-mix(in srgb, var(--horae-border) 60%, transparent);
+    backdrop-filter: blur(10px) saturate(130%);
+    -webkit-backdrop-filter: blur(10px) saturate(130%);
+}
+.horae-message-panel.horae-layout-glass .horae-panel-grid {
+    gap: 16px;
+}
+/* 短字段（时间/地点/氛围/在场角色）紧凑横排 */
+.horae-message-panel.horae-layout-glass .horae-panel-row:not(.full-width) {
+    background: var(--hg-bg-sunk);
+    box-shadow: var(--hg-shadow-inset-sm);
+    border-radius: 12px;
+    padding: 10px 14px;
+    gap: 10px;
+    min-width: 0;
+}
+/* label 收成 fit-content + nowrap，让多字段名（在场角色 / Present Characters 等）不换行；
+   panel-value 与子 input 一律 min-width:0，挡 input 默认 intrinsic 宽度撑爆容器 */
+.horae-message-panel.horae-layout-glass .horae-panel-row:not(.full-width) > label {
+    min-width: 0;
+    flex: 0 0 auto;
+    white-space: nowrap;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    color: var(--horae-text-muted);
+    padding-top: 4px;
+    text-transform: uppercase;
+}
+.horae-message-panel.horae-layout-glass .horae-panel-row:not(.full-width) .horae-panel-value {
+    flex: 1 1 0;
+    min-width: 0;
+}
+.horae-message-panel.horae-layout-glass .horae-panel-row:not(.full-width) .horae-panel-value > input {
+    width: 100%;
+    min-width: 0;
+    text-overflow: ellipsis;
+}
+/* full-width 行 = section 容器（凹陷感 + 圆角 + 顶部留空给 add 按钮） */
+.horae-message-panel.horae-layout-glass .horae-panel-row.full-width {
+    position: relative;
+    background: var(--hg-bg-sunk);
+    box-shadow: var(--hg-shadow-inset);
+    border-radius: 14px;
+    padding: 16px 18px 14px;
+    gap: 12px;
+}
+.horae-message-panel.horae-layout-glass .horae-panel-row.full-width > label {
+    min-width: 0;
+    padding-top: 0;
+    padding-bottom: 2px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    color: var(--horae-text);
+    text-transform: uppercase;
+}
+.horae-message-panel.horae-layout-glass .horae-panel-row.full-width > label i {
+    color: var(--horae-primary-light);
+    margin-right: 2px;
+}
+
+/* ---------- input 静态化：非 focus 时去边框去背景，看起来像普通文字 ---------- */
+.horae-message-panel.horae-layout-glass input[type="text"],
+.horae-message-panel.horae-layout-glass input[type="number"],
+.horae-message-panel.horae-layout-glass textarea,
+.horae-message-panel.horae-layout-glass select {
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    border-radius: 8px !important;
+    color: var(--horae-text) !important;
+    transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.horae-message-panel.horae-layout-glass input[type="text"]:hover:not(:focus),
+.horae-message-panel.horae-layout-glass input[type="number"]:hover:not(:focus),
+.horae-message-panel.horae-layout-glass textarea:hover:not(:focus),
+.horae-message-panel.horae-layout-glass select:hover {
+    background: color-mix(in srgb, var(--horae-bg) 40%, transparent) !important;
+    border-color: color-mix(in srgb, var(--horae-border) 60%, transparent) !important;
+}
+.horae-message-panel.horae-layout-glass input[type="text"]:focus,
+.horae-message-panel.horae-layout-glass input[type="number"]:focus,
+.horae-message-panel.horae-layout-glass textarea:focus,
+.horae-message-panel.horae-layout-glass select:focus {
+    background: color-mix(in srgb, var(--horae-bg) 55%, transparent) !important;
+    border-color: var(--hg-stroke-strong) !important;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--horae-primary) 14%, transparent) !important;
+    outline: none !important;
+}
+
+/* ---------- add 按钮：提升到 section 右上角 ---------- */
+.horae-message-panel.horae-layout-glass .horae-panel-row.full-width
+    > .horae-btn-add-costume,
+.horae-message-panel.horae-layout-glass .horae-panel-row.full-width
+    > .horae-btn-add-item,
+.horae-message-panel.horae-layout-glass .horae-panel-row.full-width
+    > .horae-btn-add-affection,
+.horae-message-panel.horae-layout-glass .horae-panel-row.full-width
+    > .horae-btn-add-mood,
+.horae-message-panel.horae-layout-glass .horae-panel-row.full-width
+    > .horae-btn-add-agenda-row {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    margin: 0;
+    padding: 4px 10px;
+    background: transparent;
+    border: 1px dashed color-mix(in srgb, var(--horae-primary-light) 35%, transparent);
+    border-radius: 999px;
+    font-size: 11px;
+    color: var(--horae-text-muted);
+}
+.horae-message-panel.horae-layout-glass .horae-panel-row.full-width
+    > [class^="horae-btn-add-"]:hover {
+    border-color: var(--hg-stroke-strong);
+    color: var(--horae-primary-light);
+    background: color-mix(in srgb, var(--horae-primary) 10%, transparent);
+}
+
+/* ---------- 删除按钮：hover 飞出 ---------- */
+.horae-message-panel.horae-layout-glass .horae-editor-row .horae-delete-btn {
+    opacity: 0;
+    transform: translateX(4px);
+    transition: opacity 0.18s ease, transform 0.18s ease, color 0.18s ease;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    color: var(--horae-text-muted);
+}
+.horae-message-panel.horae-layout-glass .horae-editor-row:hover .horae-delete-btn,
+.horae-message-panel.horae-layout-glass .horae-editor-row:focus-within .horae-delete-btn {
+    opacity: 1;
+    transform: translateX(0);
+}
+.horae-message-panel.horae-layout-glass .horae-editor-row .horae-delete-btn:hover {
+    color: var(--horae-danger);
+    background: color-mix(in srgb, var(--horae-danger) 14%, transparent);
+}
+
+/* ---------- 编辑行通用：紧凑卡片化 ----------
+   input 默认 intrinsic min-width ≈ 150px，flex 容器里长 value 会撑爆，wrap + min-width:0 兜底 */
+.horae-message-panel.horae-layout-glass .horae-editor-row {
+    padding: 4px 8px;
+    border-radius: 8px;
+    flex-wrap: wrap;
+    transition: background 0.18s ease;
+}
+.horae-message-panel.horae-layout-glass .horae-editor-row > input {
+    min-width: 0;
+    flex: 1 1 120px;
+}
+.horae-message-panel.horae-layout-glass .horae-editor-row:hover {
+    background: color-mix(in srgb, var(--horae-bg) 35%, transparent);
+}
+
+/* ---------- 好感度：流式 chip ---------- */
+.horae-message-panel.horae-layout-glass .horae-affection-editor {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.horae-message-panel.horae-layout-glass .horae-affection-row {
+    flex: 0 0 auto;
+    max-width: 100%;
+    background: color-mix(in srgb, var(--horae-bg) 50%, transparent);
+    box-shadow: var(--hg-shadow-inset-sm);
+    border-radius: 999px;
+    padding: 4px 10px;
+    gap: 8px;
+    position: relative;
+}
+.horae-message-panel.horae-layout-glass .horae-affection-row .horae-affection-char {
+    color: var(--horae-text);
+    font-weight: 600;
+    font-size: 12px;
+    max-width: 110px;
+    flex-shrink: 0;
+}
+.horae-message-panel.horae-layout-glass .horae-affection-row .horae-affection-delta,
+.horae-message-panel.horae-layout-glass .horae-affection-row .horae-affection-total {
+    width: 56px;
+    min-width: 56px;
+    max-width: 56px;
+    height: 24px;
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 11px;
+    padding: 2px 6px !important;
+}
+.horae-message-panel.horae-layout-glass .horae-affection-row .horae-affection-delta {
+    color: var(--horae-accent);
+}
+.horae-message-panel.horae-layout-glass .horae-affection-row .horae-delete-btn {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: color-mix(in srgb, var(--horae-bg) 75%, transparent);
+    box-shadow: var(--hg-shadow-drop-sm);
+}
+
+/* ---------- 关系网络：单行流 ---------- */
+.horae-message-panel.horae-layout-glass .horae-panel-relationships {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0 -8px;
+}
+.horae-message-panel.horae-layout-glass .horae-panel-rel-row {
+    padding: 6px 10px;
+    border-radius: 8px;
+    transition: background 0.18s ease;
+}
+.horae-message-panel.horae-layout-glass .horae-panel-rel-row:hover {
+    background: color-mix(in srgb, var(--horae-bg) 40%, transparent);
+}
+
+/* ---------- 物品：卡片化 + emoji 突出 ---------- */
+.horae-message-panel.horae-layout-glass .horae-items-editor {
+    gap: 10px;
+}
+.horae-message-panel.horae-layout-glass .horae-item-row {
+    background: color-mix(in srgb, var(--horae-bg) 50%, transparent);
+    box-shadow: var(--hg-shadow-drop-sm);
+    border-radius: 10px;
+    padding: 8px 10px;
+    gap: 8px;
+    flex-wrap: wrap;
+    border-radius: 10px 10px 0 0;
+}
+.horae-message-panel.horae-layout-glass .horae-item-row + .horae-item-desc-row {
+    background: color-mix(in srgb, var(--horae-bg) 50%, transparent);
+    box-shadow: var(--hg-shadow-drop-sm);
+    margin-top: -10px;
+    border-radius: 0 0 10px 10px;
+    padding: 0 10px 8px;
+}
+.horae-message-panel.horae-layout-glass .horae-item-row .horae-item-icon {
+    background: transparent !important;
+    border: none !important;
+    font-size: 20px;
+    max-width: 32px;
+    min-width: 32px;
+}
+
+/* ---------- 已删除物品：独立 zone，虚线分隔 ---------- */
+.horae-message-panel.horae-layout-glass .horae-deleted-items-display {
+    padding-top: 8px;
+    margin-top: 4px;
+    border-top: 1px dashed color-mix(in srgb, var(--horae-border) 80%, transparent);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.horae-message-panel.horae-layout-glass .horae-deleted-item-tag {
+    background: color-mix(in srgb, var(--horae-bg) 60%, transparent);
+    box-shadow: var(--hg-shadow-inset-sm);
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 11px;
+    color: var(--horae-text-muted);
+    text-decoration: line-through;
+    opacity: 0.85;
+}
+
+/* ---------- 事件编辑器：彩色左强调边 ---------- */
+.horae-message-panel.horae-layout-glass .horae-event-editor {
+    background: color-mix(in srgb, var(--horae-bg) 50%, transparent);
+    border-radius: 10px;
+    border-left: 3px solid var(--horae-warning);
+    padding: 8px 10px;
+    box-shadow: var(--hg-shadow-drop-sm);
+    flex-wrap: wrap;
+    min-width: 0;
+}
+.horae-message-panel.horae-layout-glass .horae-event-editor > select {
+    flex: 0 0 auto;
+    min-width: 0;
+}
+.horae-message-panel.horae-layout-glass .horae-event-editor > input {
+    flex: 1 1 60%;
+    min-width: 0;
+    text-overflow: ellipsis;
+}
+
+/* ---------- 待办事项：日期固定列 ---------- */
+.horae-message-panel.horae-layout-glass .horae-agenda-editor {
+    gap: 8px;
+}
+.horae-message-panel.horae-layout-glass .horae-agenda-edit-row {
+    background: color-mix(in srgb, var(--horae-bg) 45%, transparent);
+    box-shadow: var(--hg-shadow-drop-sm);
+    border-radius: 10px;
+    border-left: 3px solid var(--horae-info);
+    padding: 6px 10px;
+}
+
+/* ---------- 重扫区 ----------
+   quick-scan / ai-analyze 经典侧已用 background !important 锁色，同级覆盖 */
+.horae-message-panel.horae-layout-glass .horae-panel-rescan {
+    margin-top: 14px;
+    padding: 10px 14px;
+    background-color: color-mix(in srgb, var(--horae-warning) 10%, transparent);
+    border-radius: 12px;
+    box-shadow: var(--hg-shadow-inset-sm);
+}
+.horae-message-panel.horae-layout-glass .horae-panel-rescan .horae-btn {
+    border-radius: 999px;
+    padding: 6px 14px;
+    background-color: color-mix(in srgb, var(--horae-bg) 55%, transparent) !important;
+    border: none !important;
+    color: var(--horae-text) !important;
+    box-shadow: var(--hg-shadow-drop-sm);
+}
+.horae-message-panel.horae-layout-glass .horae-panel-rescan .horae-btn:hover {
+    background-color: color-mix(in srgb, var(--horae-primary) 14%, transparent) !important;
+    color: var(--horae-primary-light) !important;
+}
+.horae-message-panel.horae-layout-glass .horae-panel-rescan .horae-btn-ai-analyze {
+    color: var(--horae-primary-light) !important;
+}
+
+/* ---------- 底部按钮 ----------
+   sticky 钉底防溢出穿透；父级已建 backdrop-filter 上下文，子级 blur 无效，改用不透明遮罩。
+   .horae-btn-save 经典侧 background !important 锁绿，需同级覆盖；color 各自指定 */
+.horae-message-panel.horae-layout-glass .horae-panel-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    padding: 14px 18px 16px;
+    background: linear-gradient(180deg,
+        color-mix(in srgb, var(--horae-bg) 78%, transparent),
+        color-mix(in srgb, var(--horae-bg) 94%, transparent));
+    border-top: 1px solid color-mix(in srgb, var(--horae-border) 50%, transparent);
+    gap: 12px;
+}
+.horae-message-panel.horae-layout-glass .horae-panel-footer .horae-btn {
+    border-radius: 999px;
+    padding: 8px 18px;
+    background-color: color-mix(in srgb, var(--horae-bg) 86%, transparent) !important;
+    border: none !important;
+    color: var(--horae-text) !important;
+    box-shadow: var(--hg-shadow-drop);
+    transition: box-shadow 0.18s ease, color 0.18s ease, background-color 0.18s ease;
+}
+.horae-message-panel.horae-layout-glass .horae-panel-footer .horae-btn:hover {
+    background-color: color-mix(in srgb, var(--horae-bg) 96%, transparent) !important;
+    box-shadow: var(--hg-shadow-drop-sm);
+}
+.horae-message-panel.horae-layout-glass .horae-panel-footer .horae-btn:active {
+    box-shadow: var(--hg-shadow-inset-sm);
+}
+.horae-message-panel.horae-layout-glass .horae-btn-save {
+    color: var(--horae-success) !important;
+}
+.horae-message-panel.horae-layout-glass .horae-btn-save:hover {
+    color: color-mix(in srgb, var(--horae-success) 80%, white) !important;
+}
+.horae-message-panel.horae-layout-glass .horae-btn-cancel {
+    color: var(--horae-text-muted) !important;
+}
+.horae-message-panel.horae-layout-glass .horae-btn-open-drawer {
+    color: var(--horae-primary-light) !important;
+}
+
+/* 番外/小剧场在玻璃布局下淡化背景但保留斜纹 */
+.horae-message-panel.horae-layout-glass.horae-sideplay {
+    border-left: 3px solid color-mix(in srgb, var(--horae-text-muted) 60%, transparent);
+}
+
+/* ---------- 移动端紧凑模式 ---------- */
+@media (max-width: 768px) {
+    .horae-message-panel.horae-layout-glass .horae-panel-toggle {
+        padding: 12px 14px;
+    }
+    .horae-message-panel.horae-layout-glass .horae-panel-content {
+        padding: 14px 14px 16px;
+    }
+    .horae-message-panel.horae-layout-glass .horae-panel-icon {
+        width: 34px;
+        height: 34px;
+    }
+    .horae-message-panel.horae-layout-glass .horae-panel-actions button {
+        width: 32px;
+        height: 32px;
+    }
+    /* 触屏没有 hover，删除按钮恒显避免误删却找不到 */
+    .horae-message-panel.horae-layout-glass .horae-editor-row .horae-delete-btn {
+        opacity: 0.6;
+        transform: none;
+    }
+    .horae-message-panel.horae-layout-glass .horae-panel-row.full-width
+        > [class^="horae-btn-add-"] {
+        position: static;
+        margin-top: 6px;
+        align-self: flex-start;
+    }
+}
+
+/* === Horae 抽屉：玻璃布局 ===
+   沿用楼层面板的设计 token；仅状态页 + 设置页玻璃化，数据密集页（时间线/角色/物品/场景/RPG）
+   保留经典清晰排版，避免合成层暴增与扫读对比度回退。
+   选择器全部以 #horae_drawer_content.horae-layout-glass 限定，避免外溢污染酒馆全局。 */
+/* 抽屉浮在 #chat 主体上方，背后是高密度文字；外壳需高不透明度保证可读，
+   靠 backdrop-filter + 内层 section 半透明承担玻璃质感 */
+#horae_drawer_content.horae-layout-glass {
+    --hg-bg: color-mix(in srgb, var(--horae-bg) 60%, transparent);
+    --hg-bg-strong: color-mix(in srgb, var(--horae-bg) 78%, transparent);
+    --hg-bg-sunk: color-mix(in srgb, var(--horae-bg) 88%, transparent);
+    --hg-stroke: color-mix(in srgb, var(--horae-primary-light) 22%, transparent);
+    --hg-stroke-strong: color-mix(in srgb, var(--horae-primary-light) 38%, transparent);
+    --hg-glow: color-mix(in srgb, var(--horae-primary) 18%, transparent);
+    --hg-shadow-drop: 0 6px 14px -6px rgba(0, 0, 0, 0.42), 0 -1px 1px 0 rgba(255, 255, 255, 0.04);
+    --hg-shadow-drop-sm: 0 3px 8px -4px rgba(0, 0, 0, 0.35), 0 -1px 1px 0 rgba(255, 255, 255, 0.03);
+    --hg-shadow-inset: inset 3px 3px 6px rgba(0, 0, 0, 0.32), inset -2px -2px 5px rgba(255, 255, 255, 0.04);
+    --hg-shadow-inset-sm: inset 2px 2px 4px rgba(0, 0, 0, 0.26), inset -1px -1px 3px rgba(255, 255, 255, 0.035);
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--horae-bg) 94%, transparent) 0%,
+        color-mix(in srgb, var(--horae-bg) 90%, transparent) 100%);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+/* 浅色主题改用低对比阴影组，避免发灰 */
+#horae_drawer.horae-light #horae_drawer_content.horae-layout-glass {
+    --hg-shadow-drop: 0 6px 14px -6px rgba(0, 0, 0, 0.18), 0 -1px 1px 0 rgba(255, 255, 255, 0.6);
+    --hg-shadow-drop-sm: 0 3px 8px -4px rgba(0, 0, 0, 0.14), 0 -1px 1px 0 rgba(255, 255, 255, 0.5);
+    --hg-shadow-inset: inset 3px 3px 6px rgba(0, 0, 0, 0.12), inset -2px -2px 5px rgba(255, 255, 255, 0.7);
+    --hg-shadow-inset-sm: inset 2px 2px 4px rgba(0, 0, 0, 0.08), inset -1px -1px 3px rgba(255, 255, 255, 0.55);
+}
+
+/* ---------- 抽屉头部 ---------- */
+#horae_drawer_content.horae-layout-glass .drawer-header {
+    background: linear-gradient(180deg,
+        color-mix(in srgb, var(--horae-primary) 12%, transparent),
+        transparent);
+    border-bottom: 1px solid var(--hg-stroke);
+}
+
+/* ---------- 标签切换器：active 提起、inactive 透明 ---------- */
+#horae_drawer_content.horae-layout-glass .horae-tabs {
+    background: color-mix(in srgb, var(--horae-bg-secondary) 80%, transparent);
+    border-bottom: 1px solid var(--hg-stroke);
+    padding: 6px 8px 0;
+    gap: 4px;
+}
+#horae_drawer_content.horae-layout-glass .horae-tab {
+    border-radius: 10px 10px 0 0;
+    border-bottom: 2px solid transparent;
+    transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+#horae_drawer_content.horae-layout-glass .horae-tab:hover {
+    background: color-mix(in srgb, var(--horae-bg) 75%, transparent);
+}
+#horae_drawer_content.horae-layout-glass .horae-tab.active {
+    background: linear-gradient(180deg,
+        color-mix(in srgb, var(--horae-bg) 92%, transparent),
+        color-mix(in srgb, var(--horae-bg) 80%, transparent));
+    color: var(--horae-primary-light);
+    border-bottom-color: transparent;
+    box-shadow: var(--hg-shadow-drop-sm);
+}
+
+/* ---------- 标签内容外层：透明，由内部 section 各自承载玻璃 ---------- */
+#horae_drawer_content.horae-layout-glass .horae-tab-contents {
+    background: transparent;
+}
+#horae_drawer_content.horae-layout-glass .horae-tab-content {
+    padding: 16px 14px;
+}
+
+/* ---------- 状态页：每个 state-section 独立玻璃凹陷 ----------
+   仅作用于 #horae-tab-status 范围，其他 tab（如时间线、RPG）若复用了 .horae-section-header
+   也不会被波及 */
+#horae_drawer_content.horae-layout-glass #horae-tab-status .horae-state-section {
+    background: color-mix(in srgb, var(--horae-bg) 55%, transparent);
+    border: 1px solid var(--hg-stroke);
+    border-radius: 14px;
+    box-shadow: var(--hg-shadow-drop-sm);
+    padding: 14px 16px;
+    margin-bottom: 12px;
+}
+#horae_drawer_content.horae-layout-glass #horae-tab-status .horae-state-section:last-child {
+    margin-bottom: 0;
+}
+#horae_drawer_content.horae-layout-glass #horae-tab-status .horae-section-header {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    color: var(--horae-text);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid color-mix(in srgb, var(--horae-border) 55%, transparent);
+}
+#horae_drawer_content.horae-layout-glass #horae-tab-status .horae-section-header i {
+    color: var(--horae-primary-light);
+}
+
+/* ---------- 设置页：以「设置大组」为玻璃容器，单项无独立背景避免视觉碎屑 ---------- */
+#horae_drawer_content.horae-layout-glass #horae-tab-settings .horae-settings-section {
+    background: color-mix(in srgb, var(--horae-bg) 55%, transparent);
+    border: 1px solid var(--hg-stroke);
+    border-radius: 14px;
+    box-shadow: var(--hg-shadow-inset-sm);
+    padding: 14px 16px;
+    margin-bottom: 12px;
+}
+#horae_drawer_content.horae-layout-glass #horae-tab-settings .horae-settings-section:last-child {
+    margin-bottom: 0;
+}
+#horae_drawer_content.horae-layout-glass #horae-tab-settings .horae-section-header {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    color: var(--horae-text);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid color-mix(in srgb, var(--horae-border) 55%, transparent);
+}
+#horae_drawer_content.horae-layout-glass #horae-tab-settings .horae-section-header i {
+    color: var(--horae-primary-light);
+}
+#horae_drawer_content.horae-layout-glass #horae-tab-settings .horae-setting-item {
+    padding: 8px 0;
+    border-bottom: 1px dashed color-mix(in srgb, var(--horae-border) 45%, transparent);
+    margin-bottom: 0;
+}
+#horae_drawer_content.horae-layout-glass #horae-tab-settings .horae-setting-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+#horae_drawer_content.horae-layout-glass #horae-tab-settings .horae-setting-item:first-child {
+    padding-top: 0;
+}
+
+/* ---------- 设置页 / 状态页输入元素：与楼层面板一致的静态化观感 ----------
+   交互可见度比楼层面板更重要（设置项操作频繁），hover/focus 保留明显边框 */
+#horae_drawer_content.horae-layout-glass #horae-tab-status input[type="text"],
+#horae_drawer_content.horae-layout-glass #horae-tab-status input[type="number"],
+#horae_drawer_content.horae-layout-glass #horae-tab-status select,
+#horae_drawer_content.horae-layout-glass #horae-tab-settings input[type="text"],
+#horae_drawer_content.horae-layout-glass #horae-tab-settings input[type="number"],
+#horae_drawer_content.horae-layout-glass #horae-tab-settings input[type="password"],
+#horae_drawer_content.horae-layout-glass #horae-tab-settings select,
+#horae_drawer_content.horae-layout-glass #horae-tab-settings textarea {
+    background: color-mix(in srgb, var(--horae-bg) 70%, transparent) !important;
+    border: 1px solid color-mix(in srgb, var(--horae-border) 60%, transparent) !important;
+    border-radius: 8px !important;
+    color: var(--horae-text) !important;
+    transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+#horae_drawer_content.horae-layout-glass #horae-tab-status input[type="text"]:focus,
+#horae_drawer_content.horae-layout-glass #horae-tab-status input[type="number"]:focus,
+#horae_drawer_content.horae-layout-glass #horae-tab-status select:focus,
+#horae_drawer_content.horae-layout-glass #horae-tab-settings input[type="text"]:focus,
+#horae_drawer_content.horae-layout-glass #horae-tab-settings input[type="number"]:focus,
+#horae_drawer_content.horae-layout-glass #horae-tab-settings input[type="password"]:focus,
+#horae_drawer_content.horae-layout-glass #horae-tab-settings select:focus,
+#horae_drawer_content.horae-layout-glass #horae-tab-settings textarea:focus {
+    background: color-mix(in srgb, var(--horae-bg) 85%, transparent) !important;
+    border-color: var(--hg-stroke-strong) !important;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--horae-primary) 14%, transparent) !important;
+    outline: none !important;
+}
+
+/* ---------- 移动端 ---------- */
+@media (max-width: 768px) {
+    #horae_drawer_content.horae-layout-glass .horae-tab-content {
+        padding: 12px 10px;
+    }
+    #horae_drawer_content.horae-layout-glass #horae-tab-status .horae-state-section,
+    #horae_drawer_content.horae-layout-glass #horae-tab-settings .horae-settings-section {
+        padding: 12px 12px;
+        border-radius: 12px;
+    }
+}
+
+/* ============================================================
+   曜石简约（Obsidian Minimal）布局
+   设计语言：实色背景、2px 厚边框、胶囊 tab、Neo-brutalism 硬投影、左侧事件色条。
+   颜色全部走 var(--horae-*) 主题变量，硬投影固定走黑色组（深/浅各一档）跟日夜切，不跟主题色。
+   选择器以 .horae-layout-obsidian 限定，与 classic / glass 互斥，默认布局零干扰。
+   ============================================================ */
+
+.horae-message-panel.horae-layout-obsidian,
+#horae_drawer_content.horae-layout-obsidian {
+    --ob-bg: var(--horae-bg);
+    --ob-bg-panel: var(--horae-bg-secondary);
+    --ob-bg-card: color-mix(in srgb, var(--horae-bg-secondary) 65%, var(--horae-bg-hover));
+    --ob-bg-hover: var(--horae-bg-hover);
+    --ob-border: var(--horae-border);
+    --ob-border-focus: var(--horae-primary-light);
+    --ob-text-dim: color-mix(in srgb, var(--horae-text-muted) 70%, transparent);
+    --ob-shadow: 0 4px 0 rgba(0, 0, 0, 0.20);
+    --ob-shadow-sm: 0 2px 0 rgba(0, 0, 0, 0.15);
+    --ob-shadow-lg: 0 8px 0 rgba(0, 0, 0, 0.22);
+    --ob-radius-pill: 999px;
+    --ob-mono: ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", Consolas, Menlo, monospace;
+}
+/* 浅色主题用低对比投影组 */
+.horae-message-panel.horae-layout-obsidian.horae-light,
+#horae_drawer.horae-light #horae_drawer_content.horae-layout-obsidian {
+    --ob-shadow: 0 4px 0 rgba(0, 0, 0, 0.08);
+    --ob-shadow-sm: 0 2px 0 rgba(0, 0, 0, 0.06);
+    --ob-shadow-lg: 0 8px 0 rgba(0, 0, 0, 0.10);
+}
+
+/* ============================================================
+   楼层面板：曜石简约
+   ============================================================ */
+.horae-message-panel.horae-layout-obsidian {
+    background: var(--ob-bg);
+    border: 2px solid var(--ob-border);
+    border-radius: 20px;
+    overflow: hidden;
+    margin: 8px 0 16px;
+    box-shadow: var(--ob-shadow-lg);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+/* 事件等级左色条：一般 / 重要 走主色族（跟着主题变），关键保留红色作语义警示。
+   原本「重要」走 --horae-warning 是固定橙黄语义色，跟紫/蓝/粉等主题主色调不搭。 */
+.horae-message-panel.horae-layout-obsidian[data-level="normal"] { border-left: 6px solid var(--horae-primary-light); }
+.horae-message-panel.horae-layout-obsidian[data-level="important"] { border-left: 6px solid var(--horae-primary); }
+.horae-message-panel.horae-layout-obsidian[data-level="critical"] { border-left: 6px solid var(--horae-danger); }
+
+/* ---------- 头部 toggle ---------- */
+.horae-message-panel.horae-layout-obsidian .horae-panel-toggle {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    background: var(--ob-bg-panel);
+    border-bottom: 2px solid var(--ob-border);
+    cursor: pointer;
+    transition: background 0.18s ease;
+}
+.horae-message-panel.horae-layout-obsidian .horae-panel-toggle:hover {
+    background: var(--ob-bg-card);
+}
+.horae-message-panel.horae-layout-obsidian .horae-panel-icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--ob-bg-card);
+    border-radius: var(--ob-radius-pill);
+    color: var(--horae-primary-light);
+    font-size: 15px;
+    flex-shrink: 0;
+}
+.horae-message-panel.horae-layout-obsidian .horae-panel-summary {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow: hidden;
+}
+.horae-message-panel.horae-layout-obsidian .horae-summary-time {
+    font-family: var(--ob-mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--horae-text-muted);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.horae-message-panel.horae-layout-obsidian .horae-summary-event {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--horae-text);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.horae-message-panel.horae-layout-obsidian .horae-summary-divider,
+.horae-message-panel.horae-layout-obsidian .horae-summary-chars {
+    display: none;
+}
+.horae-message-panel.horae-layout-obsidian .horae-panel-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+.horae-message-panel.horae-layout-obsidian .horae-panel-actions button {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    background: var(--ob-bg-card) !important;
+    border: 2px solid var(--ob-border) !important;
+    color: var(--horae-text-muted) !important;
+}
+.horae-message-panel.horae-layout-obsidian .horae-panel-actions button:hover {
+    background: var(--ob-bg-hover) !important;
+    color: var(--horae-text) !important;
+}
+
+/* ---------- 内容容器 ---------- */
+.horae-message-panel.horae-layout-obsidian .horae-panel-content {
+    padding: 18px;
+    background: var(--ob-bg);
+    border-top: none;
+}
+.horae-message-panel.horae-layout-obsidian .horae-panel-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* ---------- panel-row：每行一张实色卡 ---------- */
+.horae-message-panel.horae-layout-obsidian .horae-panel-row {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px 14px;
+    background: var(--ob-bg-panel);
+    border: 2px solid transparent;
+    border-radius: 12px;
+    transition: border-color 0.18s ease;
+}
+.horae-message-panel.horae-layout-obsidian .horae-panel-row:focus-within {
+    border-color: var(--ob-border-focus);
+}
+.horae-message-panel.horae-layout-obsidian .horae-panel-row > label {
+    min-width: 0;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--horae-text-muted);
+    white-space: nowrap;
+}
+.horae-message-panel.horae-layout-obsidian .horae-panel-row > label i {
+    color: var(--horae-primary-light);
+}
+.horae-message-panel.horae-layout-obsidian .horae-panel-value {
+    flex: 1 1 0;
+    min-width: 0;
+    width: 100%;
+    display: flex;
+    gap: 8px;
+}
+.horae-message-panel.horae-layout-obsidian .horae-panel-row.full-width {
+    /* full-width 行同样走卡片化，add 按钮回归 normal flow */
+}
+.horae-message-panel.horae-layout-obsidian .horae-panel-row.full-width > [class^="horae-btn-add-"] {
+    align-self: flex-start;
+}
+
+/* ---------- 输入元素：实体化 ---------- */
+.horae-message-panel.horae-layout-obsidian input[type="text"],
+.horae-message-panel.horae-layout-obsidian input[type="number"],
+.horae-message-panel.horae-layout-obsidian select,
+.horae-message-panel.horae-layout-obsidian textarea {
+    width: 100%;
+    min-width: 0;
+    padding: 10px 14px !important;
+    background: var(--ob-bg-card) !important;
+    border: 2px solid var(--ob-border) !important;
+    border-radius: 10px !important;
+    color: var(--horae-text) !important;
+    font-size: 13px;
+    font-weight: 500;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+.horae-message-panel.horae-layout-obsidian input[type="text"]:focus,
+.horae-message-panel.horae-layout-obsidian input[type="number"]:focus,
+.horae-message-panel.horae-layout-obsidian select:focus,
+.horae-message-panel.horae-layout-obsidian textarea:focus {
+    outline: none !important;
+    background: var(--ob-bg-hover) !important;
+    border-color: var(--ob-border-focus) !important;
+}
+.horae-message-panel.horae-layout-obsidian input::placeholder,
+.horae-message-panel.horae-layout-obsidian textarea::placeholder {
+    color: var(--ob-text-dim);
+}
+
+/* ---------- editor-row：紧凑横排 + wrap 兜底 ---------- */
+.horae-message-panel.horae-layout-obsidian .horae-editor-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0;
+    background: transparent;
+}
+.horae-message-panel.horae-layout-obsidian .horae-editor-row > input {
+    min-width: 0;
+    flex: 1 1 120px;
+}
+
+/* event-editor：select 用作"重要性"标签，固定窄宽；input 占剩余空间。
+   覆盖通用 input/select 的 width:100% !important，否则 select 撑爆挤掉 input */
+.horae-message-panel.horae-layout-obsidian .horae-event-editor {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+.horae-message-panel.horae-layout-obsidian .horae-event-editor > select {
+    flex: 0 0 auto;
+    width: auto !important;
+    min-width: 96px;
+    max-width: 50%;
+}
+.horae-message-panel.horae-layout-obsidian .horae-event-editor > input {
+    flex: 1 1 140px;
+    min-width: 0;
+    width: auto !important;
+}
+.horae-message-panel.horae-layout-obsidian .horae-delete-btn {
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    background: var(--ob-bg-card) !important;
+    border: 2px solid var(--ob-border) !important;
+    border-radius: 8px !important;
+    color: var(--horae-text-muted) !important;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.horae-message-panel.horae-layout-obsidian .horae-delete-btn:hover {
+    background: var(--horae-danger) !important;
+    border-color: var(--horae-danger) !important;
+    color: var(--ob-bg) !important;
+}
+
+/* ---------- 重扫提示区 ---------- */
+.horae-message-panel.horae-layout-obsidian .horae-panel-rescan {
+    margin-top: 14px;
+    padding: 12px 14px;
+    background: var(--ob-bg-panel);
+    border: 2px solid var(--ob-border);
+    border-radius: 12px;
+}
+.horae-message-panel.horae-layout-obsidian .horae-panel-rescan .horae-btn {
+    border-radius: var(--ob-radius-pill) !important;
+    padding: 6px 14px !important;
+    background: var(--ob-bg-card) !important;
+    border: 2px solid var(--ob-border) !important;
+    color: var(--horae-text) !important;
+    box-shadow: var(--ob-shadow-sm);
+    font-weight: 700;
+}
+.horae-message-panel.horae-layout-obsidian .horae-panel-rescan .horae-btn:hover {
+    background: var(--ob-bg-hover) !important;
+}
+.horae-message-panel.horae-layout-obsidian .horae-panel-rescan .horae-btn-ai-analyze {
+    background: var(--horae-primary) !important;
+    border-color: var(--horae-primary) !important;
+    color: var(--ob-bg) !important;
+    box-shadow: 0 2px 0 var(--horae-primary-dark);
+}
+.horae-message-panel.horae-layout-obsidian .horae-panel-rescan .horae-btn-ai-analyze:hover {
+    background: var(--horae-primary-light) !important;
+    border-color: var(--horae-primary-light) !important;
+}
+
+/* ---------- footer：Neo-brutalism 按钮组 ---------- */
+.horae-message-panel.horae-layout-obsidian .horae-panel-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 16px;
+    padding: 16px 18px;
+    border-top: 2px solid var(--ob-border);
+    background: var(--ob-bg-panel);
+    align-items: center;
+}
+.horae-message-panel.horae-layout-obsidian .horae-panel-footer .horae-btn {
+    padding: 8px 16px !important;
+    background: var(--ob-bg-card) !important;
+    border: 2px solid var(--ob-border) !important;
+    border-radius: 10px !important;
+    color: var(--horae-text) !important;
+    font-weight: 700;
+    box-shadow: var(--ob-shadow-sm);
+    transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.15s ease;
+}
+.horae-message-panel.horae-layout-obsidian .horae-panel-footer .horae-btn:hover {
+    background: var(--ob-bg-hover) !important;
+    transform: translateY(-1px);
+    box-shadow: var(--ob-shadow);
+}
+.horae-message-panel.horae-layout-obsidian .horae-panel-footer .horae-btn:active {
+    transform: translateY(2px);
+    box-shadow: none;
+}
+/* 保存键用主色填充，硬投影统一走纯黑 ob-shadow-sm；hover/active 复用上面 footer .horae-btn 的位移逻辑 */
+.horae-message-panel.horae-layout-obsidian .horae-btn-save {
+    background: var(--horae-success) !important;
+    border-color: var(--horae-success) !important;
+    color: var(--ob-bg) !important;
+    box-shadow: var(--ob-shadow-sm) !important;
+}
+.horae-message-panel.horae-layout-obsidian .horae-btn-save:hover {
+    background: color-mix(in srgb, var(--horae-success) 85%, white) !important;
+    box-shadow: var(--ob-shadow) !important;
+}
+.horae-message-panel.horae-layout-obsidian .horae-btn-cancel {
+    color: var(--horae-text-muted) !important;
+}
+.horae-message-panel.horae-layout-obsidian .horae-btn-open-drawer {
+    margin-left: auto;
+    color: var(--horae-primary-light) !important;
+}
+
+/* ============================================================
+   抽屉：曜石简约
+   ============================================================ */
+#horae_drawer_content.horae-layout-obsidian {
+    background: var(--ob-bg);
+}
+
+#horae_drawer_content.horae-layout-obsidian .drawer-header {
+    background: var(--ob-bg-panel);
+    border-bottom: 2px solid var(--ob-border);
+    padding: 16px 20px;
+}
+#horae_drawer_content.horae-layout-obsidian .horae-title {
+    color: var(--horae-primary-light);
+    font-weight: 700;
+}
+
+/* ---------- tabs：胶囊分段控制器 ---------- */
+#horae_drawer_content.horae-layout-obsidian .horae-tabs {
+    display: flex;
+    gap: 8px;
+    padding: 14px 16px;
+    background: var(--ob-bg);
+    border-bottom: 2px solid var(--ob-border);
+    overflow-x: auto;
+}
+#horae_drawer_content.horae-layout-obsidian .horae-tab {
+    flex: 1;
+    min-width: 64px;
+    padding: 9px 12px;
+    background: var(--ob-bg-panel);
+    border: 2px solid transparent;
+    border-radius: var(--ob-radius-pill);
+    color: var(--horae-text-muted);
+    font-size: 12px;
+    font-weight: 700;
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+#horae_drawer_content.horae-layout-obsidian .horae-tab:hover {
+    background: var(--ob-bg-card);
+    color: var(--horae-text);
+}
+#horae_drawer_content.horae-layout-obsidian .horae-tab.active {
+    background: var(--horae-primary);
+    color: var(--ob-bg);
+    border-bottom-color: transparent;
+    box-shadow: var(--ob-shadow-sm);
+}
+
+#horae_drawer_content.horae-layout-obsidian .horae-tab-contents {
+    background: var(--ob-bg);
+}
+#horae_drawer_content.horae-layout-obsidian .horae-tab-content {
+    padding: 18px 16px;
+}
+
+/* ---------- 状态页：state-section 实色卡 ---------- */
+#horae_drawer_content.horae-layout-obsidian #horae-tab-status .horae-state-section {
+    background: var(--ob-bg-panel);
+    border: 2px solid var(--ob-border);
+    border-radius: 16px;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+}
+#horae_drawer_content.horae-layout-obsidian #horae-tab-status .horae-state-section:last-child {
+    margin-bottom: 0;
+}
+#horae_drawer_content.horae-layout-obsidian #horae-tab-status .horae-section-header {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    color: var(--horae-text);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--ob-border);
+}
+#horae_drawer_content.horae-layout-obsidian #horae-tab-status .horae-section-header i {
+    color: var(--horae-primary-light);
+}
+#horae_drawer_content.horae-layout-obsidian #horae-tab-status .horae-time-display {
+    background: var(--ob-bg-card);
+    border: 2px solid transparent;
+    border-radius: 12px;
+    padding: 14px;
+    font-family: var(--ob-mono);
+    transition: border-color 0.15s ease;
+}
+#horae_drawer_content.horae-layout-obsidian #horae-tab-status .horae-time-display:hover {
+    border-color: var(--ob-border-focus);
+}
+#horae_drawer_content.horae-layout-obsidian #horae-tab-status #horae-current-date {
+    color: var(--horae-accent);
+    font-weight: 600;
+}
+#horae_drawer_content.horae-layout-obsidian #horae-tab-status #horae-current-time {
+    color: var(--horae-text);
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+#horae_drawer_content.horae-layout-obsidian #horae-tab-status .horae-location-display {
+    background: var(--ob-bg-card);
+    border-radius: 12px;
+    padding: 14px;
+    font-weight: 500;
+}
+#horae_drawer_content.horae-layout-obsidian #horae-tab-status .horae-atmosphere-badge {
+    background: var(--horae-info);
+    color: var(--ob-bg);
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: var(--ob-radius-pill);
+    font-weight: 700;
+}
+
+/* ---------- 设置页：settings-section 实色卡 ---------- */
+#horae_drawer_content.horae-layout-obsidian #horae-tab-settings .horae-settings-section {
+    background: var(--ob-bg-panel);
+    border: 2px solid var(--ob-border);
+    border-radius: 16px;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+}
+#horae_drawer_content.horae-layout-obsidian #horae-tab-settings .horae-settings-section:last-child {
+    margin-bottom: 0;
+}
+#horae_drawer_content.horae-layout-obsidian #horae-tab-settings .horae-section-header {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    color: var(--horae-text);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--ob-border);
+}
+#horae_drawer_content.horae-layout-obsidian #horae-tab-settings .horae-section-header i {
+    color: var(--horae-primary-light);
+}
+#horae_drawer_content.horae-layout-obsidian #horae-tab-settings .horae-setting-item {
+    padding: 10px 0;
+    margin-bottom: 0;
+    border-bottom: 2px solid color-mix(in srgb, var(--ob-border) 55%, transparent);
+}
+#horae_drawer_content.horae-layout-obsidian #horae-tab-settings .horae-setting-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+#horae_drawer_content.horae-layout-obsidian #horae-tab-settings .horae-setting-item:first-child {
+    padding-top: 0;
+}
+
+/* ---------- 状态/设置页输入元素：与楼层面板一致 ---------- */
+#horae_drawer_content.horae-layout-obsidian #horae-tab-status input[type="text"],
+#horae_drawer_content.horae-layout-obsidian #horae-tab-status input[type="number"],
+#horae_drawer_content.horae-layout-obsidian #horae-tab-status select,
+#horae_drawer_content.horae-layout-obsidian #horae-tab-settings input[type="text"],
+#horae_drawer_content.horae-layout-obsidian #horae-tab-settings input[type="number"],
+#horae_drawer_content.horae-layout-obsidian #horae-tab-settings input[type="password"],
+#horae_drawer_content.horae-layout-obsidian #horae-tab-settings select,
+#horae_drawer_content.horae-layout-obsidian #horae-tab-settings textarea {
+    background: var(--ob-bg-card) !important;
+    border: 2px solid var(--ob-border) !important;
+    border-radius: 10px !important;
+    color: var(--horae-text) !important;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+#horae_drawer_content.horae-layout-obsidian #horae-tab-status input[type="text"]:focus,
+#horae_drawer_content.horae-layout-obsidian #horae-tab-status input[type="number"]:focus,
+#horae_drawer_content.horae-layout-obsidian #horae-tab-status select:focus,
+#horae_drawer_content.horae-layout-obsidian #horae-tab-settings input[type="text"]:focus,
+#horae_drawer_content.horae-layout-obsidian #horae-tab-settings input[type="number"]:focus,
+#horae_drawer_content.horae-layout-obsidian #horae-tab-settings input[type="password"]:focus,
+#horae_drawer_content.horae-layout-obsidian #horae-tab-settings select:focus,
+#horae_drawer_content.horae-layout-obsidian #horae-tab-settings textarea:focus {
+    background: var(--ob-bg-hover) !important;
+    border-color: var(--ob-border-focus) !important;
+    outline: none !important;
+}
+
+/* ---------- 移动端 ---------- */
+@media (max-width: 768px) {
+    .horae-message-panel.horae-layout-obsidian .horae-panel-toggle {
+        padding: 12px 14px;
+    }
+    .horae-message-panel.horae-layout-obsidian .horae-panel-content {
+        padding: 14px;
+    }
+    .horae-message-panel.horae-layout-obsidian .horae-panel-footer {
+        padding: 12px 14px;
+    }
+    #horae_drawer_content.horae-layout-obsidian .horae-tab-content {
+        padding: 14px 12px;
+    }
+    #horae_drawer_content.horae-layout-obsidian #horae-tab-status .horae-state-section,
+    #horae_drawer_content.horae-layout-obsidian #horae-tab-settings .horae-settings-section {
+        padding: 14px;
+        border-radius: 14px;
+    }
+}
+
+/* ============================================================
+   赛博朋克布局
+   ============================================================ */
+
+.horae-message-panel.horae-layout-cyber,
+#horae_drawer_content.horae-layout-cyber {
+    --cb-bg: var(--horae-bg);
+    --cb-bg-panel: color-mix(in srgb, var(--horae-bg) 90%, #000);
+    --cb-bg-sink: color-mix(in srgb, var(--horae-bg) 50%, #000);
+    --cb-bg-card: color-mix(in srgb, var(--horae-primary) 6%, var(--horae-bg));
+    --cb-border: color-mix(in srgb, var(--horae-primary) 32%, transparent);
+    --cb-border-strong: var(--horae-primary);
+    --cb-text: var(--horae-text);
+    --cb-text-muted: var(--horae-text-muted);
+    --cb-text-dim: color-mix(in srgb, var(--horae-text-muted) 55%, transparent);
+    --cb-accent: var(--horae-accent);
+    --cb-glow: color-mix(in srgb, var(--horae-primary) 28%, transparent);
+
+    --cb-clip-drawer: polygon(0 0, calc(100% - 30px) 0, 100% 30px, 100% 100%, 30px 100%, 0 calc(100% - 30px));
+    --cb-clip-panel: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 0 100%);
+    --cb-clip-btn: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+    --cb-clip-tab: polygon(10px 0, calc(100% - 10px) 0, 100% 100%, 0 100%);
+
+    --cb-font-title: 'Orbitron', 'Eurostile', 'Bank Gothic', 'Trebuchet MS', 'Microsoft JhengHei', sans-serif;
+    --cb-font-mono: 'Share Tech Mono', 'JetBrains Mono', 'Cascadia Code', Consolas, Menlo, monospace;
+}
+
+/* ============================================================
+   楼层面板：赛博朋克
+   ============================================================ */
+.horae-message-panel.horae-layout-cyber {
+    background: var(--cb-bg-panel);
+    clip-path: var(--cb-clip-panel);
+    margin: 8px 0 16px;
+    position: relative;
+    overflow: visible;
+    border: none;
+    transition: filter 0.18s ease;
+}
+/* clip-path 会裁掉 box-shadow，改用 ::before 描边 */
+.horae-message-panel.horae-layout-cyber::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--cb-border);
+    clip-path: var(--cb-clip-panel);
+    pointer-events: none;
+    z-index: 1;
+    transition: border-color 0.18s ease;
+}
+.horae-message-panel.horae-layout-cyber:hover::before {
+    border-color: var(--cb-border-strong);
+}
+/* 事件等级配色 */
+.horae-message-panel.horae-layout-cyber[data-level="normal"] { --cb-panel-color: var(--horae-primary); }
+.horae-message-panel.horae-layout-cyber[data-level="important"] { --cb-panel-color: var(--horae-warning); }
+.horae-message-panel.horae-layout-cyber[data-level="critical"] { --cb-panel-color: var(--horae-danger); }
+
+/* ---------- 头部 toggle ---------- */
+.horae-message-panel.horae-layout-cyber .horae-panel-toggle {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 18px;
+    background: color-mix(in srgb, var(--cb-bg) 50%, #000);
+    border-bottom: 1px dashed var(--cb-border);
+    cursor: pointer;
+    position: relative;
+    z-index: 2;
+}
+.horae-message-panel.horae-layout-cyber .horae-panel-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 0 !important;
+    background: color-mix(in srgb, #fff 4%, transparent) !important;
+    border: 1px solid var(--cb-panel-color, var(--horae-primary)) !important;
+    color: var(--cb-panel-color, var(--horae-primary)) !important;
+    position: relative;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+/* 用 ">_" 终端提示符替换原图标 */
+.horae-message-panel.horae-layout-cyber .horae-panel-icon > i {
+    display: none;
+}
+.horae-message-panel.horae-layout-cyber .horae-panel-icon::before {
+    content: ">_";
+    font-family: var(--cb-font-mono);
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--cb-panel-color, var(--horae-primary));
+    letter-spacing: -1px;
+    line-height: 1;
+}
+/* 右下角装饰方块 */
+.horae-message-panel.horae-layout-cyber .horae-panel-icon::after {
+    content: '';
+    position: absolute;
+    bottom: -3px;
+    right: -3px;
+    width: 6px;
+    height: 6px;
+    background: var(--cb-panel-color, var(--horae-primary));
+}
+.horae-message-panel.horae-layout-cyber .horae-panel-summary {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    overflow: hidden;
+}
+.horae-message-panel.horae-layout-cyber .horae-summary-time {
+    font-family: var(--cb-font-mono);
+    font-size: 12px;
+    color: var(--cb-panel-color, var(--horae-primary));
+    letter-spacing: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.horae-message-panel.horae-layout-cyber .horae-summary-event {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--cb-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.horae-message-panel.horae-layout-cyber .horae-summary-divider,
+.horae-message-panel.horae-layout-cyber .horae-summary-chars {
+    display: none;
+}
+.horae-message-panel.horae-layout-cyber .horae-panel-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+.horae-message-panel.horae-layout-cyber .horae-panel-actions button {
+    width: 30px;
+    height: 30px;
+    border-radius: 0 !important;
+    clip-path: var(--cb-clip-btn);
+    background: transparent !important;
+    border: 1px solid var(--cb-border) !important;
+    color: var(--cb-text-muted) !important;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.horae-message-panel.horae-layout-cyber .horae-panel-actions button:hover {
+    background: color-mix(in srgb, var(--horae-primary) 12%, transparent) !important;
+    border-color: var(--horae-primary) !important;
+    color: var(--horae-primary) !important;
+}
+
+/* ---------- 内容容器 ---------- */
+.horae-message-panel.horae-layout-cyber .horae-panel-content {
+    padding: 18px;
+    background: transparent;
+    border-top: none;
+    position: relative;
+    z-index: 2;
+}
+.horae-message-panel.horae-layout-cyber .horae-panel-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* ---------- panel-row：行式排版 ---------- */
+.horae-message-panel.horae-layout-cyber .horae-panel-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.horae-message-panel.horae-layout-cyber .horae-panel-row > label {
+    flex: 0 0 auto;
+    min-width: 80px;
+    font-family: var(--cb-font-title);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--cb-text-muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+.horae-message-panel.horae-layout-cyber .horae-panel-row > label i {
+    color: var(--horae-primary);
+}
+.horae-message-panel.horae-layout-cyber .horae-panel-value {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    gap: 8px;
+}
+.horae-message-panel.horae-layout-cyber .horae-panel-row.full-width {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+/* ---------- 终端输入框 ---------- */
+.horae-message-panel.horae-layout-cyber input[type="text"],
+.horae-message-panel.horae-layout-cyber input[type="number"],
+.horae-message-panel.horae-layout-cyber select,
+.horae-message-panel.horae-layout-cyber textarea {
+    width: 100%;
+    min-width: 0;
+    padding: 8px 12px !important;
+    background: var(--cb-bg-sink) !important;
+    border: 1px solid var(--cb-border) !important;
+    border-bottom: 2px solid color-mix(in srgb, var(--horae-primary) 55%, transparent) !important;
+    border-radius: 0 !important;
+    color: var(--cb-text) !important;
+    font-family: var(--cb-font-mono);
+    font-size: 13px;
+    transition: background 0.18s, border-color 0.18s, box-shadow 0.18s;
+}
+.horae-message-panel.horae-layout-cyber input[type="text"]:focus,
+.horae-message-panel.horae-layout-cyber input[type="number"]:focus,
+.horae-message-panel.horae-layout-cyber select:focus,
+.horae-message-panel.horae-layout-cyber textarea:focus {
+    outline: none !important;
+    background: color-mix(in srgb, var(--horae-primary) 5%, var(--cb-bg-sink)) !important;
+    border-color: var(--horae-primary) !important;
+    border-bottom-color: var(--horae-primary) !important;
+    box-shadow: 0 4px 10px -5px var(--horae-primary) !important;
+}
+.horae-message-panel.horae-layout-cyber input::placeholder,
+.horae-message-panel.horae-layout-cyber textarea::placeholder {
+    color: var(--cb-text-dim) !important;
+}
+
+/* ---------- editor-row / event-editor / 删除键 ---------- */
+.horae-message-panel.horae-layout-cyber .horae-editor-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    background: transparent;
+}
+.horae-message-panel.horae-layout-cyber .horae-editor-row > input {
+    min-width: 0;
+    flex: 1 1 120px;
+}
+.horae-message-panel.horae-layout-cyber .horae-event-editor {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+.horae-message-panel.horae-layout-cyber .horae-event-editor > select {
+    flex: 0 0 auto;
+    width: auto !important;
+    min-width: 96px;
+    max-width: 50%;
+}
+.horae-message-panel.horae-layout-cyber .horae-event-editor > input {
+    flex: 1 1 140px;
+    min-width: 0;
+    width: auto !important;
+}
+.horae-message-panel.horae-layout-cyber .horae-delete-btn {
+    width: 30px;
+    height: 30px;
+    background: transparent !important;
+    border: 1px solid var(--horae-danger) !important;
+    color: var(--horae-danger) !important;
+    border-radius: 0 !important;
+    clip-path: var(--cb-clip-btn);
+    flex-shrink: 0;
+    transition: background 0.15s, color 0.15s;
+}
+.horae-message-panel.horae-layout-cyber .horae-delete-btn:hover {
+    background: var(--horae-danger) !important;
+    color: var(--cb-bg) !important;
+}
+
+/* ---------- 重扫提示区 + footer 按钮 ---------- */
+.horae-message-panel.horae-layout-cyber .horae-panel-rescan {
+    margin-top: 14px;
+    padding: 12px 14px;
+    background: color-mix(in srgb, var(--cb-bg) 50%, #000);
+    border: 1px dashed var(--cb-border);
+}
+.horae-message-panel.horae-layout-cyber .horae-panel-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    align-items: center;
+    margin-top: 14px;
+    padding: 14px 18px;
+    background: color-mix(in srgb, var(--cb-bg) 50%, #000);
+    border-top: 1px solid var(--cb-border);
+    position: relative;
+    z-index: 2;
+}
+.horae-message-panel.horae-layout-cyber .horae-panel-footer .horae-btn,
+.horae-message-panel.horae-layout-cyber .horae-panel-rescan .horae-btn {
+    padding: 8px 16px !important;
+    background: transparent !important;
+    border: 1px solid var(--cb-border) !important;
+    color: var(--horae-primary) !important;
+    border-radius: 0 !important;
+    clip-path: var(--cb-clip-btn);
+    font-family: var(--cb-font-title);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: background 0.18s, border-color 0.18s, box-shadow 0.18s, text-shadow 0.18s, color 0.18s;
+}
+.horae-message-panel.horae-layout-cyber .horae-panel-footer .horae-btn:hover,
+.horae-message-panel.horae-layout-cyber .horae-panel-rescan .horae-btn:hover {
+    background: color-mix(in srgb, var(--horae-primary) 12%, transparent) !important;
+    border-color: var(--horae-primary) !important;
+    box-shadow: inset 0 0 10px color-mix(in srgb, var(--horae-primary) 22%, transparent) !important;
+    text-shadow: 0 0 6px color-mix(in srgb, var(--horae-primary) 55%, transparent);
+}
+/* 保存按钮 */
+.horae-message-panel.horae-layout-cyber .horae-btn-save {
+    background: color-mix(in srgb, var(--horae-primary) 80%, #000) !important;
+    border-color: var(--horae-primary) !important;
+    color: #fff !important;
+}
+.horae-message-panel.horae-layout-cyber .horae-btn-save:hover {
+    background: var(--horae-primary) !important;
+    color: var(--cb-bg) !important;
+    box-shadow: 0 0 12px color-mix(in srgb, var(--horae-primary) 60%, transparent) !important;
+    text-shadow: none;
+}
+/* AI 分析按钮 */
+.horae-message-panel.horae-layout-cyber .horae-btn-ai-analyze {
+    background: color-mix(in srgb, var(--cb-accent) 12%, transparent) !important;
+    border-color: var(--cb-accent) !important;
+    color: var(--cb-accent) !important;
+}
+.horae-message-panel.horae-layout-cyber .horae-btn-ai-analyze:hover {
+    background: var(--cb-accent) !important;
+    color: var(--cb-bg) !important;
+    box-shadow: 0 0 12px color-mix(in srgb, var(--cb-accent) 60%, transparent) !important;
+}
+
+/* ============================================================
+   抽屉：赛博朋克
+   顶层只贴背景，切角/发光下沉到内层容器，避免影响 navbar drawer 定位
+   ============================================================ */
+#horae_drawer_content.horae-layout-cyber {
+    background: var(--cb-bg-panel);
+}
+
+/* ---------- drawer header ---------- */
+#horae_drawer_content.horae-layout-cyber .drawer-header {
+    background: linear-gradient(90deg, color-mix(in srgb, var(--horae-primary) 12%, transparent), transparent);
+    border-bottom: 1px solid var(--cb-border);
+    padding: 22px 28px 14px;
+    position: relative;
+}
+/* 顶部装饰线 */
+#horae_drawer_content.horae-layout-cyber .drawer-header::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    height: 2px;
+    width: 30%;
+    background: var(--horae-primary);
+    box-shadow: 0 0 10px var(--horae-primary);
+}
+#horae_drawer_content.horae-layout-cyber .horae-title {
+    font-family: var(--cb-font-title);
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: var(--cb-text);
+}
+#horae_drawer_content.horae-layout-cyber .horae-title i {
+    color: var(--horae-primary);
+}
+
+/* ---------- tabs：梯形终端机风格 ---------- */
+#horae_drawer_content.horae-layout-cyber .horae-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 10px 18px 0;
+    background: var(--cb-bg-sink);
+    border-bottom: 2px solid var(--cb-border);
+    overflow-x: auto;
+}
+#horae_drawer_content.horae-layout-cyber .horae-tab {
+    flex: 1;
+    min-width: 72px;
+    padding: 9px 12px;
+    background: color-mix(in srgb, var(--horae-primary) 5%, transparent);
+    border: none;
+    clip-path: var(--cb-clip-tab);
+    color: var(--cb-text-muted);
+    font-family: var(--cb-font-title);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: background 0.18s, color 0.18s;
+}
+#horae_drawer_content.horae-layout-cyber .horae-tab:hover {
+    background: color-mix(in srgb, var(--horae-primary) 15%, transparent);
+    color: var(--horae-primary-light);
+}
+#horae_drawer_content.horae-layout-cyber .horae-tab.active {
+    background: color-mix(in srgb, var(--horae-primary) 75%, #000);
+    color: #fff;
+    border-bottom-color: transparent;
+}
+
+/* ---------- tab-contents + 浮水印 ---------- */
+#horae_drawer_content.horae-layout-cyber .horae-tab-contents {
+    background: transparent;
+    position: relative;
+    overflow: hidden auto;
+}
+#horae_drawer_content.horae-layout-cyber .horae-tab-content {
+    padding: 22px 22px 28px;
+    position: relative;
+    z-index: 1;
+}
+/* 浮水印 */
+#horae_drawer_content.horae-layout-cyber .horae-tab-contents::before {
+    content: 'SYS.ACTIVE // HR-MEM-CORE';
+    position: absolute;
+    bottom: 30px;
+    right: -90px;
+    transform: rotate(-90deg);
+    font-family: var(--cb-font-mono);
+    color: color-mix(in srgb, var(--horae-text) 4%, transparent);
+    font-size: 36px;
+    letter-spacing: 5px;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 0;
+}
+
+/* ---------- 状态页 / 设置页 section ---------- */
+#horae_drawer_content.horae-layout-cyber #horae-tab-status .horae-state-section,
+#horae_drawer_content.horae-layout-cyber #horae-tab-settings .horae-settings-section {
+    background: color-mix(in srgb, var(--horae-primary) 5%, transparent);
+    border: 1px solid var(--cb-border);
+    border-left: 3px solid var(--horae-primary);
+    border-radius: 0;
+    padding: 18px 20px;
+    margin-bottom: 18px;
+    position: relative;
+}
+#horae_drawer_content.horae-layout-cyber #horae-tab-status .horae-state-section:last-child,
+#horae_drawer_content.horae-layout-cyber #horae-tab-settings .horae-settings-section:last-child {
+    margin-bottom: 0;
+}
+/* 右上角标 */
+#horae_drawer_content.horae-layout-cyber #horae-tab-status .horae-state-section::after,
+#horae_drawer_content.horae-layout-cyber #horae-tab-settings .horae-settings-section::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 14px;
+    height: 14px;
+    border-top: 2px solid var(--horae-primary);
+    border-right: 2px solid var(--horae-primary);
+}
+#horae_drawer_content.horae-layout-cyber #horae-tab-status .horae-section-header,
+#horae_drawer_content.horae-layout-cyber #horae-tab-settings .horae-section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--cb-font-title);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--horae-primary-light);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+/* 标题前缀 ">" */
+#horae_drawer_content.horae-layout-cyber #horae-tab-status .horae-section-header::before,
+#horae_drawer_content.horae-layout-cyber #horae-tab-settings .horae-section-header::before {
+    content: '>';
+    color: var(--cb-accent);
+    font-weight: 700;
+}
+#horae_drawer_content.horae-layout-cyber #horae-tab-status .horae-section-header i,
+#horae_drawer_content.horae-layout-cyber #horae-tab-settings .horae-section-header i {
+    color: var(--horae-primary);
+}
+
+/* ---------- 状态/设置页输入元素 ---------- */
+#horae_drawer_content.horae-layout-cyber #horae-tab-status input[type="text"],
+#horae_drawer_content.horae-layout-cyber #horae-tab-status input[type="number"],
+#horae_drawer_content.horae-layout-cyber #horae-tab-status select,
+#horae_drawer_content.horae-layout-cyber #horae-tab-settings input[type="text"],
+#horae_drawer_content.horae-layout-cyber #horae-tab-settings input[type="number"],
+#horae_drawer_content.horae-layout-cyber #horae-tab-settings input[type="password"],
+#horae_drawer_content.horae-layout-cyber #horae-tab-settings select,
+#horae_drawer_content.horae-layout-cyber #horae-tab-settings textarea {
+    background: var(--cb-bg-sink) !important;
+    border: 1px solid var(--cb-border) !important;
+    border-bottom: 2px solid color-mix(in srgb, var(--horae-primary) 55%, transparent) !important;
+    color: var(--cb-text) !important;
+    font-family: var(--cb-font-mono);
+    border-radius: 0 !important;
+    transition: background 0.18s, border-color 0.18s, box-shadow 0.18s;
+}
+#horae_drawer_content.horae-layout-cyber #horae-tab-status input[type="text"]:focus,
+#horae_drawer_content.horae-layout-cyber #horae-tab-status input[type="number"]:focus,
+#horae_drawer_content.horae-layout-cyber #horae-tab-status select:focus,
+#horae_drawer_content.horae-layout-cyber #horae-tab-settings input[type="text"]:focus,
+#horae_drawer_content.horae-layout-cyber #horae-tab-settings input[type="number"]:focus,
+#horae_drawer_content.horae-layout-cyber #horae-tab-settings input[type="password"]:focus,
+#horae_drawer_content.horae-layout-cyber #horae-tab-settings select:focus,
+#horae_drawer_content.horae-layout-cyber #horae-tab-settings textarea:focus {
+    outline: none !important;
+    background: color-mix(in srgb, var(--horae-primary) 5%, var(--cb-bg-sink)) !important;
+    border-color: var(--horae-primary) !important;
+    border-bottom-color: var(--horae-primary) !important;
+    box-shadow: 0 4px 10px -5px var(--horae-primary) !important;
+}
+
+/* ---------- 移动端：缩小切角 ---------- */
+@media (max-width: 768px) {
+    .horae-message-panel.horae-layout-cyber {
+        --cb-clip-panel: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+        --cb-clip-btn: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%);
+    }
+    #horae_drawer_content.horae-layout-cyber {
+        --cb-clip-drawer: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
+        --cb-clip-tab: polygon(6px 0, calc(100% - 6px) 0, 100% 100%, 0 100%);
+    }
+    .horae-message-panel.horae-layout-cyber .horae-panel-toggle {
+        padding: 10px 14px;
+    }
+    .horae-message-panel.horae-layout-cyber .horae-panel-content {
+        padding: 14px;
+    }
+    .horae-message-panel.horae-layout-cyber .horae-panel-footer {
+        padding: 12px 14px;
+    }
+    #horae_drawer_content.horae-layout-cyber .horae-tab-content {
+        padding: 16px 14px 22px;
+    }
+    #horae_drawer_content.horae-layout-cyber .horae-tab-contents::before {
+        font-size: 24px;
+        right: -60px;
+    }
+}
+
 .horae-panel-content {
     padding: 12px;
     background: var(--horae-bg-secondary);

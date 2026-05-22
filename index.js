@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.14.1
+ * 版本: 1.14.2
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -22,7 +22,7 @@ import { initPromptDefaults, ensurePromptDefaults, ensurePresetPrompts, getPromp
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.14.1';
+const VERSION = '1.14.2';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -131,7 +131,10 @@ const DEFAULT_SETTINGS = {
     sendTimeline: true,    // 发送剧情轨迹（关闭则无法计算相对时间）
     contextDepth: 15,      // 一般级别剧情轨迹数量
     sendCharacters: true,  // 发送角色信息（服装、好感度）
+    sendCharacterAffection: true,        // 单独控制好感度注入
+    sendMainCharacterPersonality: true,  // 关闭后主要角色（卡片本体 + 置顶 NPC）的性格简述不再注入
     sendItems: true,       // 发送物品栏
+    panelLayoutStyle: 'classic',         // 'classic' = 默认 / 'glass' = 半透明玻璃 / 'obsidian' = 曜石简约 / 'cyber' = 赛博
     customTables: [],      // 自定义表格 [{id, name, rows, cols, data, prompt}]
     customSystemPrompt: '',      // 自定义系统注入提示词（空=使用默认）
     customBatchPrompt: '',       // 自定义AI摘要提示词（空=使用默认）
@@ -166,6 +169,7 @@ const DEFAULT_SETTINGS = {
     autoSummaryBufferMsgLimit: 10,  // 按AI条数触发的阈值
     autoSummaryBufferTokenLimit: 30000, // 按Token数触发的阈值
     autoSummaryResummaryThreshold: 7, // <=0 关闭二次总结；>0 时同层摘要达到此值触发更高层摘要（2->3->4...）
+    autoSummaryResummaryMinChars: 800, // 二次总结输入字数下限；不足时跳过避免对短文本反复压缩降质
     autoSummaryBatchMaxMsgs: 50,    // 单次摘要最大消息条数
     autoSummaryBatchMaxTokens: 80000, // 单次摘要最大Token数
     autoSummaryUseCustomApi: false, // 是否使用独立API端点
@@ -237,6 +241,8 @@ const DEFAULT_SETTINGS = {
     vectorFullTextCount: 3,
     vectorFullTextThreshold: 0.9,
     vectorStripTags: '',
+    vectorQueryRewriteEnabled: false,    // 多角度 Query 重写；默认关，强制走辅助 API 避免阻塞主回合
+    vectorQueryRewriteSystemPrompt: '',  // 自定义重写提示词（空=使用默认按语言加载）
 };
 
 const PROMPT_SETTING_KEYS = [
@@ -251,6 +257,7 @@ const PROMPT_SETTING_KEYS = [
     'customRelationshipPrompt',
     'customMoodPrompt',
     'customRpgPrompt',
+    'vectorQueryRewriteSystemPrompt',
 ];
 
 // ============================================
@@ -268,6 +275,8 @@ let _portsReady = false;
 let _autoSummaryRanThisTurn = false;
 let _vectorEnsureIndexPromise = null;
 let _vectorEnsureIndexChatId = null;
+// 记录上一次已知的 chat 数组引用快照，删除楼层时通过对比定位被删的最早索引
+let _lastChatMessageRefs = [];
 let itemsMultiSelectMode = false;  // 物品多选模式
 let selectedItems = new Set();     // 选中的物品名称
 let agendaMultiSelectMode = false; // 待办多选模式
@@ -2297,6 +2306,120 @@ function getSummaryMsgIndices(entry) {
         for (let i = entry.range[0]; i <= entry.range[1]; i++) fromEvents.push(i);
     }
     return [...new Set(fromEvents)];
+}
+
+/**
+ * 记录当前 chat 数组的浅拷贝（保留对每条 message 对象的引用）
+ * 用于下一次 onMessageDeleted 触发时识别哪些楼层被删除
+ */
+function _snapshotCurrentChatMessageRefs() {
+    const chat = horaeManager.getChat();
+    _lastChatMessageRefs = Array.isArray(chat) ? chat.slice() : [];
+}
+
+/**
+ * 通过对比上次快照定位被删的最早 chat index
+ * - 若快照中至少一条 ref 仍在新 chat 中，则缺失的最小 index 即为删除边界
+ * - 否则回退到事件携带的 chat length
+ */
+function _resolveSummaryDeletionBoundary(chat, reportedChatLength = null) {
+    if (!Array.isArray(chat)) return 0;
+
+    const currentRefs = new Set(chat);
+    const missingOldIndices = [];
+    let sharedOldRefs = 0;
+    for (let i = 0; i < _lastChatMessageRefs.length; i++) {
+        const oldMsg = _lastChatMessageRefs[i];
+        if (!oldMsg) continue;
+        if (currentRefs.has(oldMsg)) sharedOldRefs++;
+        else missingOldIndices.push(i);
+    }
+    if (missingOldIndices.length > 0 && sharedOldRefs > 0) {
+        return Math.min(...missingOldIndices);
+    }
+
+    const reported = parseInt(reportedChatLength, 10);
+    if (Number.isFinite(reported) && reported >= 0) {
+        return Math.floor(reported);
+    }
+
+    return chat.length;
+}
+
+/** 摘要是否覆盖 boundary 及其之后的任一楼层 */
+function _summaryCoversIndexAtOrAfter(entry, boundaryIndex) {
+    if (!entry || !Number.isInteger(boundaryIndex)) return false;
+
+    for (const idx of getSummaryMsgIndices(entry)) {
+        if (Number.isInteger(idx) && idx >= boundaryIndex) return true;
+    }
+
+    const range = _getSummaryEntryRange(entry);
+    return !!(range && range[1] >= boundaryIndex);
+}
+
+/** 优先删除：层级最高 → 起点最靠前 → 终点最靠后 → 跨度最小 */
+function _pickSummaryCoveringDeletedFloor(chat, boundaryIndex) {
+    const sums = chat?.[0]?.horae_meta?.autoSummaries;
+    if (!Array.isArray(sums) || !Number.isInteger(boundaryIndex)) return null;
+
+    const candidates = [];
+    for (const s of sums) {
+        if (!s?.id) continue;
+        if (!_summaryCoversIndexAtOrAfter(s, boundaryIndex)) continue;
+
+        const range = _getSummaryEntryRange(s);
+        const depth = _normalizeSummaryDepth(s.depth);
+        const span = range ? Math.max(1, range[1] - range[0] + 1) : Number.MAX_SAFE_INTEGER;
+        candidates.push({
+            entry: s,
+            depth,
+            start: range?.[0] ?? Number.MAX_SAFE_INTEGER,
+            end: range?.[1] ?? Number.MAX_SAFE_INTEGER,
+            span,
+        });
+    }
+
+    candidates.sort((a, b) =>
+        b.depth - a.depth ||
+        a.start - b.start ||
+        b.end - a.end ||
+        a.span - b.span
+    );
+    return candidates[0]?.entry || null;
+}
+
+/** 级联删除所有覆盖被删楼层的摘要，逐条调用现有的层级恢复函数 */
+async function _removeSummariesCoveringDeletedFloors(chat, boundaryIndex) {
+    if (!Array.isArray(chat) || !chat.length || !Number.isInteger(boundaryIndex)) return [];
+    const removed = [];
+    const seen = new Set();
+    let guard = 0;
+
+    while (guard++ < 100) {
+        const target = _pickSummaryCoveringDeletedFloor(chat, boundaryIndex);
+        if (!target?.id) break;
+        if (seen.has(target.id)) {
+            console.warn(`[Horae] 摘要删除级联检测到重复目标，已停止: ${target.id}`);
+            break;
+        }
+        seen.add(target.id);
+
+        const result = await _removeSummaryAndRestoreHierarchy(chat, target.id);
+        if (!result?.removedEntry) break;
+        removed.push(result.removedEntry);
+    }
+
+    if (removed.length > 0) {
+        const detail = removed.map(s => {
+            const range = _getSummaryEntryRange(s);
+            const rangeText = range ? `#${range[0]}-#${range[1]}` : '#?';
+            return `L${_normalizeSummaryDepth(s.depth)} ${rangeText}`;
+        }).join(', ');
+        console.log(`[Horae] 删除楼层后级联清理 ${removed.length} 条摘要: ${detail}`);
+    }
+
+    return removed;
 }
 
 function _pickPreferredSummaryOwner(prev, next) {
@@ -9889,6 +10012,20 @@ function isLightMode() {
     return !!(theme && theme.isLight);
 }
 
+/** 应用面板布局风格：同时联动楼层面板与抽屉主面板（classic / glass / obsidian / cyber 互斥） */
+function applyPanelLayoutStyle() {
+    const raw = settings.panelLayoutStyle;
+    const style = ['glass', 'obsidian', 'cyber'].includes(raw) ? raw : 'classic';
+    const apply = (el) => {
+        if (!el) return;
+        el.classList.toggle('horae-layout-glass', style === 'glass');
+        el.classList.toggle('horae-layout-obsidian', style === 'obsidian');
+        el.classList.toggle('horae-layout-cyber', style === 'cyber');
+    };
+    document.querySelectorAll('.horae-message-panel').forEach(apply);
+    apply(document.getElementById('horae_drawer_content'));
+}
+
 /** 应用主题模式（dark / light / 内置预设 / custom-{index}） */
 function applyThemeMode() {
     const mode = settings.themeMode || 'dark';
@@ -10847,9 +10984,17 @@ function addMessagePanel(messageEl, messageIndex) {
         const charCount = meta.scene?.characters_present?.length || 0;
         const isSkipped = !!meta._skipHorae;
         const sideplayBtnStyle = settings.sideplayMode ? '' : 'display:none;';
+        // 取首条事件等级落到根节点 data-level，曜石简约依此渲染左侧色条；其他布局忽略
+        const firstLevel = (eventsArr.find(e => e && e.level)?.level || '').trim();
+        const levelMap = { '一般': 'normal', '重要': 'important', '关键': 'critical', '關鍵': 'critical' };
+        const dataLevel = levelMap[firstLevel] || (firstLevel ? 'normal' : '');
+        const layoutClass = settings.panelLayoutStyle === 'glass' ? ' horae-layout-glass'
+            : settings.panelLayoutStyle === 'obsidian' ? ' horae-layout-obsidian'
+            : settings.panelLayoutStyle === 'cyber' ? ' horae-layout-cyber'
+            : '';
 
         const panelHtml = `
-        <div class="horae-message-panel${isSkipped ? ' horae-sideplay' : ''}" data-message-id="${messageIndex}">
+        <div class="horae-message-panel${isSkipped ? ' horae-sideplay' : ''}${layoutClass}" data-message-id="${messageIndex}"${dataLevel ? ` data-level="${dataLevel}"` : ''}>
             <div class="horae-panel-toggle">
                 <div class="horae-panel-icon">
                     <i class="fa-regular ${isSkipped ? 'fa-eye-slash' : 'fa-clock'}"></i>
@@ -12975,6 +13120,11 @@ function initSettingsEvents() {
         'rpgStrictPresentOnly', 'rpgBarsUserOnly', 'rpgSkillsUserOnly', 'rpgAttrsUserOnly', 'rpgReputationUserOnly',
         'rpgEquipmentUserOnly', 'rpgLevelUserOnly', 'rpgCurrencyUserOnly', 'rpgUserOnly',
         'rpgBarConfig', 'rpgAttributeConfig', 'rpgAttrViewMode', 'equipmentTemplates',
+        // 自动总结：之前漏掉，导致「恢复默认」无法重置自动总结开关与相关阈值
+        'autoSummaryEnabled', 'autoSummaryKeepRecent', 'autoSummarySourceMode',
+        'autoSummaryBufferMode', 'autoSummaryBufferMsgLimit', 'autoSummaryBufferTokenLimit',
+        'autoSummaryResummaryThreshold', 'autoSummaryResummaryMinChars',
+        'autoSummaryBatchMaxMsgs', 'autoSummaryBatchMaxTokens',
         ..._PRESET_PROMPT_KEYS,
     ];
 
@@ -13126,6 +13276,20 @@ function initSettingsEvents() {
 
     $('#horae-setting-send-characters').on('change', function () {
         settings.sendCharacters = this.checked;
+        saveSettings();
+        horaeManager.init(getContext(), settings);
+        updateTokenCounter();
+    });
+
+    $('#horae-setting-send-character-affection').on('change', function () {
+        settings.sendCharacterAffection = this.checked;
+        saveSettings();
+        horaeManager.init(getContext(), settings);
+        updateTokenCounter();
+    });
+
+    $('#horae-setting-send-main-character-personality').on('change', function () {
+        settings.sendMainCharacterPersonality = this.checked;
         saveSettings();
         horaeManager.init(getContext(), settings);
         updateTokenCounter();
@@ -13327,6 +13491,12 @@ function initSettingsEvents() {
         this.value = settings.autoSummaryResummaryThreshold;
         saveSettings();
     });
+    $('#horae-setting-auto-summary-resummary-min-chars').on('change', function () {
+        const raw = parseInt(this.value, 10);
+        settings.autoSummaryResummaryMinChars = Number.isFinite(raw) ? Math.max(0, raw) : 800;
+        this.value = settings.autoSummaryResummaryMinChars;
+        saveSettings();
+    });
     $('#horae-setting-auto-summary-batch-msgs').on('change', function () {
         settings.autoSummaryBatchMaxMsgs = Math.max(5, parseInt(this.value) || 50);
         this.value = settings.autoSummaryBatchMaxMsgs;
@@ -13374,6 +13544,17 @@ function initSettingsEvents() {
     $('#horae-btn-fetch-models').on('click', fetchAndPopulateModels);
     $('#horae-btn-test-sub-api').on('click', testSubApiConnection);
 
+    // 密钥可见性切换：按钮按下显示明文、松开/失焦回到 password 状态，避免离开视线后明文残留
+    $('#horae-btn-toggle-aux-api-key').on('click', function () {
+        const input = document.getElementById('horae-setting-aux-api-key');
+        const icon = this.querySelector('i');
+        if (!input || !icon) return;
+        const showing = input.type === 'text';
+        input.type = showing ? 'password' : 'text';
+        icon.classList.toggle('fa-eye', showing);
+        icon.classList.toggle('fa-eye-slash', !showing);
+    });
+
     $('#horae-setting-panel-width').on('change', function () {
         let val = parseInt(this.value) || 100;
         val = Math.max(50, Math.min(100, val));
@@ -13395,6 +13576,14 @@ function initSettingsEvents() {
         settings.themeMode = this.value;
         saveSettings();
         applyThemeMode();
+    });
+
+    // 面板布局风格（classic / glass / obsidian / cyber）
+    $('#horae-setting-panel-layout-style').on('change', function () {
+        const allowed = ['classic', 'glass', 'obsidian', 'cyber'];
+        settings.panelLayoutStyle = allowed.includes(this.value) ? this.value : 'classic';
+        saveSettings();
+        applyPanelLayoutStyle();
     });
 
     // 美化导入/导出/删除/自助美化
@@ -13791,6 +13980,20 @@ function initSettingsEvents() {
         $('#horae-vector-rerank-options').toggle(this.checked);
     });
 
+    $('#horae-setting-vector-query-rewrite-enabled').on('change', function () {
+        const enabled = this.checked;
+        if (enabled && !settings.auxApiEnabled) {
+            // 没配辅助 API 直接开重写只会在召回时报错；先提示用户去开
+            showToast(t('toast.queryRewriteRequiresAuxApi') || 'Query 重写需要先启用辅助 API', 'warning');
+            this.checked = false;
+            settings.vectorQueryRewriteEnabled = false;
+            saveSettings();
+            return;
+        }
+        settings.vectorQueryRewriteEnabled = enabled;
+        saveSettings();
+    });
+
     $('#horae-setting-vector-rerank-fulltext').on('change', function () {
         settings.vectorRerankFullText = this.checked;
         saveSettings();
@@ -14106,6 +14309,7 @@ function _syncVectorRecallPresetInputs() {
     $('#horae-setting-vector-pure-mode').prop('checked', !!settings.vectorPureMode);
     $('#horae-setting-vector-debug-log').prop('checked', !!settings.vectorDebugLog);
     $('#horae-setting-vector-rerank-enabled').prop('checked', !!settings.vectorRerankEnabled);
+    $('#horae-setting-vector-query-rewrite-enabled').prop('checked', !!settings.vectorQueryRewriteEnabled);
     $('#horae-vector-rerank-options').toggle(!!settings.vectorRerankEnabled);
     $('#horae-setting-vector-rerank-fulltext').prop('checked', !!settings.vectorRerankFullText);
     $('#horae-setting-vector-rerank-candidates').val(settings.vectorRerankCandidates ?? 25);
@@ -14132,6 +14336,8 @@ function syncSettingsToUI() {
     $('#horae-setting-send-timeline').prop('checked', settings.sendTimeline);
     $('#horae-setting-context-depth').val(Number.isFinite(parseInt(settings.contextDepth, 10)) ? Math.max(0, parseInt(settings.contextDepth, 10)) : 15);
     $('#horae-setting-send-characters').prop('checked', settings.sendCharacters);
+    $('#horae-setting-send-character-affection').prop('checked', settings.sendCharacterAffection !== false);
+    $('#horae-setting-send-main-character-personality').prop('checked', settings.sendMainCharacterPersonality !== false);
     $('#horae-setting-send-items').prop('checked', settings.sendItems);
 
     applyTopIconVisibility();
@@ -14200,6 +14406,10 @@ function syncSettingsToUI() {
         const thresholdVal = Number.isFinite(raw) ? raw : 10;
         $('#horae-setting-auto-summary-resummary-threshold').val(thresholdVal);
     }
+    {
+        const raw = parseInt(settings.autoSummaryResummaryMinChars, 10);
+        $('#horae-setting-auto-summary-resummary-min-chars').val(Number.isFinite(raw) ? Math.max(0, raw) : 800);
+    }
     $('#horae-setting-auto-summary-batch-msgs').val(settings.autoSummaryBatchMaxMsgs || 50);
     $('#horae-setting-auto-summary-batch-tokens').val(settings.autoSummaryBatchMaxTokens || 80000);
     $('#horae-setting-aux-api-enabled').prop('checked', !!settings.auxApiEnabled);
@@ -14267,6 +14477,10 @@ function syncSettingsToUI() {
     refreshThemeSelector();
     applyThemeMode();
 
+    // 楼层面板布局风格
+    $('#horae-setting-panel-layout-style').val(settings.panelLayoutStyle || 'classic');
+    applyPanelLayoutStyle();
+
     // 自定义CSS
     $('#horae-custom-css').val(settings.customCSS || '');
     applyCustomCSS();
@@ -14294,6 +14508,7 @@ function syncSettingsToUI() {
     $('#horae-setting-vector-pure-mode').prop('checked', !!settings.vectorPureMode);
     $('#horae-setting-vector-debug-log').prop('checked', !!settings.vectorDebugLog);
     $('#horae-setting-vector-rerank-enabled').prop('checked', !!settings.vectorRerankEnabled);
+    $('#horae-setting-vector-query-rewrite-enabled').prop('checked', !!settings.vectorQueryRewriteEnabled);
     $('#horae-vector-rerank-options').toggle(!!settings.vectorRerankEnabled);
     $('#horae-setting-vector-rerank-fulltext').prop('checked', !!settings.vectorRerankFullText);
     // Rerank 模型：若有保存值则初始化 select 选项
@@ -14763,6 +14978,8 @@ function _shouldUseAuxApi(kind) {
     if (kind === 'analysis') return settings.auxApiUseForAnalysis !== false;
     if (kind === 'summary' || kind === 'aiEnrich') return settings.auxApiUseForSummary !== false;
     if (kind === 'manualCompress') return !!settings.auxApiUseForManualCompress;
+    // Query 重写强制走辅助 API：与主回合并发会拖慢首字时间，且需要独立速率额度
+    if (kind === 'queryRewrite') return true;
     return false;
 }
 
@@ -14777,6 +14994,8 @@ function _getAuxApiProfile() {
 async function _generateForAuxTask(prompt, opts = {}) {
     const { kind = 'summary', ...rawOpts } = opts;
     _syncSubApiSettingsFromDom();
+    // Query 重写不允许回退主 API；与主回合共用同一份额度反而会延后玩家收到正文的时间
+    const forbidFallback = kind === 'queryRewrite';
     if (_shouldUseAuxApi(kind)) {
         const profile = _getAuxApiProfile();
         const missing = [
@@ -14788,17 +15007,19 @@ async function _generateForAuxTask(prompt, opts = {}) {
             try {
                 return await _enqueueAuxApi(() => generateWithDirectApi(prompt, profile, { kind }));
             } catch (err) {
-                if (!settings.auxApiFallbackToMain) throw err;
+                if (forbidFallback || !settings.auxApiFallbackToMain) throw err;
                 console.warn('[Horae] 辅助API失败，回退主API:', err);
                 showToast(t('toast.auxApiFallback', { error: err?.message || err }), 'warning');
             }
         } else {
             console.warn(`[Horae] 辅助API缺少: ${missing}`);
-            if (!settings.auxApiFallbackToMain) {
+            if (forbidFallback || !settings.auxApiFallbackToMain) {
                 throw new Error(t('toast.auxApiMissing', { missing }));
             }
             showToast(t('toast.subApiMissing', { missing }), 'warning');
         }
+    } else if (forbidFallback) {
+        throw new Error(t('toast.auxApiRequired'));
     }
     return await _generateForAiTasks(prompt, { ...rawOpts, kind });
 }
@@ -15275,6 +15496,8 @@ async function _runAutoResummaryIfNeeded(chat, cutoff) {
     const threshold = Number.isFinite(rawThreshold) ? rawThreshold : 10;
     if (threshold <= 0) return 0;
     const effectiveThreshold = Math.max(2, threshold);
+    const rawMinChars = parseInt(settings.autoSummaryResummaryMinChars, 10);
+    const minChars = Number.isFinite(rawMinChars) ? Math.max(0, rawMinChars) : 0;
 
     const maxRounds = 4;
     let rounds = 0;
@@ -15284,6 +15507,16 @@ async function _runAutoResummaryIfNeeded(chat, cutoff) {
 
         const payload = _collectAutoResummaryPayload(chat, plan, cutoff);
         if (!payload?.coveredIndices?.length) break;
+
+        // 输入字数过短时直接跳出整个二次总结循环（再触发也只会变更短）
+        if (minChars > 0) {
+            const totalChars = (payload.eventRecords || [])
+                .reduce((sum, e) => sum + ((e?.summary || '').length), 0);
+            if (totalChars < minChars) {
+                console.log(`[Horae] 二次总结跳过：输入 ${totalChars} 字 < 下限 ${minChars} 字`);
+                break;
+            }
+        }
 
         showToast(t('toast.autoSummaryProgress', {
             batch: payload.coveredIndices.length,
@@ -15666,6 +15899,15 @@ function _getAuxApiPromptProfile(kind = 'summary') {
         return {
             system: 'You are a strict character profile extractor for creative fiction. Output only the requested JSON object and do not add prose.',
             ready: 'Understood. I will extract the character profile and output strict JSON only.',
+            prefill: '',
+            skipOaiInjection: true,
+        };
+    }
+    if (kind === 'queryRewrite') {
+        // 重写专用 system 在调用端注入，这里不再二次叠加，避免污染查询结构
+        return {
+            system: 'You are an assistant.',
+            ready: 'Ready.',
             prefill: '',
             skipOaiInjection: true,
         };
@@ -16342,7 +16584,7 @@ async function checkAutoSummary() {
             const msg = chat[idx];
             const d = msg?.horae_meta?.timestamp?.story_date || '';
             const tm = msg?.horae_meta?.timestamp?.story_time || '';
-            return `【#${idx}${d ? ' ' + d : ''}${tm ? ' ' + tm : ''}】\n${_stripConfiguredTags(msg?.mes || '')}`;
+            return `【#${idx}${d ? ' ' + d : ''}${tm ? ' ' + tm : ''}】\n${_stripHoraeAnalysisInput(msg?.mes || '')}`;
         });
         const sourceText = fullTexts.join('\n\n');
 
@@ -18389,6 +18631,7 @@ async function onMessageReceived(messageId) {
     try {
         refreshAllDisplays();
         renderCustomTablesList();
+        _snapshotCurrentChatMessageRefs();
     } catch (err) {
         console.error('[Horae] refreshAllDisplays 失败:', err);
     }
@@ -18429,23 +18672,31 @@ async function onMessageReceived(messageId) {
 }
 
 /**
- * 消息删除时触发 — 重建表格数据
+ * 消息删除时触发 — 级联清理失效摘要并重建派生数据
+ * reportedChatLength 来自 ST 的 MESSAGE_DELETED 事件，作为引用对比失败时的兜底
  */
-async function onMessageDeleted() {
+async function onMessageDeleted(reportedChatLength = null) {
     if (!settings.enabled) return;
 
-    horaeManager.rebuildTableData();
-    horaeManager.rebuildRelationships();
-    horaeManager.rebuildLocationMemory();
-    horaeManager.rebuildRpgData();
     try {
+        const chat = horaeManager.getChat();
+        const summaryDeletionBoundary = _resolveSummaryDeletionBoundary(chat, reportedChatLength);
+        await _removeSummariesCoveringDeletedFloors(chat, summaryDeletionBoundary);
+
+        horaeManager.rebuildTableData();
+        horaeManager.rebuildRelationships();
+        horaeManager.rebuildLocationMemory();
+        horaeManager.rebuildRpgData();
+
         if (settings.autoSummaryEnabled) {
             await _reconcileAutoBufferVisibilityByKeepRecent();
         }
+
+        await getContext().saveChat();
+        _snapshotCurrentChatMessageRefs();
     } catch (err) {
-        console.warn('[Horae] 自动摘要显隐重算失败:', err);
+        console.error('[Horae] onMessageDeleted 失败:', err);
     }
-    await getContext().saveChat();
 
     refreshAllDisplays();
     renderCustomTablesList();
@@ -18480,6 +18731,7 @@ function onMessageEdited(messageId) {
 
             refreshAllDisplays();
             renderCustomTablesList();
+            _snapshotCurrentChatMessageRefs();
 
             if (settings.showMessagePanel) {
                 const messageEl = document.querySelector(`.mes[mesid="${messageId}"]`);
@@ -18854,11 +19106,16 @@ async function onPromptReady(eventData) {
                 if (promptCoveredChatIndices.size > 0) {
                     console.log(`[Horae] Prompt已覆盖楼层: ${promptCoveredChatIndices.size}，召回将排除这些楼层`);
                 }
+                // 启用 Query 重写时，把辅助 API 包装成 (prompt) => string 传入
+                const aiTaskFn = settings.vectorQueryRewriteEnabled
+                    ? (prompt) => _generateForAuxTask(prompt, { kind: 'queryRewrite', label: 'Query Rewrite' })
+                    : null;
                 recallPrompt = await vectorManager.generateRecallPrompt(
                     horaeManager,
                     skipLast,
                     settings,
-                    promptCoveredChatIndices
+                    promptCoveredChatIndices,
+                    aiTaskFn
                 );
                 console.log(`[Horae] 向量召回结果: ${recallPrompt ? recallPrompt.length + ' 字符' : '空'}`);
             } catch (err) {
@@ -19042,9 +19299,16 @@ async function onChatChanged() {
         }
 
         _rebuildGlobalDataForCurrentChat();
+        // 加载/切换 chat 后立刻补一次级联清理，覆盖跨会话期间删过的楼层
+        try {
+            await _removeSummariesCoveringDeletedFloors(horaeManager.getChat(), horaeManager.getChat()?.length || 0);
+        } catch (e) {
+            console.warn('[Horae] onChatChanged 摘要清理失败:', e);
+        }
         refreshAllDisplays();
         renderCustomTablesList();
         renderDicePanel();
+        _snapshotCurrentChatMessageRefs();
     } catch (err) {
         console.error('[Horae] onChatChanged 初始化失败:', err);
     }
@@ -19161,6 +19425,7 @@ function onSwipePanel(messageId) {
 
             refreshAllDisplays();
             renderCustomTablesList();
+            _snapshotCurrentChatMessageRefs();
         } catch (err) {
             console.error(`[Horae] onSwipePanel #${messageId} 失败:`, err);
         }
@@ -19391,6 +19656,7 @@ jQuery(async () => {
     // 并行自动摘要：用户发消息时并行触发（独立API走直接HTTP，不影响主连接）
     if (event_types.USER_MESSAGE_RENDERED) {
         eventSource.on(event_types.USER_MESSAGE_RENDERED, () => {
+            if (settings.enabled) _snapshotCurrentChatMessageRefs();
             if (!settings.enabled || !settings.autoSummaryEnabled || !settings.sendTimeline) return;
             _autoSummaryRanThisTurn = true;
             checkAutoSummary().catch((e) => {
@@ -19401,6 +19667,7 @@ jQuery(async () => {
     }
 
     refreshAllDisplays();
+    _snapshotCurrentChatMessageRefs();
 
     if (settings.vectorEnabled) {
         setTimeout(() => _initVectorModel(), 1000);
