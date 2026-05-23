@@ -10,7 +10,7 @@
                 <i class="fa-regular fa-clock"></i>
                 Horae 时光记忆
             </div>
-            <span class="horae-version">1.14.2</span>
+            <span class="horae-version">1.14.3</span>
         </div>
         
         <!-- 标签页导航 -->
@@ -813,7 +813,33 @@
                     </div>
                     </div>
                 </div>
-                
+
+                <div class="horae-settings-section">
+                    <div class="horae-section-header horae-collapse-header" id="horae-custom-cal-collapse-toggle" data-i18n="settings.customCalendar">
+                        <i class="fa-solid fa-calendar-week"></i>
+                        自定义日历
+                        <i class="fa-solid fa-chevron-down horae-collapse-icon collapsed"></i>
+                    </div>
+                    <div id="horae-custom-cal-collapse-body" style="display: none;">
+                        <span class="horae-setting-hint" data-i18n="settings.customCalendarHint" style="margin-bottom: 12px;">
+                            <i class="fa-solid fa-circle-info"></i>
+                            为非公历世界观（四季月、奇幻历法等）定义月份名与天数。启用后剧情时间按此日历推算相对时间；公历世界观不要开。
+                        </span>
+                        <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                            <input type="checkbox" id="horae-setting-custom-cal-enabled">
+                            <span data-i18n="settings.customCalendarEnable">启用自定义日历</span>
+                        </label>
+                        <label data-i18n="settings.customCalendarMonths" style="font-size:12px; color: var(--horae-text-muted); display:block; margin-bottom:4px;">
+                            月份配置（每行 月名:天数）
+                        </label>
+                        <textarea id="horae-setting-custom-cal-months" class="horae-prompt-textarea" rows="6" data-i18n-placeholder="settings.customCalendarPlaceholder" placeholder="春之月:30&#10;夏之月:30&#10;秋之月:30&#10;冬之月:30"></textarea>
+                        <div style="display:flex; align-items:center; gap:10px; margin-top:6px;">
+                            <button type="button" id="horae-setting-custom-cal-apply" class="horae-btn" data-i18n="settings.customCalendarApply">应用</button>
+                            <span id="horae-setting-custom-cal-status" class="horae-setting-sub-hint" style="margin:0;"></span>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="horae-settings-section">
                     <div class="horae-section-header horae-collapse-header" id="horae-send-to-ai-collapse-toggle" data-i18n="settings.sendToAi">
                         <i class="fa-solid fa-paper-plane"></i>
@@ -1625,7 +1651,7 @@
                 </div>
                 
                 <div class="horae-about">
-                    <p>Horae v1.14.2 | 作者: SenriYuki</p>
+                    <p>Horae v1.14.3 | 作者: SenriYuki</p>
                     <p>基于时间锚点的AI记忆增强系统</p>
                 </div>
             </div>

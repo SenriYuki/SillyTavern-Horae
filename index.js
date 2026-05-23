@@ -186,6 +186,14 @@ const DEFAULT_SETTINGS = {
     auxApiFallbackToMain: false,     // 辅助API失败后回退主API
     antiParaphraseMode: false,      // 反转述模式：AI回复时结算上一条USER的内容
     sideplayMode: false,            // 番外/小剧场模式：启用后可标记消息跳过Horae
+    // 自定义日历：开启后插件按 monthNames/monthDays 解析剧情日期；未启用走默认公历+奇幻兜底
+    customCalendar: {
+        enabled: false,
+        monthNames: [],
+        monthDays: [],
+    },
+    // 已忽略过自定义日历建议的 chatId 集合，避免同一会话反复弹窗
+    _customCalendarHintDismissed: {},
     // RPG 模式
     rpgMode: false,                 // RPG 模式总开关
     rpgStrictPresentOnly: false,     // 无在场角色时不发送RPG数据
@@ -11789,38 +11797,23 @@ async function rescanMessageMeta(messageId, panelEl) {
     }
 }
 
-/**
- * 保存面板数据
- */
+/** 保存底部栏面板数据：从旧 meta 深拷贝起手，避免重置时丢 _rpgChanges 等内部字段 */
 async function savePanelData(panelEl, messageId) {
-    // 获取现有的 meta，保留面板中没有编辑区的数据（如 NPC）
     const existingMeta = horaeManager.getMessageMeta(messageId);
-    const meta = createEmptyMeta();
+    const meta = existingMeta
+        ? JSON.parse(JSON.stringify(existingMeta))
+        : createEmptyMeta();
 
-    // 保留面板中没有编辑区的数据
-    if (existingMeta?.npcs) {
-        meta.npcs = JSON.parse(JSON.stringify(existingMeta.npcs));
-    }
-    if (existingMeta?.relationships?.length) {
-        meta.relationships = JSON.parse(JSON.stringify(existingMeta.relationships));
-    }
-    if (existingMeta?.scene?.scene_desc) {
-        meta.scene.scene_desc = existingMeta.scene.scene_desc;
-    }
-    if (existingMeta?.mood && Object.keys(existingMeta.mood).length > 0) {
-        meta.mood = JSON.parse(JSON.stringify(existingMeta.mood));
-    }
-    // 底部栏不编辑这些只读字段，保存时沿用原值。
-    if (existingMeta?.deletedItems?.length) {
-        meta.deletedItems = JSON.parse(JSON.stringify(existingMeta.deletedItems));
-    }
-    if (existingMeta?.deletedAgenda?.length) {
-        meta.deletedAgenda = JSON.parse(JSON.stringify(existingMeta.deletedAgenda));
-    }
-    if (existingMeta?.tableContributions) {
-        meta.tableContributions = JSON.parse(JSON.stringify(existingMeta.tableContributions));
-    }
-    const savedCompressedFlags = _saveCompressedFlags(existingMeta);
+    if (!meta.timestamp) meta.timestamp = { story_date: '', story_time: '', absolute: '' };
+    if (!meta.scene) meta.scene = { location: '', characters_present: [], atmosphere: '' };
+    if (!meta.costumes) meta.costumes = {};
+    if (!meta.items) meta.items = {};
+    if (!meta.affection) meta.affection = {};
+    if (!meta.npcs) meta.npcs = {};
+    if (!meta.agenda) meta.agenda = [];
+    if (!meta.mood) meta.mood = {};
+    if (!meta.relationships) meta.relationships = [];
+    if (!Array.isArray(meta.events)) meta.events = [];
 
     // 分离日期时间
     const datetimeVal = (panelEl.querySelector('.horae-input-datetime')?.value || '').trim();
@@ -11834,13 +11827,13 @@ async function savePanelData(panelEl, messageId) {
     }
     meta.timestamp.absolute = new Date().toISOString();
 
-    // 场景
+    // scene_desc 已随深拷贝保留
     meta.scene.location = panelEl.querySelector('.horae-input-location')?.value || '';
     meta.scene.atmosphere = panelEl.querySelector('.horae-input-atmosphere')?.value || '';
     const charsInput = panelEl.querySelector('.horae-input-characters')?.value || '';
     meta.scene.characters_present = charsInput.split(/[,，]/).map(s => s.trim()).filter(Boolean);
 
-    // 服装
+    meta.costumes = {};
     panelEl.querySelectorAll('.horae-costume-editor .horae-editor-row').forEach(row => {
         const inputs = row.querySelectorAll('input');
         if (inputs.length >= 2) {
@@ -11852,21 +11845,26 @@ async function savePanelData(panelEl, messageId) {
         }
     });
 
-    // 情绪
-    panelEl.querySelectorAll('.horae-mood-editor .horae-mood-row').forEach(row => {
-        const charEl = row.querySelector('.mood-char');
-        const emotionInput = row.querySelector('.mood-emotion');
-        const char = (charEl?.tagName === 'INPUT' ? charEl.value : charEl?.textContent)?.trim();
-        const emotion = emotionInput?.value?.trim();
-        if (char && emotion) meta.mood[char] = emotion;
-    });
+    // sendMood 关时面板没有 mood editor，留旧值
+    const moodEditor = panelEl.querySelector('.horae-mood-editor');
+    if (moodEditor) {
+        meta.mood = {};
+        moodEditor.querySelectorAll('.horae-mood-row').forEach(row => {
+            const charEl = row.querySelector('.mood-char');
+            const emotionInput = row.querySelector('.mood-emotion');
+            const char = (charEl?.tagName === 'INPUT' ? charEl.value : charEl?.textContent)?.trim();
+            const emotion = emotionInput?.value?.trim();
+            if (char && emotion) meta.mood[char] = emotion;
+        });
+    }
 
-    // 物品配对处理
+    // 物品全量重建，importance 不在面板里改，从物品栏/旧 meta 兜回
     const itemMainRows = panelEl.querySelectorAll('.horae-items-editor .horae-item-row');
     const itemDescRows = panelEl.querySelectorAll('.horae-items-editor .horae-item-desc-row');
     const latestState = horaeManager.getLatestState();
     const existingItems = latestState.items || {};
-
+    const oldMetaItems = existingMeta?.items || {};
+    meta.items = {};
     itemMainRows.forEach((row, idx) => {
         const iconInput = row.querySelector('.horae-item-icon');
         const nameInput = row.querySelector('.horae-item-name');
@@ -11878,11 +11876,10 @@ async function savePanelData(panelEl, messageId) {
         if (nameInput) {
             const name = nameInput.value.trim();
             if (name) {
-                // 从物品栏获取已保存的importance，底部栏不再编辑分类
-                const existingImportance = existingItems[name]?.importance || existingMeta?.items?.[name]?.importance || '';
+                const existingImportance = existingItems[name]?.importance || oldMetaItems[name]?.importance || '';
                 meta.items[name] = {
                     icon: iconInput?.value.trim() || null,
-                    importance: existingImportance,  // 保留物品栏的分类
+                    importance: existingImportance,
                     holder: holderInput?.value.trim() || null,
                     location: locationInput?.value.trim() || '',
                     description: descInput?.value.trim() || ''
@@ -11891,10 +11888,11 @@ async function savePanelData(panelEl, messageId) {
         }
     });
 
-    // 底部栏只编辑第一条事件，后续事件和压缩标记需保留。
+    // 底部栏只编辑第 0 条事件，其余事件和摘要压缩标记沿用
     const eventLevel = panelEl.querySelector('.horae-input-event-level')?.value;
     const eventSummary = panelEl.querySelector('.horae-input-event-summary')?.value;
     const restEvents = Array.isArray(existingMeta?.events) ? existingMeta.events.slice(1) : [];
+    const savedCompressedFlags = _saveCompressedFlags(existingMeta);
     if (eventLevel && eventSummary) {
         meta.events = [{
             is_important: eventLevel === '重要' || eventLevel === '关键' || eventLevel === '關鍵',
@@ -11902,13 +11900,15 @@ async function savePanelData(panelEl, messageId) {
             summary: eventSummary
         }, ...restEvents];
     } else if (restEvents.length > 0) {
-        // 第一条事件被清空但后续事件仍需保留
         meta.events = restEvents;
+    } else {
+        meta.events = [];
     }
     if (savedCompressedFlags?.length) {
         _restoreCompressedFlags(meta, savedCompressedFlags);
     }
 
+    meta.affection = {};
     panelEl.querySelectorAll('.horae-affection-editor .horae-affection-row').forEach(row => {
         const charSpan = row.querySelector('.horae-affection-char');
         const charInput = row.querySelector('.horae-affection-char-input');
@@ -11921,8 +11921,7 @@ async function savePanelData(panelEl, messageId) {
             meta.affection[key] = { type: 'absolute', value: total };
         }
     });
-
-    // 兼容旧格式
+    // 兼容旧 affection 行（非 .horae-affection-row）
     panelEl.querySelectorAll('.horae-affection-editor .horae-editor-row:not(.horae-affection-row)').forEach(row => {
         const inputs = row.querySelectorAll('input');
         if (inputs.length >= 2) {
@@ -11934,25 +11933,22 @@ async function savePanelData(panelEl, messageId) {
         }
     });
 
-    const agendaItems = [];
-    panelEl.querySelectorAll('.horae-agenda-editor .horae-agenda-edit-row').forEach(row => {
-        const dateInput = row.querySelector('.horae-agenda-date');
-        const textInput = row.querySelector('.horae-agenda-text');
-        const date = dateInput?.value?.trim() || '';
-        const text = textInput?.value?.trim() || '';
-        if (text) {
-            // 保留原 source
-            const existingAgendaItem = existingMeta?.agenda?.find(a => a.text === text);
-            const source = existingAgendaItem?.source || 'user';
-            agendaItems.push({ date, text, source, done: false });
-        }
-    });
-
+    // agenda editor 不存在时（关掉待办面板）留旧值
     const agendaEditor = panelEl.querySelector('.horae-agenda-editor');
     if (agendaEditor) {
+        const agendaItems = [];
+        agendaEditor.querySelectorAll('.horae-agenda-edit-row').forEach(row => {
+            const dateInput = row.querySelector('.horae-agenda-date');
+            const textInput = row.querySelector('.horae-agenda-text');
+            const date = dateInput?.value?.trim() || '';
+            const text = textInput?.value?.trim() || '';
+            if (text) {
+                const existingAgendaItem = existingMeta?.agenda?.find(a => a.text === text);
+                const source = existingAgendaItem?.source || 'user';
+                agendaItems.push({ date, text, source, done: false });
+            }
+        });
         meta.agenda = agendaItems;
-    } else if (existingMeta?.agenda?.length > 0) {
-        meta.agenda = existingMeta.agenda;
     }
 
     horaeManager.setMessageMeta(messageId, meta);
@@ -13274,6 +13270,9 @@ function initSettingsEvents() {
         updateTokenCounter();
     });
 
+    $('#horae-setting-custom-cal-enabled').on('change', _applyCustomCalendarFromUI);
+    $('#horae-setting-custom-cal-apply').on('click', _applyCustomCalendarFromUI);
+
     $('#horae-setting-send-characters').on('change', function () {
         settings.sendCharacters = this.checked;
         saveSettings();
@@ -13889,6 +13888,13 @@ function initSettingsEvents() {
         icon.toggleClass('collapsed');
     });
 
+    $('#horae-custom-cal-collapse-toggle').on('click', function () {
+        const body = $('#horae-custom-cal-collapse-body');
+        const icon = $(this).find('.horae-collapse-icon');
+        body.slideToggle(200);
+        icon.toggleClass('collapsed');
+    });
+
     // 向量记忆区域折叠切换
     $('#horae-vector-collapse-toggle').on('click', function () {
         const body = $('#horae-vector-collapse-body');
@@ -14136,6 +14142,158 @@ function initSettingsEvents() {
     $('#horae-btn-vector-clear').on('click', _clearVectorIndex);
 }
 
+/** 自定义日历：把 textarea 每行 "月名:天数" 解析回 settings.customCalendar，并刷新提示词与状态 */
+function _applyCustomCalendarFromUI() {
+    const raw = String($('#horae-setting-custom-cal-months').val() || '');
+    const names = [];
+    const days = [];
+    for (const line of raw.split(/\r?\n/)) {
+        const t = line.trim();
+        if (!t) continue;
+        const m = t.match(/^(.+?)[:：]\s*(\d+)\s*$/);
+        if (m) { names.push(m[1].trim()); days.push(parseInt(m[2], 10)); }
+    }
+    if (!settings.customCalendar) settings.customCalendar = { enabled: false, monthNames: [], monthDays: [] };
+    settings.customCalendar.monthNames = names;
+    settings.customCalendar.monthDays = days;
+    settings.customCalendar.enabled = $('#horae-setting-custom-cal-enabled').is(':checked');
+
+    const $status = $('#horae-setting-custom-cal-status');
+    const enabled = settings.customCalendar.enabled;
+    const valid = names.length > 0 && names.length === days.length;
+    if (enabled && !valid) {
+        $status.text(t('settings.customCalendarStatusInvalid', { names: names.length, days: days.length })).css('color', 'var(--horae-error, #ff7b7b)');
+    } else if (enabled) {
+        const total = days.reduce((a, b) => a + b, 0);
+        $status.text(t('settings.customCalendarStatusEnabled', { count: names.length, total })).css('color', 'var(--horae-success, #5fd57a)');
+        // 用户已知道这个功能，清空所有 chat 的"已忽略"标记，让以后切到别的虚拟日历卡时还能再提示
+        settings._customCalendarHintDismissed = {};
+    } else {
+        $status.text('').css('color', '');
+    }
+    saveSettings();
+    horaeManager.init(getContext(), settings);
+    _refreshSystemPromptDisplay();
+    updateTokenCounter();
+}
+
+// 自定义日历建议弹窗：节流时间戳与已弹标志，避免一次 chat 切换里多次面板渲染重复弹
+let _customCalLastChecked = 0;
+let _customCalModalOpen = false;
+
+/** 检测当前 chat 是否有反复出现的奇幻月名；满足阈值且未忽略时弹一次建议窗 */
+function _maybeSuggestCustomCalendar() {
+    if (!settings.enabled) return;
+    if (settings.customCalendar?.enabled) return;
+    if (_customCalModalOpen) return;
+    const ctx = getContext();
+    const chatId = ctx?.chatId;
+    if (!chatId) return;
+    if (settings._customCalendarHintDismissed?.[chatId]) return;
+    const now = Date.now();
+    if (now - _customCalLastChecked < 1500) return;
+    _customCalLastChecked = now;
+    const info = horaeManager.suggestCustomCalendarSignal();
+    if (!info) return;
+    _showCustomCalendarSuggestModal(info, chatId);
+}
+
+/** 任何关闭路径都把当前 chat 标记为已忽略，永久不再弹 */
+function _dismissCustomCalendarHint(chatId) {
+    if (!chatId) return;
+    if (!settings._customCalendarHintDismissed) settings._customCalendarHintDismissed = {};
+    settings._customCalendarHintDismissed[chatId] = true;
+    saveSettings();
+}
+
+function _showCustomCalendarSuggestModal(info, chatId) {
+    if (document.getElementById('horae-custom-cal-suggest-modal')) return;
+    _customCalModalOpen = true;
+    const lang = getLanguage();
+    const joiner = (lang === 'zh-CN' || lang === 'zh-TW' || lang === 'ja') ? '、' : ', ';
+    const sample = info.monthIds.slice(0, 4).map(escapeHtml).join(joiner);
+    const more = info.monthIds.length > 4
+        ? t('settings.customCalendarSuggestMore', { count: info.monthIds.length })
+        : '';
+    const detected = t('settings.customCalendarSuggestDetected', { sample, more, total: info.total });
+    const html = `
+        <div id="horae-custom-cal-suggest-modal" class="horae-modal${isLightMode() ? ' horae-light' : ''}">
+            <div class="horae-modal-content" style="max-width:460px;">
+                <div class="horae-modal-header">
+                    <i class="fa-solid fa-calendar-week"></i> ${escapeHtml(t('settings.customCalendarSuggestTitle'))}
+                </div>
+                <div class="horae-modal-body" style="font-size:13px; line-height:1.7;">
+                    <p style="margin:0 0 8px 0;">${detected}</p>
+                    <p style="margin:0; color:var(--horae-text-muted);">${escapeHtml(t('settings.customCalendarSuggestHint'))}</p>
+                </div>
+                <div class="horae-modal-footer">
+                    <button id="horae-custom-cal-suggest-go" class="horae-btn primary">
+                        <i class="fa-solid fa-gear"></i> ${escapeHtml(t('settings.customCalendarSuggestGo'))}
+                    </button>
+                    <button id="horae-custom-cal-suggest-dismiss" class="horae-btn">${escapeHtml(t('settings.customCalendarSuggestDismiss'))}</button>
+                </div>
+            </div>
+        </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+    const modal = document.getElementById('horae-custom-cal-suggest-modal');
+    preventModalBubble(modal);
+
+    const close = () => {
+        _customCalModalOpen = false;
+        _dismissCustomCalendarHint(chatId);
+        modal?.remove();
+    };
+
+    modal.addEventListener('click', (e) => {
+        if (e.target.id === 'horae-custom-cal-suggest-modal') close();
+    });
+    document.getElementById('horae-custom-cal-suggest-dismiss').addEventListener('click', (e) => {
+        e.stopPropagation();
+        close();
+    });
+    document.getElementById('horae-custom-cal-suggest-go').addEventListener('click', (e) => {
+        e.stopPropagation();
+        close();
+        _openCustomCalendarSection();
+    });
+}
+
+/** 打开 drawer、滚到自定义日历 section、展开并高亮 */
+function _openCustomCalendarSection() {
+    const drawerIcon = document.getElementById('horae_drawer_icon');
+    if (drawerIcon?.classList.contains('closedIcon')) drawerIcon.click();
+    setTimeout(() => {
+        const settingsTab = document.querySelector('.horae-tab[data-tab="settings"]');
+        if (settingsTab && settingsTab.offsetParent !== null) settingsTab.click();
+        const toggle = document.getElementById('horae-custom-cal-collapse-toggle');
+        const body = document.getElementById('horae-custom-cal-collapse-body');
+        if (body && body.style.display === 'none') toggle?.click();
+        const section = toggle?.closest('.horae-settings-section');
+        if (section) {
+            section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            section.classList.add('horae-tutorial-highlight');
+            setTimeout(() => section.classList.remove('horae-tutorial-highlight'), 2400);
+        }
+    }, 300);
+}
+
+/** 把 settings.customCalendar 回填到 UI textarea */
+function _syncCustomCalendarToUI() {
+    const cal = settings.customCalendar || {};
+    $('#horae-setting-custom-cal-enabled').prop('checked', !!cal.enabled);
+    const names = Array.isArray(cal.monthNames) ? cal.monthNames : [];
+    const days = Array.isArray(cal.monthDays) ? cal.monthDays : [];
+    const lines = names.map((n, i) => `${n}:${days[i] ?? ''}`);
+    $('#horae-setting-custom-cal-months').val(lines.join('\n'));
+    const $status = $('#horae-setting-custom-cal-status');
+    if (cal.enabled && names.length && names.length === days.length) {
+        const total = days.reduce((a, b) => a + (parseInt(b, 10) || 0), 0);
+        $status.text(t('settings.customCalendarStatusEnabled', { count: names.length, total })).css('color', 'var(--horae-success, #5fd57a)');
+    } else {
+        $status.text('').css('color', '');
+    }
+}
+
 /**
  * 同步设置到UI
  */
@@ -14335,6 +14493,7 @@ function syncSettingsToUI() {
     $('#horae-setting-timeline-injection-mode').val(settings.timelineInjectionMode === 'separate' ? 'separate' : 'inline');
     $('#horae-setting-send-timeline').prop('checked', settings.sendTimeline);
     $('#horae-setting-context-depth').val(Number.isFinite(parseInt(settings.contextDepth, 10)) ? Math.max(0, parseInt(settings.contextDepth, 10)) : 15);
+    _syncCustomCalendarToUI();
     $('#horae-setting-send-characters').prop('checked', settings.sendCharacters);
     $('#horae-setting-send-character-affection').prop('checked', settings.sendCharacterAffection !== false);
     $('#horae-setting-send-main-character-personality').prop('checked', settings.sendMainCharacterPersonality !== false);
@@ -17036,6 +17195,11 @@ event:重要程度|事件描述
 ★ 严禁氛围总结：禁止出现“显得...带有生活气息”、“气氛变得...”等主观感悟。`;
         }
 
+        // 反转述模式下条目为 [USER行动]+[AI回复] 双段，模板里没明确说这点，AI 容易只读后半段
+        if (settings.antiParaphraseMode) {
+            batchPrompt += `\n\n${_antiParaphraseSnippets().batchHint}`;
+        }
+
         try {
             const response = await Promise.race([
                 _generateForAuxTask(batchPrompt, { kind: 'summary' }),
@@ -18346,12 +18510,14 @@ async function analyzeMessageWithAI(messageContent, opts = {}) {
             const stateBeforeTarget = horaeManager.getLatestState(skipLast);
             contextText = _buildAnalysisContext(stateBeforeTarget, messageIndex, userName);
 
-            for (let i = messageIndex - 1; i >= Math.max(0, messageIndex - 3); i--) {
-                if (chat[i]?.is_user) {
-                    previousUserMessage = _stripHoraeAnalysisInput(chat[i].mes || '');
-                    if (previousUserMessage.length > 2000) previousUserMessage = previousUserMessage.slice(0, 2000) + '…';
-                    break;
-                }
+            for (let i = messageIndex - 1; i >= Math.max(0, messageIndex - 6); i--) {
+                const m = chat[i];
+                if (!m?.is_user) continue;
+                // 跳过隐藏 / 番外（小剧场）消息，避免把无关行动塞进结算
+                if (m.is_hidden || m.horae_meta?._skipHorae) continue;
+                previousUserMessage = _stripHoraeAnalysisInput(m.mes || '');
+                if (previousUserMessage.length > 2000) previousUserMessage = previousUserMessage.slice(0, 2000) + '…';
+                break;
             }
         }
     }
@@ -18365,6 +18531,12 @@ async function analyzeMessageWithAI(messageContent, opts = {}) {
     const fieldLines = horaeManager.getPromptFieldLines?.() || {};
     for (const [key, value] of Object.entries(fieldLines)) {
         analysisPrompt = analysisPrompt.replace(new RegExp(`\\$\\{${key}\\}`, 'g'), value);
+    }
+
+    // 反转述模式下，模板的 {{previousUserMessage}} 段缺乏「必须并入结算」的强制语气，
+    // 还有可能被「只读参考」之类的措辞误导，这里在末尾补一条硬性说明。
+    if (settings.antiParaphraseMode && previousUserMessage) {
+        analysisPrompt += `\n\n${_antiParaphraseSnippets().analysisHint}`;
     }
 
     try {
@@ -19050,6 +19222,56 @@ function _stripNoContextInjectionMarkers(chatMessages) {
     return found;
 }
 
+/** 反转述模式下三处注入点共用的文案（按 AI 输出语言切换） */
+function _antiParaphraseSnippets() {
+    const lang = detectEffectiveAiLang(settings);
+    const tr = (zh, tw, en, ja, ko, ru) => {
+        if (lang === 'zh-CN') return zh;
+        if (lang === 'zh-TW') return tw;
+        if (lang === 'ja') return ja;
+        if (lang === 'ko') return ko;
+        if (lang === 'ru') return ru;
+        return en;
+    };
+    return {
+        // onPromptReady：USER 上一条原始消息的引用块
+        refHeader: tr(
+            '【反转述参考 · USER 上一条消息】',
+            '【反轉述參考 · USER 上一條訊息】',
+            '[Anti-Paraphrase Reference · Previous USER message]',
+            '【反転叙述リファレンス · 直前の USER メッセージ】',
+            '【반-패러프레이즈 참조 · 직전 USER 메시지】',
+            '【Анти-перефраз · предыдущее сообщение USER】',
+        ),
+        refFooter: tr(
+            '【强制】本条 <horae>/<horaeevent> 必须把上文 USER 行为中的物品/位置/事件/NPC 变化全部并入，不得只结算 AI 叙述部分。',
+            '【強制】本條 <horae>/<horaeevent> 必須把上文 USER 行為中的物品/位置/事件/NPC 變化全部併入，不得只結算 AI 敘述部分。',
+            '[MANDATORY] This <horae>/<horaeevent> MUST consolidate every item/location/event/NPC change from the USER actions above; do not settle only the AI narration.',
+            '【必須】本ターンの <horae>/<horaeevent> には上記 USER 行為の全アイテム/場所/イベント/NPC 変化を必ず含めること。AI 描写部分のみで完結させない。',
+            '【필수】이번 <horae>/<horaeevent>에는 위 USER 행동의 모든 아이템/장소/사건/NPC 변화를 반드시 포함할 것. AI 서술 부분만으로 정산하지 말 것.',
+            '【ОБЯЗАТЕЛЬНО】Этот <horae>/<horaeevent> ДОЛЖЕН включать все изменения предметов/мест/событий/NPC из действий USER выше; нельзя ограничиваться только частью AI.',
+        ),
+        // batchAIScan：批量扫描末尾追加
+        batchHint: tr(
+            '【反转述模式 · 必读】本批次部分条目以 [USER行动] + [AI回复] 双段拼接给出，提取 horae/horaeevent 时必须把【USER行动】里的物品/位置/事件/NPC 变化与【AI回复】一并写入，禁止只读 AI 回复部分。',
+            '【反轉述模式 · 必讀】本批次部分條目以 [USER行動] + [AI回覆] 雙段拼接給出，提取 horae/horaeevent 時必須把【USER行動】裡的物品/位置/事件/NPC 變化與【AI回覆】一併寫入，禁止只讀 AI 回覆部分。',
+            '[Anti-Paraphrase Mode - REQUIRED] Some entries in this batch are concatenations of [USER ACTION] + [AI REPLY]. When extracting horae/horaeevent you MUST merge every item/location/event/NPC change from [USER ACTION] together with [AI REPLY]; do not read only the AI half.',
+            '【反転叙述モード · 必読】本バッチの一部項目は [USERの行動] + [AIの返答] を結合した形で渡される。horae/horaeevent を抽出する際は [USERの行動] 側のアイテム/場所/イベント/NPC 変化を [AIの返答] と必ず統合して記録すること。',
+            '【반-패러프레이즈 모드 · 필독】 본 배치의 일부 항목은 [USER 행동] + [AI 응답] 두 단락의 결합 형태로 제공된다. horae/horaeevent를 추출할 때 [USER 행동] 측의 아이템/장소/사건/NPC 변화를 [AI 응답]과 반드시 합산해 기록할 것.',
+            '【Режим анти-перефраза — обязательно】Некоторые записи в этом пакете объединяют [ДЕЙСТВИЕ USER] и [ОТВЕТ AI]. При извлечении horae/horaeevent ОБЯЗАТЕЛЬНО объединяйте все изменения предметов/мест/событий/NPC из [ДЕЙСТВИЕ USER] вместе с [ОТВЕТ AI].',
+        ),
+        // analyzeMessageWithAI：单条分析末尾追加
+        analysisHint: tr(
+            '【反转述模式】上方【上一条用户行动】描写的是 USER 自己的动作；本回合 <horae>/<horaeevent> 必须把那段行动里的物品/位置/事件/NPC 变化与【待分析文本】一并写入，不得忽略。',
+            '【反轉述模式】上方【上一條用戶行動】描寫的是 USER 自己的動作；本回合 <horae>/<horaeevent> 必須把那段行動裡的物品/位置/事件/NPC 變化與【待分析文本】一併寫入，不得忽略。',
+            '[Anti-Paraphrase Mode] The previous USER message above describes the user\'s own actions. This turn\'s <horae>/<horaeevent> MUST merge every item/location/event/NPC change from that USER message together with the text being analyzed; do not omit it.',
+            '【反転叙述モード】上記の【直前のユーザー行動】は USER 自身の行動を描写する。本ターンの <horae>/<horaeevent> には、その USER 行動のアイテム/場所/イベント/NPC 変化を【分析対象テキスト】と合算して必ず含めること。',
+            '【반-패러프레이즈 모드】 위 【직전 USER 행동】은 USER 본인의 행동을 묘사한다. 이번 턴의 <horae>/<horaeevent>는 해당 USER 행동의 아이템/장소/사건/NPC 변화를 【분석 대상 텍스트】와 함께 반드시 기록할 것.',
+            '【Режим анти-перефраза】Сообщение «предыдущее действие USER» выше описывает действия самого USER. <horae>/<horaeevent> в этом ходе ОБЯЗАТЕЛЬНО должно объединять все изменения предметов/мест/событий/NPC из этого сообщения USER с анализируемым текстом.',
+        ),
+    };
+}
+
 async function onPromptReady(eventData) {
     const skipVectorRecallOnce = _stripNoVectorRecallMarkers(eventData?.chat);
     const skipContextInjectionOnce = _stripNoContextInjectionMarkers(eventData?.chat);
@@ -19128,20 +19350,27 @@ async function onPromptReady(eventData) {
         let antiParaRef = '';
         if (settings.antiParaphraseMode && chat?.length) {
             for (let i = chat.length - 1; i >= 0; i--) {
-                if (chat[i].is_user && chat[i].mes) {
-                    const cleaned = chat[i].mes.replace(/<horae>[\s\S]*?<\/horae>/gi, '').replace(/<horaeevent>[\s\S]*?<\/horaeevent>/gi, '').trim();
-                    if (cleaned) {
-                        const truncated = cleaned.length > 2000 ? cleaned.slice(0, 2000) + '…' : cleaned;
-                        antiParaRef = `\n【反转述参考 - USER上一条消息内容】\n${truncated}\n（请将以上USER行为一并纳入本条<horae>结算）`;
-                    }
-                    break;
+                const m = chat[i];
+                if (!m?.is_user || !m.mes) continue;
+                // 跳过隐藏 / 番外（小剧场），这些不应被算进本回合结算
+                if (m.is_hidden || m.horae_meta?._skipHorae) continue;
+                const cleaned = m.mes
+                    .replace(/<horae>[\s\S]*?<\/horae>/gi, '')
+                    .replace(/<horaeevent>[\s\S]*?<\/horaeevent>/gi, '')
+                    .trim();
+                if (cleaned) {
+                    const truncated = cleaned.length > 2000 ? cleaned.slice(0, 2000) + '…' : cleaned;
+                    const snip = _antiParaphraseSnippets();
+                    antiParaRef = `\n\n${snip.refHeader}\n${truncated}\n${snip.refFooter}`;
                 }
+                break;
             }
         }
 
+        // antiParaRef 紧贴 rulesPrompt 末尾，让 AI 把"上一条 USER 消息"和"反转述规则"看在一起
         const combinedPrompt = recallPrompt
-            ? `${dataPrompt}\n${recallPrompt}${antiParaRef}\n${rulesPrompt}`
-            : `${dataPrompt}${antiParaRef}\n${rulesPrompt}`;
+            ? `${dataPrompt}\n${recallPrompt}\n${rulesPrompt}${antiParaRef}`
+            : `${dataPrompt}\n${rulesPrompt}${antiParaRef}`;
         const positionRaw = parseInt(settings.injectionPosition, 10);
         const position = Number.isNaN(positionRaw) ? 1 : Math.max(0, positionRaw);
         const depthSource = settings.injectionDepthSource === 'preset' ? 'preset' : 'system';
@@ -19349,6 +19578,8 @@ async function onChatChanged() {
                 const count = _pending.msgIndices.length;
                 setTimeout(() => _showPendingScanRecoveryModal(_pChat, _pending, count), 1000);
             }
+            // 跟 pending-scan 错开，避免两个弹窗叠在一起
+            setTimeout(() => _maybeSuggestCustomCalendar(), 2200);
         } catch (err) {
             console.error('[Horae] onChatChanged 面板渲染失败:', err);
         }
@@ -19372,6 +19603,7 @@ function onMessageRendered(messageId) {
         } catch (err) {
             console.error(`[Horae] onMessageRendered #${messageId} 失败:`, err);
         }
+        _maybeSuggestCustomCalendar();
     }, 100);
 }
 

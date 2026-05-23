@@ -3,7 +3,7 @@
  * 负责元数据的存储、解析、聚合
  */
 
-import { parseStoryDate, calculateRelativeTime, calculateDetailedRelativeTime, generateTimeReference, formatRelativeTime, formatFullDateTime, getRelativeTimeMeta } from '../utils/timeUtils.js';
+import { parseStoryDate, calculateRelativeTime, calculateDetailedRelativeTime, generateTimeReference, formatRelativeTime, formatFullDateTime, getRelativeTimeMeta, setCustomCalendar } from '../utils/timeUtils.js';
 import { detectEffectiveAiLangIsZh, detectEffectiveAiLang } from './i18n.js';
 import { getPromptDefaultSync } from './promptDefaults.js';
 
@@ -117,6 +117,7 @@ class HoraeManager {
     init(context, settings) {
         this.context = context;
         this.settings = settings;
+        setCustomCalendar(settings?.customCalendar || null);
     }
 
     /** 获取 AI 输出语言代码 (zh-CN / zh-TW / en / ja / ko / ru) */
@@ -557,6 +558,35 @@ class HoraeManager {
         return this.getEvents(limit, 'all');
     }
 
+    /** 扫描当前 chat 的剧情时间，判定是否应建议启用自定义日历。
+     *  三道闸全部满足才返回 { monthIds, total }，否则 null：
+     *    1) monthId 必须含「非数字、非"月"字」字符（如 春之月/霜降月），过滤纯数字月名（"8月"），
+     *       这样即便 parseStoryDate 漏识别了某种纪年格式也不会误触
+     *    2) 至少 2 种不同 monthId（同一个月反复出现是正常剧情节奏，不算非公历世界观特征）
+     *    3) 总命中数达阈值（默认 8）
+     */
+    suggestCustomCalendarSignal(threshold = 8) {
+        if (this.settings?.customCalendar?.enabled) return null;
+        const chat = this.getChat();
+        if (!chat?.length) return null;
+        const counts = new Map();
+        let total = 0;
+        for (let i = 0; i < chat.length; i++) {
+            const meta = chat[i]?.horae_meta;
+            if (!meta || meta._skipHorae) continue;
+            const date = meta.timestamp?.story_date;
+            if (!date) continue;
+            const parsed = parseStoryDate(date);
+            if (!parsed || parsed.type !== 'fantasy' || !parsed.monthId) continue;
+            if (!/[^\d月]/.test(parsed.monthId)) continue;
+            counts.set(parsed.monthId, (counts.get(parsed.monthId) || 0) + 1);
+            total++;
+        }
+        if (total < threshold || counts.size < 2) return null;
+        const monthIds = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
+        return { monthIds, total };
+    }
+
     /** 生成紧凑的上下文注入内容（skipLast: swipe时跳过末尾N条消息） */
     generateCompactPrompt(skipLast = 0) {
         const state = this.getLatestState(skipLast);
@@ -622,6 +652,8 @@ class HoraeManager {
                     lines.push(`[${L('时间参考','Time Ref','時間参考','시간 참조','Время (справка)')}|${L('昨天','yesterday','昨日','어제','вчера')}=${timeRef.yesterday}|${L('前天','day before','一昨日','그저께','позавчера')}=${timeRef.dayBefore}|${L('3天前','3 days ago','3日前','3일 전','3 дня назад')}=${timeRef.threeDaysAgo}]`);
                 } else if (timeRef && timeRef.type === 'fantasy') {
                     lines.push(`[${L('时间参考','Time Ref','時間参考','시간 참조','Время (справка)')}|${L('奇幻日历模式，参见剧情轨迹中的相对时间标记','Fantasy calendar mode, see relative time markers in story timeline','ファンタジー暦モード、ストーリー軌跡の相対時間マーカーを参照','판타지 달력 모드, 스토리 궤적의 상대 시간 마커 참조','Режим фэнтезийного календаря, см. относительные метки времени в сюжетной линии')}]`);
+                } else if (timeRef && timeRef.type === 'custom') {
+                    lines.push(`[${L('时间参考','Time Ref','時間参考','시간 참조','Время (справка)')}|${L('自定义日历模式，相对时间见剧情轨迹','Custom calendar mode, see relative time in story timeline','カスタム暦モード、相対時間はストーリー軌跡参照','사용자 정의 달력 모드, 상대 시간은 스토리 궤적 참조','Пользовательский календарь, см. относительное время в сюжетной линии')}]`);
                 }
             }
         }
@@ -3419,7 +3451,8 @@ class HoraeManager {
         const [userName, charName] = this._getDefaultNames();
         const subs = this.generateLocationMemoryPrompt() + this.generateCustomTablesPrompt() +
                      this.generateRelationshipPrompt() + this.generateMoodPrompt() +
-                     this.generateRpgPrompt() + this._generateAntiParaphrasePrompt();
+                     this.generateRpgPrompt() + this._generateAntiParaphrasePrompt() +
+                     this._generateCustomCalendarPrompt();
         const fieldLines = this.getPromptFieldLines();
 
         if (this.settings?.customSystemPrompt) {
@@ -3587,6 +3620,39 @@ class HoraeManager {
         const text = this._getPromptDefaultFromResource('customAntiParaphrasePrompt', { userName });
         if (!text || !text.trim()) return '';
         return '\n' + text.trim();
+    }
+
+    /** 自定义日历提示词：仅启用且配置完整时注入，告诉 AI 使用指定月名 + 日数 */
+    _generateCustomCalendarPrompt() {
+        const cal = this.settings?.customCalendar;
+        if (!cal?.enabled) return '';
+        const names = Array.isArray(cal.monthNames)
+            ? cal.monthNames.map(s => String(s || '').trim()).filter(Boolean)
+            : [];
+        const days = Array.isArray(cal.monthDays)
+            ? cal.monthDays.map(n => parseInt(n, 10)).filter(n => Number.isFinite(n) && n > 0)
+            : [];
+        if (!names.length || names.length !== days.length) return '';
+
+        const lang = this._getAiOutputLang();
+        const tr = (zh, tw, en, ja, ko, ru) => {
+            if (lang === 'zh-CN') return zh;
+            if (lang === 'zh-TW') return tw;
+            if (lang === 'ja') return ja;
+            if (lang === 'ko') return ko;
+            if (lang === 'ru') return ru;
+            return en;
+        };
+        const monthList = names.map((n, i) => `${n}(${days[i]})`).join('、');
+        const sample = names[0];
+        return '\n' + tr(
+            `本世界使用自定义日历，共 ${names.length} 个月：${monthList}。time 字段必须用月名+日数，例 "${sample}1" 或 "${sample}十五日"；跨年写 "X年${sample}1"。禁止使用公历 M/D 或"今天/昨天"。`,
+            `本世界使用自訂日曆，共 ${names.length} 個月：${monthList}。time 欄位必須用月名+日數，例 "${sample}1" 或 "${sample}十五日"；跨年寫 "X年${sample}1"。禁止使用公曆 M/D 或"今天/昨天"。`,
+            `This world uses a custom calendar with ${names.length} months: ${monthList}. The time field must use month name + day, e.g. "${sample}1" or "${sample}15"; cross-year format: "Year N ${sample}1". Do not use Gregorian M/D or "today/yesterday".`,
+            `本世界はカスタム暦使用、計 ${names.length} か月：${monthList}。time フィールドは月名＋日数必須、例「${sample}1」「${sample}十五日」、跨年は「X年${sample}1」。グレゴリオ暦 M/D や「今日／昨日」は禁止。`,
+            `이 세계는 사용자 정의 달력 사용, 총 ${names.length}개월: ${monthList}. time 필드는 월명+일수 필수, 예: "${sample}1" 또는 "${sample}15", 연도 표기: "X년 ${sample}1". 그레고리력 M/D 또는 "오늘/어제" 금지.`,
+            `Этот мир использует пользовательский календарь из ${names.length} месяцев: ${monthList}. Поле time — название месяца + число, например "${sample}1" или "${sample}15"; смена года: "Год N ${sample}1". Не использовать григорианский M/D или "сегодня/вчера".`,
+        );
     }
 
     generateMoodPrompt() {

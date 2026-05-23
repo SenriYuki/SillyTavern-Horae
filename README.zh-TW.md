@@ -1,4 +1,4 @@
-# Horae - 時光記憶 v1.14.2 | SillyTavern 記憶增強插件
+# Horae - 時光記憶 v1.14.3 | SillyTavern 記憶增強插件
 
 [English](README.md) | [简体中文](README.zh-CN.md) | **繁體中文**
 

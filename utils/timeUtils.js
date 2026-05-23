@@ -15,8 +15,67 @@ const CHINESE_NUMS = {
     '十六': 16, '十七': 17, '十八': 18, '十九': 19, '二十': 20,
     '廿': 20, '廿一': 21, '廿二': 22, '廿三': 23, '廿四': 24, '廿五': 25,
     '廿六': 26, '廿七': 27, '廿八': 28, '廿九': 29, '三十': 30,
-    '三十一': 31, '卅': 30, '卅一': 31
+    '三十一': 31, '卅': 30, '卅一': 31,
+    // 元年=1（其余如正月/腊月这些农历俗称暂不收，避免与公历月份冲突）
+    '元': 1
 };
+
+/** 当前生效的自定义日历，未启用为 null */
+let _customCalendar = null;
+
+/** 装填或清空自定义日历；月名/天数对不上即视为无效配置，避免半截数据误判 */
+export function setCustomCalendar(cfg) {
+    if (!cfg || !cfg.enabled) { _customCalendar = null; return; }
+    const names = Array.isArray(cfg.monthNames)
+        ? cfg.monthNames.map(s => String(s || '').trim()).filter(Boolean)
+        : [];
+    const days = Array.isArray(cfg.monthDays)
+        ? cfg.monthDays.map(n => parseInt(n, 10)).filter(n => Number.isFinite(n) && n > 0)
+        : [];
+    if (!names.length || names.length !== days.length) { _customCalendar = null; return; }
+    const offsets = [];
+    let acc = 0;
+    for (const d of days) { offsets.push(acc); acc += d; }
+    _customCalendar = { monthNames: names, monthDays: days, monthOffsets: offsets, yearLength: acc };
+}
+
+/** 返回当前自定义日历配置（未启用为 null） */
+export function getActiveCustomCalendar() {
+    return _customCalendar;
+}
+
+/** 中文数字短串转整数（一/二/.../三十一/廿X/卅X，兼容十一~十九、二十一~三十一） */
+function _cnNumToInt(s) {
+    if (!s) return null;
+    if (CHINESE_NUMS[s] !== undefined) return CHINESE_NUMS[s];
+    // 十X / 二十X / 三十X 这类组合 CHINESE_NUMS 没全列，这里兜底
+    let m = s.match(/^([一二三四五六七八九])?十([一二三四五六七八九])?$/);
+    if (m) {
+        const tens = m[1] ? CHINESE_NUMS[m[1]] : 1;
+        const ones = m[2] ? CHINESE_NUMS[m[2]] : 0;
+        return tens * 10 + ones;
+    }
+    m = s.match(/^([廿卅])([一二三四五六七八九])?$/);
+    if (m) {
+        const base = m[1] === '廿' ? 20 : 30;
+        const ones = m[2] ? CHINESE_NUMS[m[2]] : 0;
+        return base + ones;
+    }
+    return null;
+}
+
+/** 逐位中文数字年份（二〇二四 / 一九九九），不支持千/百位写法 */
+function _cnYearToInt(s) {
+    if (!s) return null;
+    if (/^\d+$/.test(s)) return parseInt(s, 10);
+    let n = 0;
+    for (const ch of s) {
+        const v = CHINESE_NUMS[ch];
+        if (v === undefined || v > 9) return null;
+        n = n * 10 + v;
+    }
+    return n || null;
+}
 
 /** 从日期字符串中提取日数 */
 function extractDayNumber(dateStr) {
@@ -50,17 +109,49 @@ function extractDayNumber(dateStr) {
     return null;
 }
 
-/** 从日期字符串中提取月份标识 */
+/** 月名按长度倒序匹配，避免短月名（春之月）吞掉长月名（春之月初始） */
+function _parseCustomDate(s) {
+    const cal = _customCalendar;
+    if (!cal) return null;
+    const order = cal.monthNames
+        .map((name, i) => ({ name, i }))
+        .sort((a, b) => b.name.length - a.name.length);
+    for (const { name, i } of order) {
+        const nameEsc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const reYear = new RegExp(`(?:^|[^\\d\\u4e00-\\u9fa5])([零〇一二三四五六七八九十廿卅元]+|\\d+)年\\s*${nameEsc}\\s*([零〇一二三四五六七八九十廿卅]+|\\d+)日?`);
+        const my = s.match(reYear);
+        if (my) {
+            const year = /^\d+$/.test(my[1]) ? parseInt(my[1], 10) : _cnNumToInt(my[1]);
+            const day = /^\d+$/.test(my[2]) ? parseInt(my[2], 10) : _cnNumToInt(my[2]);
+            if (year !== null && day !== null && day >= 1 && day <= cal.monthDays[i]) {
+                return { year, monthIndex: i, day, type: 'custom' };
+            }
+        }
+        const re = new RegExp(`${nameEsc}\\s*([零〇一二三四五六七八九十廿卅]+|\\d+)日?`);
+        const m = s.match(re);
+        if (m) {
+            const day = /^\d+$/.test(m[1]) ? parseInt(m[1], 10) : _cnNumToInt(m[1]);
+            if (day !== null && day >= 1 && day <= cal.monthDays[i]) {
+                return { monthIndex: i, day, type: 'custom' };
+            }
+        }
+    }
+    return null;
+}
+
+/** 自定义日历的线性日序号，用于跨月跨年减法 */
+function _customLinearDay(parsed) {
+    const cal = _customCalendar;
+    if (!cal || parsed.type !== 'custom') return null;
+    const year = parsed.year ?? 0;
+    return year * cal.yearLength + cal.monthOffsets[parsed.monthIndex] + (parsed.day - 1);
+}
+
+/** 从日期字符串中提取月份标识：仅识别「非数字月名」（春之月/霜降月） */
 function extractMonthIdentifier(dateStr) {
     if (!dateStr) return null;
-    
-    // 匹配"X月"格式
     const monthMatch = dateStr.match(/([^\s\d]+月)/);
     if (monthMatch) return monthMatch[1];
-    
-    const numMatch = dateStr.match(/(?:\d{4}[\/\-])?(\d{1,2})[\/\-]\d{1,2}/);
-    if (numMatch) return numMatch[1] + '月';
-    
     return null;
 }
 
@@ -128,7 +219,72 @@ export function parseStoryDate(dateStr) {
             return { month, day, type: 'standard' };
         }
     }
-    
+
+    // 历法/纪年前缀 + 年月日（"萬曆十五年八月十六日" / "公元前2024年八月十六日" / "贞观元年五月廿八"）
+    // 前缀首字必须是「非空白、非数字、非中文数字、非年月日」的普通字符，避免吃掉"二〇二四"这种纯年份
+    const eraMatch = cleanStr.match(/^([^\s\d零〇一二三四五六七八九十廿卅元年月日][^\s年月日]*?)([零〇一二三四五六七八九十廿卅元]+|\d+)年\s*([零〇一二三四五六七八九十廿卅元]+|\d+)月([零〇一二三四五六七八九十廿卅元]+|\d+)日?/);
+    if (eraMatch) {
+        const calendarPrefix = eraMatch[1].trim() || undefined;
+        const year = /^\d+$/.test(eraMatch[2]) ? parseInt(eraMatch[2], 10) : _cnNumToInt(eraMatch[2]);
+        const month = /^\d+$/.test(eraMatch[3]) ? parseInt(eraMatch[3], 10) : _cnNumToInt(eraMatch[3]);
+        const day = /^\d+$/.test(eraMatch[4]) ? parseInt(eraMatch[4], 10) : _cnNumToInt(eraMatch[4]);
+        if (year !== null && year >= 1 && month !== null && month >= 1 && month <= 12 && day !== null && day >= 1 && day <= 31) {
+            return { year, month, day, type: 'standard', calendarPrefix };
+        }
+    }
+
+    // 纪年（任意前缀，含中文/阿拉伯年）+ 阿拉伯月日（"玄昭十五年 8/16" / "万历15年 8/16" / "2024年 8/16" / "贞观元年8/16"）
+    // 前缀允许为空（纯阿拉伯/中文数字年），且 \s* 允许年与 M/D 之间有无空白；优先级必须高于 fantasy 兜底
+    const yearSlashMatch = cleanStr.match(/^([^\s\d零〇一二三四五六七八九十廿卅元年月日]?[^\s年月日]*?)([零〇一二三四五六七八九十廿卅元]+|\d+)年\s*(\d{1,2})[\/\-](\d{1,2})\b/);
+    if (yearSlashMatch) {
+        const calendarPrefix = yearSlashMatch[1].trim() || undefined;
+        const yearRaw = yearSlashMatch[2];
+        let year;
+        if (/^\d+$/.test(yearRaw)) {
+            year = parseInt(yearRaw, 10);
+        } else {
+            year = _cnNumToInt(yearRaw);
+            if (year === null) year = _cnYearToInt(yearRaw);
+        }
+        const month = parseInt(yearSlashMatch[3], 10);
+        const day = parseInt(yearSlashMatch[4], 10);
+        if (year !== null && year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+            return { year, month, day, type: 'standard', calendarPrefix };
+        }
+    }
+
+    // 中/阿年份 + 中文月日（"二〇二四年八月十六日" / "2024年八月十六日"）
+    // 必须放在纯中文月日之前，否则会丢失年份
+    const cnYearMixedMatch = cleanStr.match(/(\d+|[零〇一二三四五六七八九]+)年\s*([零〇一二三四五六七八九十廿卅]+)月([零〇一二三四五六七八九十廿卅]+)日?/);
+    if (cnYearMixedMatch) {
+        const year = _cnYearToInt(cnYearMixedMatch[1]);
+        const month = _cnNumToInt(cnYearMixedMatch[2]);
+        const day = _cnNumToInt(cnYearMixedMatch[3]);
+        if (year !== null && month !== null && day !== null && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+            const fullMatchStr = cnYearMixedMatch[0];
+            const prefixEnd = cleanStr.indexOf(fullMatchStr);
+            const calendarPrefix = cleanStr.substring(0, prefixEnd).trim() || undefined;
+            return { year, month, day, type: 'standard', calendarPrefix };
+        }
+    }
+
+    // 纯中文月日（"八月十六日" / "十二月廿八日" / "六月二十三日"），按公历处理
+    // 月名包含非数字字符的奇幻日历（春之月/霜降月）走下方 fantasy 分支
+    const cnMonthDayMatch = cleanStr.match(/([零〇一二三四五六七八九十廿卅]+)月([零〇一二三四五六七八九十廿卅]+)日?/);
+    if (cnMonthDayMatch) {
+        const month = _cnNumToInt(cnMonthDayMatch[1]);
+        const day = _cnNumToInt(cnMonthDayMatch[2]);
+        if (month !== null && day !== null && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+            return { month, day, type: 'standard' };
+        }
+    }
+
+    // 自定义日历：月名匹配优先于奇幻兜底，否则 春之月十五日 会被当作 monthId="春之月"
+    if (_customCalendar) {
+        const custom = _parseCustomDate(cleanStr);
+        if (custom) return custom;
+    }
+
     // 奇幻日历格式
     const monthId = extractMonthIdentifier(cleanStr);
     const dayNum = extractDayNumber(cleanStr);
@@ -167,8 +323,21 @@ export function calculateRelativeTime(fromDate, toDate) {
     
     if (!from || !to) return null;
     
+    // 自定义日历：必须两端都是 custom 才能算，跨历法返 null
+    if (from.type === 'custom' || to.type === 'custom') {
+        if (from.type !== 'custom' || to.type !== 'custom') return null;
+        const f = _customLinearDay(from);
+        const t = _customLinearDay(to);
+        return (f === null || t === null) ? null : t - f;
+    }
+
     // 标准格式精确计算
     if (from.type === 'standard' && to.type === 'standard') {
+        // 跨历法前缀（萬曆 vs 崇禎、公元前 vs 现代）没有统一时间轴，相对时间标为未知
+        const fromPrefix = from.calendarPrefix || '';
+        const toPrefix = to.calendarPrefix || '';
+        if (fromPrefix !== toPrefix) return null;
+
         const defaultYear = 2024;
         const fromYear = from.year || to.year || defaultYear;
         const toYear = to.year || from.year || defaultYear;
@@ -338,6 +507,12 @@ export function formatRelativeTime(days, options = {}) {
 /** 格式化剧情日期为标准格式 */
 export function formatStoryDate(dateObj, includeWeekday = false) {
     if (!dateObj) return '';
+    // 自定义日历：用月名+日数组成显示串
+    if (dateObj.type === 'custom' && _customCalendar) {
+        const name = _customCalendar.monthNames[dateObj.monthIndex] || '?';
+        const yr = dateObj.year ? `${dateObj.year}年` : '';
+        return `${yr}${name}${dateObj.day}日`;
+    }
     // 奇幻日历保留原始字符串
     if (dateObj.raw && !dateObj.month) {
         let result = dateObj.raw;
@@ -396,11 +571,13 @@ export function generateTimeReference(currentDate) {
     const current = parseStoryDate(currentDate);
     if (!current) return null;
     
-    if (current.type === 'fantasy') {
+    if (current.type === 'fantasy' || current.type === 'custom') {
         return {
             current: currentDate,
-            type: 'fantasy',
-            note: '奇幻日历模式，相对日期由插件自动计算'
+            type: current.type,
+            note: current.type === 'custom'
+                ? '自定义日历模式，相对日期由插件自动计算'
+                : '奇幻日历模式，相对日期由插件自动计算'
         };
     }
     
@@ -455,7 +632,22 @@ export function calculateDetailedRelativeTime(fromDateStr, toDateStr) {
 export function subtractDays(dateStr, days) {
     const parsed = parseStoryDate(dateStr);
     if (!parsed || parsed.type === 'fantasy') return dateStr;
-    
+
+    if (parsed.type === 'custom' && _customCalendar) {
+        const cal = _customCalendar;
+        const linear = _customLinearDay(parsed) - days;
+        if (linear < 0) return dateStr;
+        const year = Math.floor(linear / cal.yearLength);
+        let rem = linear - year * cal.yearLength;
+        let mi = 0;
+        for (; mi < cal.monthDays.length; mi++) {
+            if (rem < cal.monthDays[mi]) break;
+            rem -= cal.monthDays[mi];
+        }
+        const yr = parsed.year != null ? `${year}年` : '';
+        return `${yr}${cal.monthNames[mi]}${rem + 1}日`;
+    }
+
     const refYear = parsed.year || 2024;
     const date = new Date(0);
     date.setFullYear(refYear, parsed.month - 1, parsed.day);
