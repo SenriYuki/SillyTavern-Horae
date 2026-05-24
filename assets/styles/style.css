@@ -7986,3 +7986,158 @@ body .horae-context-menu {
         font-size: 13px;
     }
 }
+
+/* 外部 settings 决策弹窗 —— 自命名空间，所有属性显式覆盖以隔离酒馆全局美化 */
+.horae-extsettings-modal .horae-extsettings-content {
+    max-width: 540px !important;
+    width: 92% !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-langbar {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 8px 12px !important;
+    background: var(--horae-bg-secondary, rgba(0, 0, 0, 0.18)) !important;
+    border-bottom: 1px solid var(--horae-border, rgba(255, 255, 255, 0.08)) !important;
+    flex-wrap: wrap !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-langbar-icon {
+    color: var(--horae-primary-light, #8b9dff) !important;
+    font-size: 14px !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-langbar-label {
+    font-size: 11px !important;
+    color: var(--horae-text-muted, #94a3b8) !important;
+    margin-right: 4px !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-langbar-btns {
+    display: flex !important;
+    gap: 4px !important;
+    flex-wrap: wrap !important;
+    margin-left: auto !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-lang-btn {
+    padding: 3px 9px !important;
+    font-size: 11px !important;
+    line-height: 1.4 !important;
+    border-radius: 4px !important;
+    border: 1px solid var(--horae-border, rgba(255, 255, 255, 0.12)) !important;
+    background: transparent !important;
+    color: var(--horae-text, #e2e8f0) !important;
+    cursor: pointer !important;
+    font-family: inherit !important;
+    transition: background 0.15s, border-color 0.15s !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-lang-btn:hover {
+    background: var(--horae-bg-soft, rgba(255, 255, 255, 0.06)) !important;
+    border-color: var(--horae-primary-light, #8b9dff) !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-lang-btn.is-active {
+    background: var(--horae-primary, #4f46e5) !important;
+    border-color: var(--horae-primary, #4f46e5) !important;
+    color: #fff !important;
+    font-weight: 600 !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-body {
+    font-size: 13px !important;
+    line-height: 1.7 !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-intro {
+    margin: 0 0 10px 0 !important;
+    color: var(--horae-text, #e2e8f0) !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-block {
+    background: var(--horae-bg-soft, rgba(127, 127, 127, 0.08)) !important;
+    border-radius: 6px !important;
+    padding: 10px 14px !important;
+    margin: 8px 0 !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-block-title {
+    font-weight: 600 !important;
+    margin-bottom: 4px !important;
+    color: var(--horae-text, #e2e8f0) !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-block-title-keep {
+    margin: 10px 0 4px 0 !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-list {
+    margin: 0 !important;
+    padding-left: 20px !important;
+    color: var(--horae-text, #e2e8f0) !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-list li {
+    margin: 2px 0 !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-themes-note {
+    margin: 10px 0 0 0 !important;
+    padding: 6px 10px !important;
+    background: rgba(245, 158, 11, 0.10) !important;
+    border-left: 2px solid var(--horae-warning, #f59e0b) !important;
+    border-radius: 3px !important;
+    font-size: 11px !important;
+    color: var(--horae-text-muted, #94a3b8) !important;
+    line-height: 1.5 !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-themes-note i {
+    color: var(--horae-warning, #f59e0b) !important;
+    margin-right: 4px !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-memorysafe {
+    margin: 10px 0 0 0 !important;
+    color: var(--horae-text-muted, #94a3b8) !important;
+    font-size: 12px !important;
+    line-height: 1.5 !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-memorysafe i {
+    color: var(--horae-info, #38bdf8) !important;
+    margin-right: 4px !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-footer {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-skip {
+    margin-left: auto !important;
+}
+
+.horae-extsettings-modal .horae-extsettings-skip-hint {
+    flex-basis: 100% !important;
+    text-align: right !important;
+    font-size: 11px !important;
+    color: var(--horae-text-muted, #94a3b8) !important;
+    margin-top: 2px !important;
+}
+
+@media screen and (max-width: 600px) {
+    .horae-extsettings-modal .horae-extsettings-langbar-btns {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+    .horae-extsettings-modal .horae-extsettings-lang-btn {
+        flex: 1 1 calc(33% - 4px) !important;
+        min-width: 0 !important;
+    }
+    .horae-extsettings-modal .horae-extsettings-skip-hint {
+        text-align: center !important;
+    }
+}

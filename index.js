@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.14.2
+ * 版本: 1.14.4
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -22,7 +22,10 @@ import { initPromptDefaults, ensurePromptDefaults, ensurePresetPrompts, getPromp
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.14.2';
+const VERSION = '1.14.4';
+
+// settings 来源标记。仅用于区分「上次写入是否本版本自身」，外部来源（旧版本/其他分发版）会触发一次确认弹窗
+const ENGINE_TAG = 'horae-official';
 
 // 配套正则规则（自动注入ST原生正则系统）
 const HORAE_REGEX_RULES = [
@@ -268,6 +271,25 @@ const PROMPT_SETTING_KEYS = [
     'vectorQueryRewriteSystemPrompt',
 ];
 
+// 外部来源弹窗里「重置但保留」的白名单：填起来麻烦或丢失代价大的字段
+const PRESERVED_KEYS_ON_RESET = [
+    ...PROMPT_SETTING_KEYS,
+    'auxApiUrl', 'auxApiKey', 'auxApiModel', 'auxApiEnabled',
+    'auxApiUseForAnalysis', 'auxApiUseForSummary',
+    'auxApiUseForManualCompress', 'auxApiFallbackToMain',
+    'vectorEnabled', 'vectorSource', 'vectorModel', 'vectorDtype',
+    'vectorApiUrl', 'vectorApiKey', 'vectorApiModel',
+    'vectorRerankEnabled', 'vectorRerankFullText',
+    'vectorRerankModel', 'vectorRerankUrl', 'vectorRerankKey',
+    'vectorRerankCandidates', 'vectorRerankRecallThreshold', 'vectorRerankMinScore',
+    'vectorRecallPresets', 'vectorRecallPresetSelected',
+    'vectorTopK', 'vectorThreshold', 'vectorFullTextCount', 'vectorFullTextThreshold',
+    'vectorStripTags', 'vectorPureMode',
+    'vectorQueryRewriteEnabled',
+    'customThemes', 'globalTables',
+    'uiLanguage', 'aiOutputLanguage',
+];
+
 // ============================================
 // 全局变量
 // ============================================
@@ -275,6 +297,10 @@ let settings = { ...DEFAULT_SETTINGS };
 let doNavbarIconClick = null;
 let isInitialized = false;
 let _i18nReady = false;
+// 外部数据待用户决定：UI 就绪后弹窗交由用户处理
+let _pendingExternalSettings = null;
+// 「本次先不决定」：本次会话照常写盘但不写入 _engine 指纹
+let _engineDeferred = false;
 let _isSummaryGeneration = false;
 let _summaryInProgress = false;
 let _panelAiAnalyzeInProgress = false;
@@ -859,23 +885,47 @@ function _normalizeAutoSummarySettingsInPlace(saved = {}) {
 
 function loadSettings() {
     let changed = false;
-    const saved = extension_settings[EXTENSION_NAME] || null;
-    if (extension_settings[EXTENSION_NAME]) {
-        settings = { ...DEFAULT_SETTINGS, ...extension_settings[EXTENSION_NAME] };
-    } else {
-        _isFirstTimeUser = true;
-        extension_settings[EXTENSION_NAME] = { ...DEFAULT_SETTINGS };
-        settings = { ...DEFAULT_SETTINGS };
+    let raw = extension_settings[EXTENSION_NAME] || null;
+
+    // 上次确认弹窗的结果走 sessionStorage 中转，绕开 ST 异步写盘竞态
+    try {
+        const forced = sessionStorage.getItem('horae_force_settings');
+        if (forced) {
+            sessionStorage.removeItem('horae_force_settings');
+            const parsed = JSON.parse(forced);
+            if (parsed && typeof parsed === 'object') {
+                raw = parsed;
+                extension_settings[EXTENSION_NAME] = raw;
+            }
+        }
+    } catch (err) {
+        console.warn('[Horae] sessionStorage 还原失败:', err);
     }
+
+    if (!raw) {
+        _isFirstTimeUser = true;
+        settings = { ...DEFAULT_SETTINGS };
+        extension_settings[EXTENSION_NAME] = settings;
+    } else if (raw._engine !== ENGINE_TAG) {
+        _pendingExternalSettings = raw;
+        settings = { ...DEFAULT_SETTINGS, ...raw };
+        delete settings._skippedExternalRaw;
+    } else {
+        settings = { ...DEFAULT_SETTINGS, ...raw };
+        delete settings._skippedExternalRaw;
+    }
+
+    const saved = raw || {};
+
     if (!settings._autoFillPrevTimelineDefaultOffMigrated) {
         settings.autoFillPrevTimelineOnSend = false;
         settings._autoFillPrevTimelineDefaultOffMigrated = true;
         changed = true;
     }
-    if (_migrateAuxApiSettings(saved || {})) changed = true;
-    if (_normalizeAutoSummarySettingsInPlace(saved || {}) || _normalizePromptSettingsInPlace() || _normalizeVectorRecallPresetsInPlace() || _normalizeRpgSettingsInPlace()) changed = true;
+    if (_migrateAuxApiSettings(saved)) changed = true;
+    if (_normalizeAutoSummarySettingsInPlace(saved) || _normalizePromptSettingsInPlace() || _normalizeVectorRecallPresetsInPlace() || _normalizeRpgSettingsInPlace()) changed = true;
     if (_migrateLegacyVectorSettings(settings)) changed = true;
-    if (changed) saveSettings();
+    if (changed && !_pendingExternalSettings) saveSettings();
 }
 
 function _migrateAuxApiSettings(saved = {}) {
@@ -914,13 +964,20 @@ function _migrateAttrConfig() {
     }
 }
 
-/**
- * 保存设置
- */
-function saveSettings() {
+function saveSettings(options = {}) {
+    if (_pendingExternalSettings) return;
     _normalizePromptTextFields(settings, PROMPT_SETTING_KEYS);
+    if (_engineDeferred) {
+        delete settings._engine;
+    } else {
+        settings._engine = ENGINE_TAG;
+    }
     extension_settings[EXTENSION_NAME] = settings;
     saveSettingsDebounced();
+    if (options.immediate && typeof saveSettingsDebounced.flush === 'function') {
+        try { saveSettingsDebounced.flush(); }
+        catch (err) { console.warn('[Horae] flush 失败:', err); }
+    }
     eventSource.emit('horae:settingsChanged', { enabled: !!settings.enabled });
 }
 
@@ -10036,8 +10093,14 @@ function applyPanelLayoutStyle() {
 
 /** 应用主题模式（dark / light / 内置预设 / custom-{index}） */
 function applyThemeMode() {
-    const mode = settings.themeMode || 'dark';
-    const theme = resolveTheme(mode);
+    let mode = settings.themeMode || 'dark';
+    let theme = resolveTheme(mode);
+    if (mode.startsWith('custom-') && !theme) {
+        mode = 'dark';
+        settings.themeMode = 'dark';
+        theme = resolveTheme(mode);
+        saveSettings();
+    }
     const isLight = mode === 'light' || !!(theme && theme.isLight);
     const hasCustomVars = !!(theme && theme.variables);
 
@@ -10072,7 +10135,6 @@ function applyThemeMode() {
         if (themeStyleEl) themeStyleEl.remove();
     }
 
-    // 注入主题附带CSS
     let themeCssEl = document.getElementById('horae-theme-css');
     if (theme && theme.css) {
         if (!themeCssEl) {
@@ -10080,16 +10142,37 @@ function applyThemeMode() {
             themeCssEl.id = 'horae-theme-css';
             document.head.appendChild(themeCssEl);
         }
-        themeCssEl.textContent = theme.css;
+        themeCssEl.textContent = _sanitizeCustomCSS(theme.css);
     } else {
         if (themeCssEl) themeCssEl.remove();
     }
 }
 
+// 剥掉会让本版控件折叠/工具栏被强制隐藏的危险规则，避免外部 customCSS 锁死 UI
+function _sanitizeCustomCSS(input) {
+    if (!input) return '';
+    const lockedSelectors = [
+        'horae-aux-api-options',
+        'horae-aux-api-collapse-body',
+        'horae-autosummary-collapse-body',
+        'horae-vector-collapse-body',
+        'horae-advanced-collapse-body',
+        'horae-custom-cal-collapse-body',
+        'horae-custom-tables-collapse-body',
+        'horae-send-to-ai-collapse-body',
+        'horae-css-collapse-body',
+    ];
+    const pattern = new RegExp(
+        `#(?:${lockedSelectors.join('|')})[^{}]*\\{[^{}]*display\\s*:\\s*none[^{}]*!important[^{}]*\\}`,
+        'gi'
+    );
+    return input.replace(pattern, '');
+}
+
 /** 注入用户自定义CSS */
 function applyCustomCSS() {
     let styleEl = document.getElementById('horae-custom-style');
-    const css = (settings.customCSS || '').trim();
+    const css = _sanitizeCustomCSS((settings.customCSS || '').trim());
     if (!css) {
         if (styleEl) styleEl.remove();
         return;
@@ -10153,6 +10236,7 @@ function importTheme() {
                 return;
             }
             theme.name = theme.name || file.name.replace('.json', '');
+            if (typeof theme.css === 'string') theme.css = _sanitizeCustomCSS(theme.css);
             if (!settings.customThemes) settings.customThemes = [];
             settings.customThemes.push(theme);
             saveSettings();
@@ -12285,6 +12369,11 @@ function initTabs() {
  */
 function initSettingsEvents() {
     $('#horae-btn-restart-tutorial').on('click', () => startTutorial());
+    $('#horae-btn-restore-extsettings').on('click', () => {
+        const raw = extension_settings[EXTENSION_NAME];
+        if (raw && raw._engine !== ENGINE_TAG) _showExternalSettingsModal(raw);
+    });
+    _refreshRestoreExtSettingsBtn();
 
     $('#horae-setting-ui-language').val(settings.uiLanguage || 'auto').on('change', async function () {
         const prev = settings.uiLanguage;
@@ -14277,6 +14366,203 @@ function _openCustomCalendarSection() {
     }, 300);
 }
 
+function _runSettingsMigrationChain(rawSource) {
+    const saved = rawSource && typeof rawSource === 'object' ? rawSource : {};
+    _migrateAuxApiSettings(saved);
+    _normalizeAutoSummarySettingsInPlace(saved);
+    _normalizePromptSettingsInPlace();
+    _normalizeVectorRecallPresetsInPlace();
+    _normalizeRpgSettingsInPlace();
+    _migrateLegacyVectorSettings(settings);
+}
+
+function _sanitizeInheritedThemes(themes) {
+    if (!Array.isArray(themes)) return themes;
+    return themes.map(th => {
+        if (!th || typeof th !== 'object') return th;
+        if (typeof th.css !== 'string') return th;
+        return { ...th, css: _sanitizeCustomCSS(th.css) };
+    });
+}
+
+function _applyExternalSettings(raw) {
+    settings = { ...DEFAULT_SETTINGS, ...raw };
+    if (Array.isArray(settings.customThemes)) {
+        settings.customThemes = _sanitizeInheritedThemes(settings.customThemes);
+    }
+    if (typeof settings.customCSS === 'string') {
+        settings.customCSS = _sanitizeCustomCSS(settings.customCSS);
+    }
+    delete settings._skippedExternalRaw;
+    _pendingExternalSettings = null;
+    _engineDeferred = false;
+    _runSettingsMigrationChain(raw);
+    saveSettings({ immediate: true });
+    _stashSettingsForReload();
+    showToast(t('settings.externalSettingsAppliedToast'), 'success');
+    setTimeout(() => location.reload(), 800);
+}
+
+function _resetWithPreservedExternalSettings(raw) {
+    const next = { ...DEFAULT_SETTINGS };
+    for (const key of PRESERVED_KEYS_ON_RESET) {
+        if (raw[key] === undefined) continue;
+        if (key === 'customThemes') {
+            next[key] = _sanitizeInheritedThemes(raw[key]);
+        } else {
+            next[key] = raw[key];
+        }
+    }
+    settings = next;
+    delete settings._skippedExternalRaw;
+    _pendingExternalSettings = null;
+    _engineDeferred = false;
+    _runSettingsMigrationChain(raw);
+    saveSettings({ immediate: true });
+    _stashSettingsForReload();
+    showToast(t('settings.externalSettingsResetToast'), 'success');
+    setTimeout(() => location.reload(), 800);
+}
+
+function _stashSettingsForReload() {
+    try {
+        sessionStorage.setItem('horae_force_settings', JSON.stringify(extension_settings[EXTENSION_NAME]));
+    } catch (err) {
+        console.warn('[Horae] sessionStorage 暂存失败:', err);
+    }
+}
+
+function _refreshRestoreExtSettingsBtn() {
+    const $btn = $('#horae-btn-restore-extsettings');
+    if (!$btn.length) return;
+    const raw = extension_settings[EXTENSION_NAME];
+    $btn.css('display', (raw && raw._engine !== ENGINE_TAG) ? 'flex' : 'none');
+}
+
+const _EXTSETTINGS_LANGS = [
+    { code: 'zh-CN', label: '简体' },
+    { code: 'zh-TW', label: '繁體' },
+    { code: 'en',    label: 'EN' },
+    { code: 'ja',    label: '日本語' },
+    { code: 'ko',    label: '한국어' },
+    { code: 'ru',    label: 'Русский' },
+];
+
+function _diagnoseExternalSource(raw) {
+    if (!raw || typeof raw !== 'object') return 'unknown';
+    if (!raw._engine) return 'legacy_upgrade';
+    if (raw._engine !== ENGINE_TAG) return 'foreign_fork';
+    return 'unknown';
+}
+
+function _showExternalSettingsModal(raw, displayLang) {
+    document.getElementById('horae-external-settings-modal')?.remove();
+
+    const lang = displayLang || getLanguage();
+    const tr = (key, vars) => tForLang(lang, `settings.${key}`, vars);
+    const source = _diagnoseExternalSource(raw);
+
+    const introKey = source === 'legacy_upgrade' ? 'externalSettingsIntroLegacy'
+                   : source === 'foreign_fork'   ? 'externalSettingsIntroForeign'
+                   : 'externalSettingsIntro';
+    const primaryBtn = source === 'foreign_fork' ? 'reset' : 'apply';
+
+    const clearItems = [
+        'externalSettingsClearTheme',
+        'externalSettingsClearToggles',
+        'externalSettingsClearMemoryFlags',
+        'externalSettingsClearAdvanced',
+    ].map(k => `<li>${escapeHtml(tr(k))}</li>`).join('');
+
+    const keepItems = [
+        'externalSettingsKeepApi',
+        'externalSettingsKeepPrompts',
+        'externalSettingsKeepThemes',
+        'externalSettingsKeepLang',
+    ].map(k => `<li>${escapeHtml(tr(k))}</li>`).join('');
+
+    const langBtns = _EXTSETTINGS_LANGS.map(({ code, label }) => {
+        const active = code === lang ? ' is-active' : '';
+        return `<button type="button" data-lang="${code}" class="horae-extsettings-lang-btn${active}">${escapeHtml(label)}</button>`;
+    }).join('');
+
+    const applyClass = primaryBtn === 'apply' ? 'horae-btn primary' : 'horae-btn';
+    const resetClass = primaryBtn === 'reset' ? 'horae-btn primary' : 'horae-btn';
+
+    const html = `
+        <div id="horae-external-settings-modal" class="horae-modal horae-extsettings-modal${isLightMode() ? ' horae-light' : ''}">
+            <div class="horae-modal-content horae-extsettings-content">
+                <div class="horae-modal-header">
+                    <i class="fa-solid fa-circle-question"></i> ${escapeHtml(tr('externalSettingsTitle'))}
+                </div>
+                <div class="horae-extsettings-langbar">
+                    <i class="fa-solid fa-language horae-extsettings-langbar-icon"></i>
+                    <span class="horae-extsettings-langbar-label">${escapeHtml(tr('externalSettingsLangPickerLabel'))}</span>
+                    <div class="horae-extsettings-langbar-btns">${langBtns}</div>
+                </div>
+                <div class="horae-modal-body horae-extsettings-body">
+                    <p class="horae-extsettings-intro">${escapeHtml(tr(introKey))}</p>
+                    <div class="horae-extsettings-block">
+                        <div class="horae-extsettings-block-title">${escapeHtml(tr('externalSettingsClearTitle'))}</div>
+                        <ul class="horae-extsettings-list">${clearItems}</ul>
+                        <div class="horae-extsettings-block-title horae-extsettings-block-title-keep">${escapeHtml(tr('externalSettingsKeepTitle'))}</div>
+                        <ul class="horae-extsettings-list">${keepItems}</ul>
+                        <p class="horae-extsettings-themes-note"><i class="fa-solid fa-broom"></i> ${escapeHtml(tr('externalSettingsKeepThemesNote'))}</p>
+                    </div>
+                    <p class="horae-extsettings-memorysafe">
+                        <i class="fa-solid fa-shield-halved"></i> ${escapeHtml(tr('externalSettingsMemorySafe'))}
+                    </p>
+                </div>
+                <div class="horae-modal-footer horae-extsettings-footer">
+                    <button id="horae-external-settings-apply" class="${applyClass}">
+                        <i class="fa-solid fa-check"></i> ${escapeHtml(tr('externalSettingsApply'))}
+                    </button>
+                    <button id="horae-external-settings-reset" class="${resetClass}">
+                        <i class="fa-solid fa-rotate-left"></i> ${escapeHtml(tr('externalSettingsReset'))}
+                    </button>
+                    <button id="horae-external-settings-skip" class="horae-btn horae-extsettings-skip">
+                        ${escapeHtml(tr('externalSettingsSkip'))}
+                    </button>
+                    <span class="horae-extsettings-skip-hint">${escapeHtml(tr('externalSettingsSkipHint'))}</span>
+                </div>
+            </div>
+        </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+    const modal = document.getElementById('horae-external-settings-modal');
+    preventModalBubble(modal);
+
+    const close = () => modal?.remove();
+
+    modal.querySelectorAll('.horae-extsettings-lang-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const next = btn.getAttribute('data-lang');
+            if (next && next !== lang) _showExternalSettingsModal(raw, next);
+        });
+    });
+
+    document.getElementById('horae-external-settings-apply').addEventListener('click', (e) => {
+        e.stopPropagation();
+        close();
+        _applyExternalSettings(raw);
+    });
+    document.getElementById('horae-external-settings-reset').addEventListener('click', (e) => {
+        e.stopPropagation();
+        close();
+        _resetWithPreservedExternalSettings(raw);
+    });
+    document.getElementById('horae-external-settings-skip').addEventListener('click', (e) => {
+        e.stopPropagation();
+        close();
+        delete settings._skippedExternalRaw;
+        _pendingExternalSettings = null;
+        _engineDeferred = true;
+        saveSettings({ immediate: true });
+        _refreshRestoreExtSettingsBtn();
+        showToast(t('settings.externalSettingsSkipToast'), 'info');
+    });
+}
+
 /** 把 settings.customCalendar 回填到 UI textarea */
 function _syncCustomCalendarToUI() {
     const cal = settings.customCalendar || {};
@@ -14691,6 +14977,7 @@ function syncSettingsToUI() {
     $('#horae-setting-vector-strip-tags').val(settings.vectorStripTags || '');
     _syncVectorSourceUI();
     _updateVectorStatus();
+    _refreshRestoreExtSettingsBtn();
 }
 
 // ============================================
@@ -19864,6 +20151,10 @@ jQuery(async () => {
     horaeManager.init(getContext(), settings);
     _publishHoraeApi();
     _portsReady = true;
+
+    if (_pendingExternalSettings) {
+        setTimeout(() => _showExternalSettingsModal(_pendingExternalSettings), 400);
+    }
 
     eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, onMessageReceived);
     eventSource.on(event_types.CHAT_COMPLETION_PROMPT_READY, onPromptReady);

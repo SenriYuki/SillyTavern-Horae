@@ -174,8 +174,8 @@ export function parseStoryDate(dateStr) {
         };
     }
     
-    // 标准数字格式
-    const fullMatch = cleanStr.match(/^(\d{4,})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    // 标准数字格式（点号兼容 yyyy.mm.dd 这种欧式/常见写法）
+    const fullMatch = cleanStr.match(/^(\d{4,})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
     if (fullMatch) {
         const year = parseInt(fullMatch[1]);
         const month = parseInt(fullMatch[2]);
@@ -210,19 +210,10 @@ export function parseStoryDate(dateStr) {
         }
     }
     
-    // X月X日格式
-    const cnMatch = cleanStr.match(/(\d{1,2})月(\d{1,2})日?/);
-    if (cnMatch) {
-        const month = parseInt(cnMatch[1]);
-        const day = parseInt(cnMatch[2]);
-        if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-            return { month, day, type: 'standard' };
-        }
-    }
-
-    // 历法/纪年前缀 + 年月日（"萬曆十五年八月十六日" / "公元前2024年八月十六日" / "贞观元年五月廿八"）
-    // 前缀首字必须是「非空白、非数字、非中文数字、非年月日」的普通字符，避免吃掉"二〇二四"这种纯年份
-    const eraMatch = cleanStr.match(/^([^\s\d零〇一二三四五六七八九十廿卅元年月日][^\s年月日]*?)([零〇一二三四五六七八九十廿卅元]+|\d+)年\s*([零〇一二三四五六七八九十廿卅元]+|\d+)月([零〇一二三四五六七八九十廿卅元]+|\d+)日?/);
+    // 历法/纪年前缀 + 年月日（"萬曆十五年八月十六日" / "玄昭十五年8月16日" / "公元前2024年八月十六日"）
+    // 前缀首字排除空白/数字/中文数字/年月日，避免吃掉"二〇二四"这种纯年份；月日间允许空白以容错"玄昭十五年 8月 16 日"
+    // 顺序必须早于纯月日的 cnMatch，否则 8月16日 会被先吞掉而丢年份
+    const eraMatch = cleanStr.match(/^([^\s\d零〇一二三四五六七八九十廿卅元年月日][^\s年月日]*?)([零〇一二三四五六七八九十廿卅元]+|\d+)年\s*([零〇一二三四五六七八九十廿卅元]+|\d+)\s*月\s*([零〇一二三四五六七八九十廿卅元]+|\d+)\s*日?/);
     if (eraMatch) {
         const calendarPrefix = eraMatch[1].trim() || undefined;
         const year = /^\d+$/.test(eraMatch[2]) ? parseInt(eraMatch[2], 10) : _cnNumToInt(eraMatch[2]);
@@ -265,6 +256,16 @@ export function parseStoryDate(dateStr) {
             const prefixEnd = cleanStr.indexOf(fullMatchStr);
             const calendarPrefix = cleanStr.substring(0, prefixEnd).trim() || undefined;
             return { year, month, day, type: 'standard', calendarPrefix };
+        }
+    }
+
+    // 纯阿拉伯月日（"8月16日"），无年份。必须排在所有带年份的分支之后，否则会贪婪截断"玄昭十五年8月16日"
+    const cnMatch = cleanStr.match(/(\d{1,2})月(\d{1,2})日?/);
+    if (cnMatch) {
+        const month = parseInt(cnMatch[1]);
+        const day = parseInt(cnMatch[2]);
+        if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+            return { month, day, type: 'standard' };
         }
     }
 
