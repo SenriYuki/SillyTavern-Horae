@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.14.4
+ * 版本: 1.14.5
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -22,7 +22,7 @@ import { initPromptDefaults, ensurePromptDefaults, ensurePresetPrompts, getPromp
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.14.4';
+const VERSION = '1.14.5';
 
 // settings 来源标记。仅用于区分「上次写入是否本版本自身」，外部来源（旧版本/其他分发版）会触发一次确认弹窗
 const ENGINE_TAG = 'horae-official';
@@ -1522,6 +1522,56 @@ function setChatTables(tables) {
     getContext().saveChat();
 }
 
+/** 给缺少 id 的模板补一个稳定 id（旧版数据兼容） */
+function _ensureTableId(table) {
+    if (!table) return null;
+    if (!table.id) table.id = `tbl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    return table.id;
+}
+
+/**
+ * 把 overlay 旧的 name-keyed 数据迁移到 id-keyed。
+ * 不在迁移目标里的 key 留给 setXxxTables 的清理逻辑处理。
+ */
+function _migrateOverlayKeys(overlayMap, templates) {
+    if (!overlayMap || !Array.isArray(templates) || templates.length === 0) return;
+    const idSet = new Set();
+    const nameToId = new Map();
+    for (const tpl of templates) {
+        if (!tpl) continue;
+        _ensureTableId(tpl);
+        idSet.add(tpl.id);
+        const n = (tpl.name || '').trim();
+        if (n && !nameToId.has(n)) nameToId.set(n, tpl.id);
+    }
+    for (const key of Object.keys(overlayMap)) {
+        if (idSet.has(key)) continue;
+        const newId = nameToId.get(key);
+        if (newId && !overlayMap[newId]) {
+            overlayMap[newId] = overlayMap[key];
+            delete overlayMap[key];
+        }
+    }
+}
+
+/** 读取 overlay 时优先用 id，旧 name-keyed 数据通过 name fallback 兼容 */
+function _readOverlay(overlayMap, template) {
+    if (!overlayMap || !template) return null;
+    if (template.id && overlayMap[template.id]) return overlayMap[template.id];
+    const n = (template.name || '').trim();
+    if (n && overlayMap[n]) return overlayMap[n];
+    return null;
+}
+
+/** 找到 overlay 中模板对应的实际 key（用于 delete / 写副作用） */
+function _findOverlayKey(overlayMap, template) {
+    if (!overlayMap || !template) return null;
+    if (template.id && overlayMap[template.id]) return template.id;
+    const n = (template.name || '').trim();
+    if (n && overlayMap[n]) return n;
+    return null;
+}
+
 /** 获取全局表格列表（返回结构+当前卡片数据的合并结果） */
 function getGlobalTables() {
     const templates = settings.globalTables || [];
@@ -1534,8 +1584,7 @@ function getGlobalTables() {
     const perCardData = firstMsg.horae_meta.globalTableData;
 
     return templates.map(template => {
-        const name = (template.name || '').trim();
-        const overlay = perCardData[name];
+        const overlay = _readOverlay(perCardData, template);
         if (overlay) {
             return {
                 id: template.id,
@@ -1571,23 +1620,23 @@ function getGlobalTables() {
 /** 保存全局表格列表（结构存设置，数据存当前卡片） */
 function setGlobalTables(tables) {
     const chat = horaeManager.getChat();
+    for (const t of tables) _ensureTableId(t);
 
     // 保存 per-card 数据到当前卡片
     if (chat?.[0]) {
         if (!chat[0].horae_meta) return;
         if (!chat[0].horae_meta.globalTableData) chat[0].horae_meta.globalTableData = {};
         const perCardData = chat[0].horae_meta.globalTableData;
+        _migrateOverlayKeys(perCardData, tables);
 
-        // 清除已被删除的表格的 per-card 数据
-        const currentNames = new Set(tables.map(tbl => (tbl.name || '').trim()).filter(Boolean));
+        // 清除已被删除的表格的 per-card 数据（按 id 索引）
+        const currentIds = new Set(tables.map(t => t.id));
         for (const key of Object.keys(perCardData)) {
-            if (!currentNames.has(key)) delete perCardData[key];
+            if (!currentIds.has(key)) delete perCardData[key];
         }
 
         for (const table of tables) {
-            const name = (table.name || '').trim();
-            if (!name) continue;
-            perCardData[name] = {
+            perCardData[table.id] = {
                 data: JSON.parse(JSON.stringify(table.data || {})),
                 rows: table.rows || 2,
                 cols: table.cols || 2,
@@ -1618,6 +1667,11 @@ function setGlobalTables(tables) {
         };
     });
     saveSettings();
+
+    // per-card 数据写在 chat[0].horae_meta，saveSettings 不带它落盘
+    if (chat?.[0]) {
+        try { getContext().saveChat(); } catch (err) { console.warn('[Horae] saveChat 失败:', err); }
+    }
 }
 
 /** 获取指定scope的表格 */
@@ -1638,6 +1692,81 @@ function setTablesByScope(scope, tables) {
     }
 }
 
+/**
+ * 解析指定表格的底层 data 对象（local 走 customTables，global/character 走 per-* overlay）。
+ * overlay 不存在时按需用模板物化一份，确保返回的引用稳定可写。
+ */
+function _resolveTableDataObj(tableIndex, scope) {
+    const chat = horaeManager.getChat();
+    const firstMsg = chat?.[0];
+    if (!firstMsg) return null;
+
+    if (scope === 'local') {
+        const tbl = firstMsg.horae_meta?.customTables?.[tableIndex];
+        if (!tbl) return null;
+        if (!tbl.data) tbl.data = {};
+        return tbl.data;
+    }
+
+    let template, overlayHost, overlayKey;
+    if (scope === 'global') {
+        template = settings.globalTables?.[tableIndex];
+        overlayKey = 'globalTableData';
+    } else if (scope === 'character') {
+        const ctx = getContext();
+        const charId = ctx?.characterId;
+        if (charId == null) return null;
+        template = ctx.characters?.[charId]?.data?.extensions?.horae?.charTables?.[tableIndex];
+        overlayKey = 'charTableData';
+    } else {
+        return null;
+    }
+
+    if (!template) return null;
+    if (!firstMsg.horae_meta) return null;
+    if (!firstMsg.horae_meta[overlayKey]) firstMsg.horae_meta[overlayKey] = {};
+    overlayHost = firstMsg.horae_meta[overlayKey];
+
+    // 优先沿用已存在的 overlay（避免与旧 name-key 数据冲突），找不到时再用 id 或 name 创建
+    let existingKey = _findOverlayKey(overlayHost, template);
+    if (!existingKey) {
+        _ensureTableId(template);
+        existingKey = template.id || (template.name || '').trim();
+        if (!existingKey) return null;
+        const initData = JSON.parse(JSON.stringify(template.data || {}));
+        overlayHost[existingKey] = {
+            data: initData,
+            rows: template.rows || 2,
+            cols: template.cols || 2,
+            baseData: JSON.parse(JSON.stringify(initData)),
+            baseRows: template.rows || 2,
+            baseCols: template.cols || 2,
+        };
+    } else if (!overlayHost[existingKey].data) {
+        overlayHost[existingKey].data = {};
+    }
+    return overlayHost[existingKey].data;
+}
+
+/** 把表格 DOM 中未失焦的输入值直接写回底层 data 对象 */
+function _flushTableDomToStorage(tableIndex, scope) {
+    const container = document.querySelector(`.horae-excel-table-container[data-table-index="${tableIndex}"][data-scope="${scope}"]`);
+    if (!container) return;
+
+    const dataObj = _resolveTableDataObj(tableIndex, scope);
+    if (!dataObj) return;
+
+    container.querySelectorAll('.horae-excel-table input[data-table]').forEach(inp => {
+        const r = parseInt(inp.dataset.row);
+        const c = parseInt(inp.dataset.col);
+        if (Number.isNaN(r) || Number.isNaN(c)) return;
+        const key = `${r}-${c}`;
+        const v = inp.value;
+        if (v === '') delete dataObj[key];
+        else dataObj[key] = v;
+    });
+}
+
 /** 获取当前角色卡的表格模板列表（结构存角色卡 extensions，数据存当前对话） */
 function getCharacterTables() {
     const ctx = getContext();
@@ -1656,8 +1785,7 @@ function getCharacterTables() {
     const perChatData = chat[0].horae_meta.charTableData;
 
     return templates.map(template => {
-        const name = (template.name || '').trim();
-        const overlay = perChatData[name];
+        const overlay = _readOverlay(perChatData, template);
         if (overlay) {
             return {
                 id: template.id,
@@ -1706,21 +1834,22 @@ function setCharacterTables(tables) {
     if (!charData.extensions) charData.extensions = {};
     if (!charData.extensions.horae) charData.extensions.horae = {};
 
+    for (const t of tables) _ensureTableId(t);
+
     const chat = horaeManager.getChat();
     if (chat?.[0]) {
         if (!chat[0].horae_meta) return;
         if (!chat[0].horae_meta.charTableData) chat[0].horae_meta.charTableData = {};
         const perChatData = chat[0].horae_meta.charTableData;
+        _migrateOverlayKeys(perChatData, tables);
 
-        const currentNames = new Set(tables.map(tbl => (tbl.name || '').trim()).filter(Boolean));
+        const currentIds = new Set(tables.map(t => t.id));
         for (const key of Object.keys(perChatData)) {
-            if (!currentNames.has(key)) delete perChatData[key];
+            if (!currentIds.has(key)) delete perChatData[key];
         }
 
         for (const table of tables) {
-            const name = (table.name || '').trim();
-            if (!name) continue;
-            perChatData[name] = {
+            perChatData[table.id] = {
                 data: JSON.parse(JSON.stringify(table.data || {})),
                 rows: table.rows || 2,
                 cols: table.cols || 2,
@@ -1760,6 +1889,11 @@ function setCharacterTables(tables) {
     }).catch(err => console.warn('[Horae] 保存角色卡表格失败:', err));
 
     saveSettings();
+
+    // per-chat 数据写在 chat[0].horae_meta，角色卡 API 和 saveSettings 都不带它落盘
+    if (chat?.[0]) {
+        try { getContext().saveChat(); } catch (err) { console.warn('[Horae] saveChat 失败:', err); }
+    }
 }
 
 /** 获取合并后的所有表格（用于提示词注入） */
@@ -6000,19 +6134,10 @@ function hideContextMenu() {
  */
 function executeTableAction(tableIndex, row, col, action, scope = 'local') {
     pushTableSnapshot(scope, tableIndex);
-    // 先将DOM中未提交的输入值写入data，防止正在编辑的值丢失
-    const container = document.querySelector(`.horae-excel-table-container[data-table-index="${tableIndex}"][data-scope="${scope}"]`);
-    if (container) {
-        const tbl = getTablesByScope(scope)[tableIndex];
-        if (tbl) {
-            if (!tbl.data) tbl.data = {};
-            container.querySelectorAll('.horae-excel-table input[data-table]').forEach(inp => {
-                const r = parseInt(inp.dataset.row);
-                const c = parseInt(inp.dataset.col);
-                tbl.data[`${r}-${c}`] = inp.value;
-            });
-        }
-    }
+
+    // global / character 表格的 getTablesByScope 每次返回新合成对象，
+    // 未失焦输入值必须直接写回底层 perCardData / customTables 才能被后续保存读到
+    _flushTableDomToStorage(tableIndex, scope);
 
     const tables = getTablesByScope(scope);
     const table = tables[tableIndex];
@@ -6185,14 +6310,7 @@ function deleteCustomTable(index, scope = 'local') {
         }
     }
 
-    // 全局表格：清除 per-card overlay
-    if (scope === 'global' && deletedName && chat?.[0]?.horae_meta?.globalTableData) {
-        delete chat[0].horae_meta.globalTableData[deletedName];
-    }
-    // 角色表格：清除 per-chat overlay
-    if (scope === 'character' && deletedName && chat?.[0]?.horae_meta?.charTableData) {
-        delete chat[0].horae_meta.charTableData[deletedName];
-    }
+    // 全局/角色表格的 overlay 由 setTablesByScope 内的 currentIds 清理负责，这里无需额外处理
 
     horaeManager.rebuildTableData();
     getContext().saveChat();
@@ -6231,17 +6349,25 @@ function purgeTableContributions(tableName, scope = 'local') {
         table.baseRows = table.rows;
         table.baseCols = table.cols;
     }
-    if (scope === 'global' && chat[0]?.horae_meta?.globalTableData?.[tableName]) {
-        const overlay = chat[0].horae_meta.globalTableData[tableName];
-        overlay.baseData = JSON.parse(JSON.stringify(overlay.data || {}));
-        overlay.baseRows = overlay.rows;
-        overlay.baseCols = overlay.cols;
+    if (scope === 'global') {
+        const tpl = (settings.globalTables || []).find(t => (t.name || '').trim() === tableName);
+        const overlay = _readOverlay(chat[0]?.horae_meta?.globalTableData, tpl);
+        if (overlay) {
+            overlay.baseData = JSON.parse(JSON.stringify(overlay.data || {}));
+            overlay.baseRows = overlay.rows;
+            overlay.baseCols = overlay.cols;
+        }
     }
-    if (scope === 'character' && chat[0]?.horae_meta?.charTableData?.[tableName]) {
-        const overlay = chat[0].horae_meta.charTableData[tableName];
-        overlay.baseData = JSON.parse(JSON.stringify(overlay.data || {}));
-        overlay.baseRows = overlay.rows;
-        overlay.baseCols = overlay.cols;
+    if (scope === 'character') {
+        const ctx = getContext();
+        const charTpls = ctx?.characters?.[ctx?.characterId]?.data?.extensions?.horae?.charTables || [];
+        const tpl = charTpls.find(t => (t.name || '').trim() === tableName);
+        const overlay = _readOverlay(chat[0]?.horae_meta?.charTableData, tpl);
+        if (overlay) {
+            overlay.baseData = JSON.parse(JSON.stringify(overlay.data || {}));
+            overlay.baseRows = overlay.rows;
+            overlay.baseCols = overlay.cols;
+        }
     }
 }
 
@@ -6294,8 +6420,9 @@ function clearTableData(index, scope = 'local') {
 
     // 全局/角色表格：同步清除 overlay 的数据区和 baseData
     const overlayKey = scope === 'global' ? 'globalTableData' : scope === 'character' ? 'charTableData' : null;
-    if (overlayKey && tableName && chat?.[0]?.horae_meta?.[overlayKey]?.[tableName]) {
-        const overlay = chat[0].horae_meta[overlayKey][tableName];
+    const overlayMap = overlayKey ? chat?.[0]?.horae_meta?.[overlayKey] : null;
+    const overlay = overlayMap ? _readOverlay(overlayMap, table) : null;
+    if (overlay) {
         for (const key of Object.keys(overlay.data || {})) {
             const [r, c] = key.split('-').map(Number);
             if (r > 0 && c > 0) delete overlay.data[key];
@@ -6340,17 +6467,17 @@ function toggleTableScope(tableIndex, currentScope) {
     const table = JSON.parse(JSON.stringify(srcTables[tableIndex]));
     const tableName = (table.name || '').trim();
 
-    if (currentScope === 'global' && tableName) {
+    if (currentScope === 'global') {
         const chat = horaeManager.getChat();
-        if (chat?.[0]?.horae_meta?.globalTableData) {
-            delete chat[0].horae_meta.globalTableData[tableName];
-        }
+        const overlayMap = chat?.[0]?.horae_meta?.globalTableData;
+        const key = _findOverlayKey(overlayMap, table);
+        if (key) delete overlayMap[key];
     }
-    if (currentScope === 'character' && tableName) {
+    if (currentScope === 'character') {
         const chat = horaeManager.getChat();
-        if (chat?.[0]?.horae_meta?.charTableData) {
-            delete chat[0].horae_meta.charTableData[tableName];
-        }
+        const overlayMap = chat?.[0]?.horae_meta?.charTableData;
+        const key = _findOverlayKey(overlayMap, table);
+        if (key) delete overlayMap[key];
     }
 
     srcTables.splice(tableIndex, 1);

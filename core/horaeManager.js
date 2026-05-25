@@ -2859,9 +2859,25 @@ class HoraeManager {
         return null;
     }
 
+    /** 读取 overlay 时优先用 id，旧 name-keyed 数据通过 name fallback 兼容 */
+    _readOverlay(overlayMap, template) {
+        if (!overlayMap || !template) return null;
+        if (template.id && overlayMap[template.id]) return overlayMap[template.id];
+        const n = (template.name || '').trim();
+        if (n && overlayMap[n]) return overlayMap[n];
+        return null;
+    }
+
+    /** 选择写入 overlay 的 key：有 id 用 id（新版本），无 id 退化到 name（旧版兼容） */
+    _overlayWriteKey(template) {
+        if (template?.id) return template.id;
+        return (template?.name || '').trim() || null;
+    }
+
     /**
      * 获取全局表格的当前卡片数据（per-card overlay）
      * 全局表格的结构（表头、名称、提示词、锁定）共享，数据按角色卡分离
+     * AI 注入流程只关心有名表格，无名表格在 UI 编辑层面可用但不参与提示词
      */
     _getResolvedGlobalTables() {
         const templates = this.settings?.globalTables || [];
@@ -2878,10 +2894,12 @@ class HoraeManager {
             const name = (template.name || '').trim();
             if (!name) continue;
 
-            if (!perCardData[name]) {
-                // 首次在此卡使用：从模板初始化（含迁移旧数据）
+            let overlay = this._readOverlay(perCardData, template);
+            if (!overlay) {
+                const writeKey = this._overlayWriteKey(template);
+                if (!writeKey) continue;
                 const initData = JSON.parse(JSON.stringify(template.data || {}));
-                perCardData[name] = {
+                overlay = perCardData[writeKey] = {
                     data: initData,
                     rows: template.rows || 2,
                     cols: template.cols || 2,
@@ -2890,17 +2908,15 @@ class HoraeManager {
                     baseCols: template.cols || 2,
                 };
             } else {
-                // 同步全局模板的表头到 per-card（用户可能在别处改了表头）
                 const templateData = template.data || {};
                 for (const key of Object.keys(templateData)) {
                     const [r, c] = key.split('-').map(Number);
                     if (r === 0 || c === 0) {
-                        perCardData[name].data[key] = templateData[key];
+                        overlay.data[key] = templateData[key];
                     }
                 }
             }
 
-            const overlay = perCardData[name];
             result.push({
                 name: template.name,
                 prompt: template.prompt,
@@ -2942,9 +2958,12 @@ class HoraeManager {
             const name = (template.name || '').trim();
             if (!name) continue;
 
-            if (!perChatData[name]) {
+            let overlay = this._readOverlay(perChatData, template);
+            if (!overlay) {
+                const writeKey = this._overlayWriteKey(template);
+                if (!writeKey) continue;
                 const initData = JSON.parse(JSON.stringify(template.data || {}));
-                perChatData[name] = {
+                overlay = perChatData[writeKey] = {
                     data: initData,
                     rows: template.rows || 2,
                     cols: template.cols || 2,
@@ -2957,12 +2976,11 @@ class HoraeManager {
                 for (const key of Object.keys(templateData)) {
                     const [r, c] = key.split('-').map(Number);
                     if (r === 0 || c === 0) {
-                        perChatData[name].data[key] = templateData[key];
+                        overlay.data[key] = templateData[key];
                     }
                 }
             }
 
-            const overlay = perChatData[name];
             result.push({
                 name: template.name,
                 prompt: template.prompt,
@@ -3216,19 +3234,24 @@ class HoraeManager {
                 if (c + 1 > (table.cols || 2)) table.cols = c + 1;
             }
 
-            // 全局/角色表格：将维度变更同步回 overlay
+            // 全局/角色表格：将维度变更同步回 overlay（优先 id，fallback name）
             if (isGlobal) {
                 const perCardData = firstMsg.horae_meta?.globalTableData;
-                if (perCardData?.[updateName]) {
-                    perCardData[updateName].rows = table.rows;
-                    perCardData[updateName].cols = table.cols;
+                const tpl = (this.settings?.globalTables || []).find(t => (t.name || '').trim() === updateName);
+                const overlay = this._readOverlay(perCardData, tpl);
+                if (overlay) {
+                    overlay.rows = table.rows;
+                    overlay.cols = table.cols;
                 }
             }
             if (isCharacter) {
                 const perChatData = firstMsg.horae_meta?.charTableData;
-                if (perChatData?.[updateName]) {
-                    perChatData[updateName].rows = table.rows;
-                    perChatData[updateName].cols = table.cols;
+                const charTpls = this.context?.characters?.[this.context?.characterId]?.data?.extensions?.horae?.charTables || [];
+                const tpl = charTpls.find(t => (t.name || '').trim() === updateName);
+                const overlay = this._readOverlay(perChatData, tpl);
+                if (overlay) {
+                    overlay.rows = table.rows;
+                    overlay.cols = table.cols;
                 }
             }
 
