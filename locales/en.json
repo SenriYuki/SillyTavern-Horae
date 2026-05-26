@@ -768,7 +768,8 @@
         "agendaContentHint": "Agenda content (use absolute dates for relative times)",
         "skillName": "Skill name",
         "skillLevel": "Level (optional)",
-        "skillDesc": "Effect description (optional)"
+        "skillDesc": "Effect description (optional)",
+        "rpgStatusAdd": "Status to add (e.g. Poisoned, Bleeding, Shield)"
     },
     "modal": {
         "compressTitle": "Compress Mode",
@@ -1178,6 +1179,7 @@
         "noReputationData": "No reputation data",
         "noCurrencyData": "No currency data",
         "statusList": "Status List",
+        "toggleExpand": "Expand/Collapse",
         "skillsInCard": "Skills are shown in the character card above. Click + to add manually.",
         "noSkillsAddManually": "No skills. Click + to add manually.",
         "noReputationCategories": "No reputation categories. Click + to add.",

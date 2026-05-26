@@ -765,7 +765,8 @@
         "moodState": "情绪状态",
         "affectionDelta": "±变化",
         "affectionTotal": "总值",
-        "agendaContentHint": "待办内容（相对时间请标注绝对日期）"
+        "agendaContentHint": "待办内容（相对时间请标注绝对日期）",
+        "rpgStatusAdd": "输入要添加的状态（如：中毒、流血、护盾）"
     },
     "modal": {
         "compressTitle": "压缩模式",
@@ -1175,6 +1176,7 @@
         "noReputationData": "无声望数据",
         "noCurrencyData": "无货币数据",
         "statusList": "状态列表",
+        "toggleExpand": "展开/收起",
         "skillsInCard": "技能已在上方角色卡中折叠显示，点击 + 可手动添加",
         "noSkillsAddManually": "暂无技能，点击 + 手动添加",
         "noReputationCategories": "暂无声望分类，点击 + 添加",

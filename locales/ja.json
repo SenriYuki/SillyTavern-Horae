@@ -774,7 +774,8 @@
         "agendaContentHint": "予定の内容（相対時間には絶対日付を使用）",
         "skillName": "スキル名",
         "skillLevel": "レベル（任意）",
-        "skillDesc": "効果の説明（任意）"
+        "skillDesc": "効果の説明（任意）",
+        "rpgStatusAdd": "追加するステータス（例：毒、出血、シールド）"
     },
     "modal": {
         "compressTitle": "圧縮モード",
@@ -1183,6 +1184,7 @@
         "noReputationData": "評判データなし",
         "noCurrencyData": "通貨データなし",
         "statusList": "ステータスリスト",
+        "toggleExpand": "展開/折りたたみ",
         "skillsInCard": "スキルは上のキャラクターカードに表示されています。+をクリックで手動追加。",
         "noSkillsAddManually": "スキルなし。+をクリックで手動追加。",
         "noReputationCategories": "評判カテゴリなし。+をクリックで追加。",

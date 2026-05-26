@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.14.5
+ * 版本: 1.14.6
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -22,7 +22,7 @@ import { initPromptDefaults, ensurePromptDefaults, ensurePresetPrompts, getPromp
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.14.5';
+const VERSION = '1.14.6';
 
 // settings 来源标记。仅用于区分「上次写入是否本版本自身」，外部来源（旧版本/其他分发版）会触发一次确认弹窗
 const ENGINE_TAG = 'horae-official';
@@ -6992,6 +6992,62 @@ function getStatusIcon(text) {
     return 'fa-triangle-exclamation';
 }
 
+/**
+ * RPG 状态严重度词表（按优先级降序匹配）
+ * 用于：HUD chip 配色、极简模式选最严重一项、详情列表排序
+ */
+const RPG_STATUS_SEVERITY_RULES = [
+    { sev: 'critical', kws: ['濒死', '瀕死', '重伤', '重傷', '昏', '眩', '暈', '晕', '石化', '催眠', '濒亡', '瀕亡', '将死', '將死'] },
+    { sev: 'danger',   kws: ['毒', '腐蚀', '腐蝕', '流血', '出血', '麻', '痹', '痺', '燃', '灼', '燒', '烧', '炎', '电', '電', '雷', '冻', '凍', '冰', '寒', '伤', '傷'] },
+    { sev: 'warn',     kws: ['饥', '飢', '饿', '餓', '渴', '脱水', '脫水', '疲', '累', '倦', '乏', '减速', '減速', '慢', '迟缓', '遲緩', '盲', '失明', '沉默', '禁言', '禁锢', '禁錮', '缚', '縛', '束'] },
+    { sev: 'debuff',   kws: ['弱', '衰', '虚', '虛', '恐', '惧', '懼', '惊', '驚', '乱', '亂', '狂暴', '羞愤', '羞憤', '暴怒', '愤怒', '憤怒', '暴走', '失控'] },
+    { sev: 'buff',     kws: ['护盾', '護盾', '防御', '防禦', '铁壁', '鐵壁', '再生', '恢复', '恢復', '愈', '隐', '隱', '伪装', '偽裝', '潜行', '潛行', '加速', '增益', '强化', '強化', '祝福', '神圣', '神聖'] },
+    { sev: 'neutral',  kws: ['正常', '良好', '平稳', '平穩'] },
+];
+const RPG_SEVERITY_ORDER = { critical: 0, danger: 1, warn: 2, debuff: 3, buff: 4, neutral: 5, unknown: 6 };
+
+/** 根据状态文本判断严重度等级（critical|danger|warn|debuff|buff|neutral|unknown） */
+function getStatusSeverity(text) {
+    if (!text) return 'unknown';
+    for (const rule of RPG_STATUS_SEVERITY_RULES) {
+        for (const kw of rule.kws) {
+            if (text.includes(kw)) return rule.sev;
+        }
+    }
+    return 'unknown';
+}
+
+/**
+ * 为 HUD 渲染整理状态：同关键词归并去重 + 按严重度排序
+ * @param {string[]} effects 原始状态字符串数组（不会被修改）
+ * @returns {Array<{text:string, icon:string, sev:string}>}
+ */
+function dedupeStatusForHud(effects) {
+    if (!Array.isArray(effects) || !effects.length) return [];
+    const seen = new Map();
+    for (const raw of effects) {
+        const e = (typeof raw === 'string' ? raw : String(raw || '')).trim();
+        if (!e) continue;
+        // 取第一个命中的图标关键词作为归并键；命不中则用前 4 字
+        let key = null;
+        for (const kw of Object.keys(RPG_STATUS_ICONS)) {
+            if (e.includes(kw)) { key = kw; break; }
+        }
+        if (!key) key = e.slice(0, 4);
+        if (!seen.has(key)) {
+            seen.set(key, { text: e, icon: getStatusIcon(e), sev: getStatusSeverity(e) });
+        }
+    }
+    const arr = [...seen.values()];
+    arr.sort((a, b) => (RPG_SEVERITY_ORDER[a.sev] ?? 6) - (RPG_SEVERITY_ORDER[b.sev] ?? 6));
+    return arr;
+}
+
+/** 从去重后的状态列表中挑出最严重的一项（极简模式用） */
+function pickMostSevereStatus(dedupedList) {
+    return dedupedList && dedupedList.length ? dedupedList[0] : null;
+}
+
 /** 根据配置获取属性条颜色 */
 function getRpgBarColor(key) {
     const cfg = (settings.rpgBarConfig || []).find(b => b.key === key);
@@ -9195,9 +9251,224 @@ function renderLevelValues() {
     }
 }
 
+/** 写入本楼 _rpgChanges 并刷新；不会改基线或其他楼的数据 */
+function commitRpgEdit(messageIndex, charName, fieldType, payload) {
+    const chat = horaeManager.getChat();
+    if (!chat?.length || messageIndex < 0 || messageIndex >= chat.length) return false;
+    const mes = chat[messageIndex];
+    if (!mes) return false;
+    if (!mes.horae_meta) mes.horae_meta = createEmptyMeta();
+    if (!mes.horae_meta._rpgChanges) mes.horae_meta._rpgChanges = {};
+    const ch = mes.horae_meta._rpgChanges;
+
+    switch (fieldType) {
+        case 'bar': {
+            if (!ch.bars) ch.bars = {};
+            if (!ch.bars[charName]) ch.bars[charName] = {};
+            ch.bars[charName][payload.key] = [payload.cur, payload.max, payload.desc || ''];
+            break;
+        }
+        case 'status': {
+            if (!ch.status) ch.status = {};
+            ch.status[charName] = [...(payload.effects || [])];
+            break;
+        }
+        case 'level': {
+            if (!ch.levels) ch.levels = {};
+            ch.levels[charName] = payload.value;
+            break;
+        }
+        case 'xp': {
+            if (!ch.xp) ch.xp = {};
+            ch.xp[charName] = [payload.cur, payload.max];
+            break;
+        }
+        default: return false;
+    }
+
+    horaeManager.rebuildRpgData();
+    injectHoraeRpgLinePatch(messageIndex, _buildRpgLinePatchForEdit(charName, fieldType, payload));
+    getContext().saveChat();
+    updateAllRpgHuds();
+    refreshAllDisplays();
+    return true;
+}
+
+function _snapAt(messageIndex) {
+    const chat = horaeManager.getChat();
+    if (!chat?.length) return null;
+    return _buildRpgSnapshotMap(chat).get(messageIndex) || null;
+}
+
+let _rpgHudEventsBound = false;
+function _ensureRpgHudEventsBound() {
+    if (_rpgHudEventsBound) return;
+    _rpgHudEventsBound = true;
+
+    document.addEventListener('click', (e) => {
+        const trigger = e.target.closest('.horae-rpg-hud [data-rpg-action]');
+        if (!trigger) return;
+        const hud = trigger.closest('.horae-rpg-hud');
+        if (!hud) return;
+        const mesEl = hud.closest('.mes');
+        const mesId = mesEl ? parseInt(mesEl.getAttribute('mesid')) : NaN;
+        const action = trigger.dataset.rpgAction;
+
+        if (action === 'toggle-hud') {
+            const willExpand = !hud.classList.contains('expanded');
+            hud.classList.toggle('expanded', willExpand);
+            if (!willExpand) hud.classList.remove('editing');
+            if (!isNaN(mesId)) {
+                if (willExpand) {
+                    _rpgHudExpandedMsgs.add(mesId);
+                } else {
+                    _rpgHudExpandedMsgs.delete(mesId);
+                    _rpgHudEditingMsgs.delete(mesId);
+                }
+            }
+        } else if (action === 'edit-toggle') {
+            hud.classList.add('expanded');
+            const willEdit = !hud.classList.contains('editing');
+            hud.classList.toggle('editing', willEdit);
+            if (!isNaN(mesId)) {
+                _rpgHudExpandedMsgs.add(mesId);
+                if (willEdit) _rpgHudEditingMsgs.add(mesId);
+                else _rpgHudEditingMsgs.delete(mesId);
+            }
+        } else if (action === 'reveal-more') {
+            const wrap = trigger.parentElement;
+            const extra = wrap?.querySelector('.horae-rpg-hud-status-chips-extra');
+            if (extra) extra.hidden = false;
+            trigger.style.display = 'none';
+            const row = trigger.closest('.horae-rpg-hud-row');
+            const char = row?.dataset?.char;
+            if (!isNaN(mesId) && char) _rpgHudRevealedMore.add(`${mesId}:${char}`);
+        } else if (action === 'del-status') {
+            const row = trigger.closest('.horae-rpg-hud-row');
+            const char = row?.dataset?.char;
+            const text = trigger.dataset.text;
+            if (isNaN(mesId) || !char || text == null) return;
+            const cur = _snapAt(mesId)?.status?.[char] || [];
+            const next = cur.filter(x => x !== text);
+            if (next.length !== cur.length) commitRpgEdit(mesId, char, 'status', { effects: next });
+        } else if (action === 'add-status') {
+            const row = trigger.closest('.horae-rpg-hud-row');
+            const char = row?.dataset?.char;
+            if (isNaN(mesId) || !char) return;
+            const v = (prompt(t('placeholder.rpgStatusAdd')) || '').trim();
+            if (!v) return;
+            const cur = _snapAt(mesId)?.status?.[char] || [];
+            if (cur.includes(v)) return;
+            commitRpgEdit(mesId, char, 'status', { effects: [...cur, v] });
+        }
+        e.stopPropagation();
+    });
+
+    document.addEventListener('change', (e) => {
+        const input = e.target.closest('.horae-rpg-hud .horae-rpg-hud-edit-input');
+        if (!input) return;
+        const hud = input.closest('.horae-rpg-hud');
+        const mesEl = hud?.closest('.mes');
+        const mesId = mesEl ? parseInt(mesEl.getAttribute('mesid')) : NaN;
+        const row = input.closest('.horae-rpg-hud-row');
+        const char = row?.dataset?.char;
+        if (isNaN(mesId) || !char) return;
+        const kind = input.dataset.editKind;
+        const key = input.dataset.editKey || '';
+        const num = parseInt(input.value);
+        if (isNaN(num) || num < 0) {
+            showToast(t('toast.invalidLevelNumber'), 'warning');
+            return;
+        }
+        const snap = _snapAt(mesId);
+        if (kind === 'bar-cur' || kind === 'bar-max') {
+            const bar = snap?.bars?.[char]?.[key] || [0, 100, ''];
+            const cur = kind === 'bar-cur' ? num : (bar[0] || 0);
+            const max = Math.max(1, kind === 'bar-max' ? num : (bar[1] || 100));
+            commitRpgEdit(mesId, char, 'bar', { key, cur: Math.max(0, Math.min(cur, max)), max, desc: bar[2] || '' });
+        } else if (kind === 'level') {
+            commitRpgEdit(mesId, char, 'level', { value: num });
+        } else if (kind === 'xp-cur' || kind === 'xp-max') {
+            const xp = snap?.xp?.[char] || [0, 100];
+            const cur = kind === 'xp-cur' ? num : (xp[0] || 0);
+            const max = Math.max(1, kind === 'xp-max' ? num : (xp[1] || 100));
+            commitRpgEdit(mesId, char, 'xp', { cur: Math.max(0, Math.min(cur, max)), max });
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        const input = e.target.closest('.horae-rpg-hud .horae-rpg-hud-edit-input');
+        if (!input) return;
+        e.preventDefault();
+        input.blur();
+    });
+}
+
+function _buildRpgHudControlsHtml() {
+    const editTitle = escapeHtml(t('common.edit'));
+    const toggleTitle = escapeHtml(t('ui.toggleExpand'));
+    return `<div class="horae-rpg-hud-controls"><button type="button" class="horae-rpg-hud-ctrl horae-rpg-hud-edit-btn" data-rpg-action="edit-toggle" title="${editTitle}"><i class="fa-solid fa-pen-to-square"></i></button><button type="button" class="horae-rpg-hud-ctrl horae-rpg-hud-toggle" data-rpg-action="toggle-hud" title="${toggleTitle}"><i class="fa-solid fa-chevron-down"></i></button></div>`;
+}
+
+function _decorateRpgHudPostRender(hudEl, messageIndex) {
+    if (!hudEl) return;
+    const w = Math.max(50, Math.min(100, settings.panelWidth || 100));
+    if (w < 100) hudEl.style.maxWidth = `${w}%`;
+    const ofs = Math.max(0, settings.panelOffset || 0);
+    if (ofs > 0) hudEl.style.marginLeft = `${ofs}px`;
+    if (isLightMode()) hudEl.classList.add('horae-light');
+    if (_rpgHudExpandedMsgs.has(messageIndex)) hudEl.classList.add('expanded');
+    if (_rpgHudEditingMsgs.has(messageIndex)) hudEl.classList.add('editing');
+    hudEl.querySelectorAll('.horae-rpg-hud-row').forEach(row => {
+        const char = row.dataset.char;
+        if (char && _rpgHudRevealedMore.has(`${messageIndex}:${char}`)) {
+            const more = row.querySelector('[data-rpg-action="reveal-more"]');
+            const extra = row.querySelector('.horae-rpg-hud-status-chips-extra');
+            if (more) more.style.display = 'none';
+            if (extra) extra.hidden = false;
+        }
+    });
+    _ensureRpgHudEventsBound();
+}
+
+/** 详情态最多直显 chip 数，超出折叠为 +N */
+const RPG_HUD_DETAIL_CHIP_LIMIT = 5;
+/** session 内记忆已展开的消息索引（刷新/切对话清零） */
+const _rpgHudExpandedMsgs = new Set();
+/** session 内记忆已进入编辑态的消息索引（保证 commit 后重渲染仍保留编辑态） */
+const _rpgHudEditingMsgs = new Set();
+/** session 内记忆已展开 +N 隐藏 chip 的 (msgIndex,charName) 组合 */
+const _rpgHudRevealedMore = new Set();
+
+/** chip 标准结构（含可隐藏的 × 删除按钮） */
+function _renderEffectChip(eff) {
+    const text = escapeHtml(eff.text);
+    const delTitle = escapeHtml(t('common.delete'));
+    return `<span class="horae-rpg-hud-effect-chip" data-sev="${eff.sev}">`
+        + `<i class="fa-solid ${eff.icon}"></i>`
+        + `<span class="horae-rpg-hud-effect-text">${text}</span>`
+        + `<button type="button" class="horae-rpg-hud-chip-del" data-rpg-action="del-status" data-text="${text}" title="${delTitle}"><i class="fa-solid fa-xmark"></i></button>`
+        + `</span>`;
+}
+
+/** 数值文本 + 同名隐藏 input；inputs 在 .editing 状态下显示替换 */
+function _renderEditableVal(cur, max, kindCur, kindMax, key) {
+    const keyAttr = key ? ` data-edit-key="${escapeHtml(key)}"` : '';
+    return `<span class="horae-rpg-hud-val">`
+        + `<span class="horae-rpg-hud-val-display">${cur}/${max}</span>`
+        + `<span class="horae-rpg-hud-val-edit">`
+        + `<input class="horae-rpg-hud-edit-input" type="number" inputmode="numeric" min="0" data-edit-kind="${kindCur}"${keyAttr} value="${cur}">`
+        + `<span class="horae-rpg-hud-val-sep">/</span>`
+        + `<input class="horae-rpg-hud-edit-input" type="number" inputmode="numeric" min="1" data-edit-kind="${kindMax}"${keyAttr} value="${max}">`
+        + `</span>`
+        + `</span>`;
+}
+
 /**
  * 构建单个角色在 HUD 中的 HTML
- * 布局: 角色名(+状态图标) | Lv.X 💵999 | XP条 | 属性条
+ * 布局: 角色名(+Lv+极简状态徽章+货币) | XP条 | 属性条 | 详情chip(仅 .expanded 时显示)
+ * 编辑入口：所有数值文本旁同时渲染 input（默认 hidden，由 .horae-rpg-hud.editing 接管）
  */
 function _buildCharHudHtml(name, rpg) {
     const bars = rpg.bars[name] || {};
@@ -9209,16 +9480,29 @@ function _buildCharHudHtml(name, rpg) {
     const sendLvl = !!settings.sendRpgLevel;
     const sendCur = !!settings.sendRpgCurrency;
 
-    let html = '<div class="horae-rpg-hud-row">';
+    const dedupedEffects = dedupeStatusForHud(effects);
+    const mostSevere = pickMostSevereStatus(dedupedEffects);
+    const effectCount = dedupedEffects.length;
 
-    // 第一行: 角色名 + 等级 + 状态图标 ....... 货币(右端)
+    let html = `<div class="horae-rpg-hud-row" data-char="${escapeHtml(name)}">`;
+
     html += '<div class="horae-rpg-hud-header">';
     html += `<span class="horae-rpg-hud-name">${escapeHtml(name)}</span>`;
-    if (sendLvl && charLv != null) html += `<span class="horae-rpg-hud-lv-badge">Lv.${charLv}</span>`;
-    for (const e of effects) {
-        html += `<i class="fa-solid ${getStatusIcon(e)} horae-rpg-hud-effect" title="${escapeHtml(e)}"></i>`;
+    if (sendLvl && charLv != null) {
+        html += `<span class="horae-rpg-hud-lv-badge">`
+            + `<span class="horae-rpg-hud-lv-display">Lv.${charLv}</span>`
+            + `<input class="horae-rpg-hud-edit-input horae-rpg-hud-lv-input" type="number" inputmode="numeric" min="0" data-edit-kind="level" value="${charLv}">`
+            + `</span>`;
     }
-    // 货币：推到最右
+    if (mostSevere) {
+        const summaryTitle = effectCount > 1
+            ? `${mostSevere.text} +${effectCount - 1}`
+            : mostSevere.text;
+        html += `<span class="horae-rpg-hud-status-compact" data-sev="${mostSevere.sev}" title="${escapeHtml(summaryTitle)}">`;
+        html += `<i class="fa-solid ${mostSevere.icon} horae-rpg-hud-status-compact-icon"></i>`;
+        if (effectCount > 1) html += `<span class="horae-rpg-hud-status-count">${effectCount}</span>`;
+        html += '</span>';
+    }
     if (sendCur && denomCfg.length > 0) {
         let curHtml = '';
         for (const d of denomCfg) {
@@ -9230,20 +9514,47 @@ function _buildCharHudHtml(name, rpg) {
     }
     html += '</div>';
 
-    // XP 条（如果有）
     if (sendLvl && charXp && charXp[1] > 0) {
         const pct = Math.min(100, Math.round(charXp[0] / charXp[1] * 100));
-        html += `<div class="horae-rpg-hud-bar horae-rpg-hud-xp"><span class="horae-rpg-hud-lbl">XP</span><div class="horae-rpg-hud-track"><div class="horae-rpg-hud-fill" style="width:${pct}%;background:#a78bfa;"></div></div><span class="horae-rpg-hud-val">${charXp[0]}/${charXp[1]}</span></div>`;
+        html += `<div class="horae-rpg-hud-bar horae-rpg-hud-xp">`
+            + `<span class="horae-rpg-hud-lbl">XP</span>`
+            + `<div class="horae-rpg-hud-track"><div class="horae-rpg-hud-fill" style="width:${pct}%;background:#a78bfa;"></div></div>`
+            + _renderEditableVal(charXp[0], charXp[1], 'xp-cur', 'xp-max', '')
+            + `</div>`;
     }
 
-    // 属性条
     for (const [type, val] of Object.entries(bars)) {
         const label = getRpgBarName(type, val[2]);
         const cur = val[0], max = val[1];
         const pct = max > 0 ? Math.min(100, Math.round(cur / max * 100)) : 0;
         const color = getRpgBarColor(type);
-        html += `<div class="horae-rpg-hud-bar"><span class="horae-rpg-hud-lbl">${escapeHtml(label)}</span><div class="horae-rpg-hud-track"><div class="horae-rpg-hud-fill" style="width:${pct}%;background:${color};"></div></div><span class="horae-rpg-hud-val">${cur}/${max}</span></div>`;
+        html += `<div class="horae-rpg-hud-bar">`
+            + `<span class="horae-rpg-hud-lbl">${escapeHtml(label)}</span>`
+            + `<div class="horae-rpg-hud-track"><div class="horae-rpg-hud-fill" style="width:${pct}%;background:${color};"></div></div>`
+            + _renderEditableVal(cur, max, 'bar-cur', 'bar-max', type)
+            + `</div>`;
     }
+
+    const isEmpty = dedupedEffects.length === 0;
+    const addTitle = escapeHtml(t('common.add'));
+    html += `<div class="horae-rpg-hud-status-section${isEmpty ? ' empty' : ''}">`;
+    html += `<span class="horae-rpg-hud-status-section-label">${escapeHtml(t('ui.statusList'))}</span>`;
+    html += '<div class="horae-rpg-hud-status-chips">';
+    if (!isEmpty) {
+        const visible = dedupedEffects.slice(0, RPG_HUD_DETAIL_CHIP_LIMIT);
+        const hidden = dedupedEffects.slice(RPG_HUD_DETAIL_CHIP_LIMIT);
+        for (const e of visible) html += _renderEffectChip(e);
+        if (hidden.length > 0) {
+            const moreTitles = hidden.map(h => h.text).join('\n');
+            html += `<span class="horae-rpg-hud-effect-chip horae-rpg-hud-effect-more" data-rpg-action="reveal-more" title="${escapeHtml(moreTitles)}">+${hidden.length}</span>`;
+            html += '<span class="horae-rpg-hud-status-chips-extra" hidden>';
+            for (const e of hidden) html += _renderEffectChip(e);
+            html += '</span>';
+        }
+    }
+    html += `<button type="button" class="horae-rpg-hud-chip-add" data-rpg-action="add-status" title="${addTitle}"><i class="fa-solid fa-plus"></i></button>`;
+    html += '</div>';
+    html += '</div>';
 
     html += '</div>';
     return html;
@@ -9303,20 +9614,14 @@ function renderRpgHud(messageEl, messageIndex) {
     if (chars.length === 0) return;
 
     let html = '<div class="horae-rpg-hud">';
+    html += _buildRpgHudControlsHtml();
     for (const name of chars) html += _buildCharHudHtml(name, rpg);
     html += '</div>';
 
     const panel = messageEl.querySelector('.horae-message-panel');
     if (panel) {
         panel.insertAdjacentHTML('beforebegin', html);
-        const hudEl = messageEl.querySelector('.horae-rpg-hud');
-        if (hudEl) {
-            const w = Math.max(50, Math.min(100, settings.panelWidth || 100));
-            if (w < 100) hudEl.style.maxWidth = `${w}%`;
-            const ofs = Math.max(0, settings.panelOffset || 0);
-            if (ofs > 0) hudEl.style.marginLeft = `${ofs}px`;
-            if (isLightMode()) hudEl.classList.add('horae-light');
-        }
+        _decorateRpgHudPostRender(messageEl.querySelector('.horae-rpg-hud'), messageIndex);
     }
 }
 
@@ -9428,20 +9733,14 @@ function _renderRpgHudFromSnapshot(messageEl, messageIndex, rpg) {
     if (chars.length === 0) return;
 
     let html = '<div class="horae-rpg-hud">';
+    html += _buildRpgHudControlsHtml();
     for (const name of chars) html += _buildCharHudHtml(name, rpg);
     html += '</div>';
 
     const panel = messageEl.querySelector('.horae-message-panel');
     if (panel) {
         panel.insertAdjacentHTML('beforebegin', html);
-        const hudEl = messageEl.querySelector('.horae-rpg-hud');
-        if (hudEl) {
-            const w = Math.max(50, Math.min(100, settings.panelWidth || 100));
-            if (w < 100) hudEl.style.maxWidth = `${w}%`;
-            const ofs = Math.max(0, settings.panelOffset || 0);
-            if (ofs > 0) hudEl.style.marginLeft = `${ofs}px`;
-            if (isLightMode()) hudEl.classList.add('horae-light');
-        }
+        _decorateRpgHudPostRender(messageEl.querySelector('.horae-rpg-hud'), messageIndex);
     }
 }
 
@@ -12382,6 +12681,79 @@ function injectHoraeTagToMessage(messageId, meta) {
         console.log(`[Horae] 已同步写入消息 #${messageId} 的标签`);
     } catch (error) {
         console.error(`[Horae] 写入标签失败:`, error);
+    }
+}
+
+/** 把一次 HUD 编辑落到具体行：type 取自字段或 bar key，owner 用归一名 */
+function _buildRpgLinePatchForEdit(charName, fieldType, payload) {
+    switch (fieldType) {
+        case 'bar': {
+            const key = String(payload.key || '').trim();
+            if (!key) return null;
+            const cur = payload.cur ?? 0;
+            const max = payload.max ?? 0;
+            const desc = payload.desc ? `(${payload.desc})` : '';
+            return { type: key.toLowerCase(), owner: charName, newLine: `${key}:${charName}=${cur}/${max}${desc}` };
+        }
+        case 'status': {
+            const arr = Array.isArray(payload.effects) ? payload.effects.filter(Boolean) : [];
+            const val = arr.length ? arr.join('/') : '正常';
+            return { type: 'status', owner: charName, newLine: `status:${charName}=${val}` };
+        }
+        case 'level':
+            return { type: 'level', owner: charName, newLine: `level:${charName}=${payload.value}` };
+        case 'xp':
+            return { type: 'xp', owner: charName, newLine: `xp:${charName}=${payload.cur}/${payload.max}` };
+        default:
+            return null;
+    }
+}
+
+/** 解析单行 <horaerpg> 内容；只取 `prefix:owner=` 这层，不解释 value */
+function _parseRpgLineForMatch(line) {
+    const m = String(line || '').trim().match(/^([a-zA-Z_]\w*):([^=]+)=/);
+    if (!m) return null;
+    return { type: m[1].toLowerCase(), owner: m[2].trim() };
+}
+
+/** 把 patch 落到 mes 的 <horaerpg> 块：同实体行原位替换，多余同实体行丢弃，没匹配就追加 */
+function injectHoraeRpgLinePatch(messageId, patch) {
+    if (!patch) return;
+    try {
+        const chat = horaeManager.getChat();
+        if (!chat?.[messageId]) return;
+        const message = chat[messageId];
+        let mes = message.mes || '';
+        const m = mes.match(/<horaerpg>([\s\S]*?)<\/horaerpg>/i);
+
+        const targetOwner = horaeManager._resolveRpgOwner(patch.owner);
+        const isSameTarget = (line) => {
+            const parsed = _parseRpgLineForMatch(line);
+            if (!parsed || parsed.type !== patch.type) return false;
+            return horaeManager._resolveRpgOwner(parsed.owner) === targetOwner;
+        };
+
+        if (m) {
+            const lines = m[1].split('\n');
+            const result = [];
+            let placed = false;
+            for (const ln of lines) {
+                if (isSameTarget(ln)) {
+                    if (!placed) { result.push(patch.newLine); placed = true; }
+                } else {
+                    result.push(ln);
+                }
+            }
+            if (!placed) result.push(patch.newLine);
+            const body = result.join('\n').replace(/^\n+|\n+$/g, '');
+            mes = mes.replace(/<horaerpg>[\s\S]*?<\/horaerpg>/i, `<horaerpg>\n${body}\n</horaerpg>`);
+        } else {
+            mes = mes.trimEnd() + `\n\n<horaerpg>\n${patch.newLine}\n</horaerpg>`;
+        }
+
+        message.mes = mes;
+    } catch (error) {
+        console.error(`[Horae] 写入 horaerpg 标签失败:`, error);
     }
 }
 
@@ -19882,6 +20254,9 @@ function _rebuildGlobalDataForCurrentChat() {
 async function onChatChanged() {
     if (!settings.enabled) return;
     _chatFullyLoaded = false;
+    _rpgHudExpandedMsgs.clear();
+    _rpgHudEditingMsgs.clear();
+    _rpgHudRevealedMore.clear();
 
     try {
         clearTableHistory();

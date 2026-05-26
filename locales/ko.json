@@ -769,7 +769,8 @@
         "moodState": "감정 상태",
         "affectionDelta": "±변화량",
         "affectionTotal": "합계",
-        "agendaContentHint": "일정 내용 (상대 시간은 절대 날짜를 사용하세요)"
+        "agendaContentHint": "일정 내용 (상대 시간은 절대 날짜를 사용하세요)",
+        "rpgStatusAdd": "추가할 상태 (예: 중독, 출혈, 방어막)"
     },
     "modal": {
         "compressTitle": "압축 모드",
@@ -1178,6 +1179,7 @@
         "noReputationData": "평판 데이터 없음",
         "noCurrencyData": "화폐 데이터 없음",
         "statusList": "상태 목록",
+        "toggleExpand": "펼치기/접기",
         "skillsInCard": "스킬은 위의 캐릭터 카드에 표시됩니다. +를 클릭하여 수동으로 추가하세요.",
         "noSkillsAddManually": "스킬 없음. +를 클릭하여 수동으로 추가하세요.",
         "noReputationCategories": "평판 카테고리 없음. +를 클릭하여 추가하세요.",

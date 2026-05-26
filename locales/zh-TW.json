@@ -371,10 +371,13 @@
         "tokenModeHint2": "參考：Claude ≈ 80K~200K · GPT-4o ≈ 128K · Gemini ≈ 1M~2M",
         "tokenModeHint3": "建議設為模型上下文窗口的 30%~50%，留出足夠空間給其他內容。",
         "messageModeHint": "填入AI條數觸發閾值。",
-        "messageModeHint2": "僅統計AI訊息；中間夾著的使用者訊息會隨全文一起保留/壓縮，但不參與計數。遇到總結邊界會停止計數。"
+        "messageModeHint2": "僅統計AI訊息；中間夾著的使用者訊息會隨全文一起保留/壓縮，但不參與計數。遇到總結邊界會停止計數。",
+        "statusList": "狀態列表",
+        "toggleExpand": "展開/收起"
     },
     "toast": {
         "saveSuccess": "儲存成功！",
+        "invalidLevelNumber": "請輸入有效等級數字",
         "autoSummaryInProgress": "自動總結正在執行中",
         "autoSummaryDisabled": "自動總結未啟用（請檢查總開關、自動總結、劇情軌跡發送）",
         "autoSummaryTriggered": "已手動觸發自動總結檢查",
@@ -629,7 +632,8 @@
         "relFrom": "角色A（關係發起方）",
         "relTo": "角色B（關係接收方）",
         "relType": "關係類型（如：朋友、戀人）",
-        "relNote": "關係的補充說明（選填）"
+        "relNote": "關係的補充說明（選填）",
+        "rpgStatusAdd": "輸入要新增的狀態（如：中毒、流血、護盾）"
     },
     "modal": {
         "compressTitle": "壓縮模式",

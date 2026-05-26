@@ -6895,6 +6895,242 @@ body .horae-context-menu {
     min-width: 80px;
 }
 
+/* ========== RPG HUD：极简徽章 / 控件 / 详情 / 编辑态 ========== */
+.horae-rpg-hud { position: relative; }
+.horae-rpg-hud-row:first-child .horae-rpg-hud-header { padding-right: 52px; }
+
+.horae-rpg-hud-controls {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    display: flex;
+    gap: 2px;
+    z-index: 2;
+}
+.horae-rpg-hud-ctrl {
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--horae-text-muted, #94a3b8);
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 0;
+    font-size: 11px;
+    opacity: 0.6;
+    transition: opacity 0.15s, background 0.15s;
+}
+.horae-rpg-hud-ctrl:hover { opacity: 1; background: rgba(255,255,255,0.06); }
+.horae-rpg-hud-toggle i { transition: transform 0.2s; }
+.horae-rpg-hud.expanded .horae-rpg-hud-toggle i { transform: rotate(180deg); }
+.horae-rpg-hud-edit-btn { display: none; }
+.horae-rpg-hud.expanded .horae-rpg-hud-edit-btn { display: inline-flex; }
+.horae-rpg-hud.editing .horae-rpg-hud-edit-btn { color: #fbbf24; opacity: 1; }
+
+/* 极简徽章 */
+.horae-rpg-hud-status-compact {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px 1px 5px;
+    border-radius: 9px;
+    font-size: 10px;
+    line-height: 1.4;
+    background: rgba(148, 163, 184, 0.12);
+    color: #cbd5e1;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+}
+.horae-rpg-hud-status-compact-icon { font-size: 10px; }
+.horae-rpg-hud-status-count {
+    display: inline-block;
+    min-width: 14px;
+    height: 14px;
+    line-height: 14px;
+    padding: 0 4px;
+    border-radius: 7px;
+    font-size: 9px;
+    font-weight: 700;
+    text-align: center;
+    background: rgba(0,0,0,0.25);
+    color: #fff;
+}
+.horae-rpg-hud-status-compact[data-sev="critical"] {
+    background: rgba(220, 38, 38, 0.18);
+    color: #fca5a5;
+    border-color: rgba(220, 38, 38, 0.4);
+    animation: horae-rpg-hud-pulse 1.8s ease-in-out infinite;
+}
+.horae-rpg-hud-status-compact[data-sev="danger"]  { background: rgba(239, 68, 68, 0.14); color: #fca5a5; border-color: rgba(239, 68, 68, 0.3); }
+.horae-rpg-hud-status-compact[data-sev="warn"]    { background: rgba(245, 158, 11, 0.14); color: #fcd34d; border-color: rgba(245, 158, 11, 0.3); }
+.horae-rpg-hud-status-compact[data-sev="debuff"]  { background: rgba(250, 204, 21, 0.10); color: #fde047; border-color: rgba(250, 204, 21, 0.24); }
+.horae-rpg-hud-status-compact[data-sev="buff"]    { background: rgba(52, 211, 153, 0.12); color: #6ee7b7; border-color: rgba(52, 211, 153, 0.28); }
+.horae-rpg-hud-status-compact[data-sev="neutral"] { background: rgba(148, 163, 184, 0.10); color: #cbd5e1; border-color: rgba(148, 163, 184, 0.18); }
+
+@keyframes horae-rpg-hud-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+    50%      { box-shadow: 0 0 6px 0 rgba(220, 38, 38, 0.6); }
+}
+
+/* 详情段 */
+.horae-rpg-hud-status-section { display: none; margin-top: 4px; }
+.horae-rpg-hud.expanded .horae-rpg-hud-status-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 4px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+}
+.horae-rpg-hud.expanded:not(.editing) .horae-rpg-hud-status-section.empty { display: none; }
+.horae-rpg-hud-status-section-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    color: var(--horae-text-muted, #94a3b8);
+}
+.horae-rpg-hud-status-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+}
+.horae-rpg-hud-status-chips-extra { display: contents; }
+.horae-rpg-hud-status-chips-extra[hidden] { display: none !important; }
+
+/* expanded 时极简徽章退场（详情段已显示完整信息） */
+.horae-rpg-hud.expanded .horae-rpg-hud-status-compact { display: none; }
+
+/* chip 基础 + 严重度配色 */
+.horae-rpg-hud-effect-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px 1px 5px;
+    border-radius: 9px;
+    font-size: 10px;
+    line-height: 1.5;
+    max-width: 8em;
+    background: rgba(148, 163, 184, 0.12);
+    color: var(--horae-text, #e2e8f0);
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    user-select: none;
+}
+.horae-rpg-hud-effect-chip .horae-rpg-hud-effect-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.horae-rpg-hud-effect-chip[data-sev="critical"] { background: rgba(220, 38, 38, 0.18); color: #fca5a5; border-color: rgba(220, 38, 38, 0.38); }
+.horae-rpg-hud-effect-chip[data-sev="danger"]   { background: rgba(239, 68, 68, 0.14); color: #fca5a5; border-color: rgba(239, 68, 68, 0.3);  }
+.horae-rpg-hud-effect-chip[data-sev="warn"]     { background: rgba(245, 158, 11, 0.14); color: #fcd34d; border-color: rgba(245, 158, 11, 0.3); }
+.horae-rpg-hud-effect-chip[data-sev="debuff"]   { background: rgba(250, 204, 21, 0.10); color: #fde047; border-color: rgba(250, 204, 21, 0.24); }
+.horae-rpg-hud-effect-chip[data-sev="buff"]     { background: rgba(52, 211, 153, 0.12); color: #6ee7b7; border-color: rgba(52, 211, 153, 0.28); }
+.horae-rpg-hud-effect-chip[data-sev="neutral"]  { background: rgba(148, 163, 184, 0.10); color: #cbd5e1; border-color: rgba(148, 163, 184, 0.18); }
+.horae-rpg-hud-effect-chip[data-sev="unknown"]  { background: rgba(148, 163, 184, 0.10); color: #cbd5e1; border-color: rgba(148, 163, 184, 0.18); }
+
+/* +N 折叠 chip */
+.horae-rpg-hud-effect-more {
+    cursor: pointer;
+    background: rgba(255,255,255,0.06);
+    color: var(--horae-text-muted, #94a3b8);
+    border-color: rgba(255,255,255,0.12);
+}
+.horae-rpg-hud-effect-more:hover { background: rgba(255,255,255,0.12); }
+
+/* chip × 删除按钮（仅编辑态显示） */
+.horae-rpg-hud-chip-del {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    margin-left: 2px;
+    border: none;
+    background: transparent;
+    color: currentColor;
+    cursor: pointer;
+    padding: 0;
+    font-size: 9px;
+    opacity: 0.75;
+    border-radius: 50%;
+}
+.horae-rpg-hud-chip-del:hover { opacity: 1; background: rgba(0,0,0,0.25); }
+.horae-rpg-hud.editing .horae-rpg-hud-chip-del { display: inline-flex; }
+
+/* + 添加状态（仅编辑态显示） */
+.horae-rpg-hud-chip-add {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 1px dashed rgba(148, 163, 184, 0.4);
+    background: transparent;
+    color: var(--horae-text-muted, #94a3b8);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 9px;
+}
+.horae-rpg-hud-chip-add:hover {
+    color: var(--horae-text, #e2e8f0);
+    border-color: rgba(148, 163, 184, 0.7);
+}
+.horae-rpg-hud.editing .horae-rpg-hud-chip-add { display: inline-flex; }
+
+/* 内联编辑输入 */
+.horae-rpg-hud-val { display: inline-flex; align-items: center; justify-content: flex-end; gap: 2px; }
+.horae-rpg-hud-val-display { display: inline; }
+.horae-rpg-hud-val-edit { display: none; align-items: center; gap: 2px; }
+.horae-rpg-hud.editing .horae-rpg-hud-val-display { display: none; }
+.horae-rpg-hud.editing .horae-rpg-hud-val-edit { display: inline-flex; }
+.horae-rpg-hud-val-sep { color: var(--horae-text-muted, #94a3b8); font-size: 9px; }
+.horae-rpg-hud-edit-input {
+    width: 38px;
+    height: 18px;
+    padding: 0 3px;
+    font-size: 10px;
+    text-align: center;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 3px;
+    color: var(--horae-text, #e2e8f0);
+    font-variant-numeric: tabular-nums;
+    -moz-appearance: textfield;
+}
+.horae-rpg-hud-edit-input::-webkit-outer-spin-button,
+.horae-rpg-hud-edit-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.horae-rpg-hud-edit-input:focus {
+    outline: none;
+    border-color: rgba(96, 165, 250, 0.6);
+    background: rgba(255,255,255,0.1);
+}
+
+/* Lv 徽章内联输入 */
+.horae-rpg-hud-lv-badge { display: inline-flex; align-items: center; }
+.horae-rpg-hud-lv-display { display: inline; }
+.horae-rpg-hud-lv-input {
+    display: none;
+    width: 44px;
+    height: 18px;
+    padding: 0 4px;
+    font-weight: 700;
+    color: #a78bfa;
+}
+.horae-rpg-hud.editing .horae-rpg-hud-lv-display { display: none; }
+.horae-rpg-hud.editing .horae-rpg-hud-lv-input { display: inline-flex; }
+
+/* 浅色模式下提高对比 */
+.horae-rpg-hud.horae-light .horae-rpg-hud-edit-input {
+    background: rgba(0,0,0,0.04);
+    border-color: rgba(0,0,0,0.16);
+    color: var(--horae-text, #1e293b);
+}
+.horae-rpg-hud.horae-light .horae-rpg-hud-ctrl { color: rgba(0,0,0,0.55); }
+.horae-rpg-hud.horae-light .horae-rpg-hud-ctrl:hover { background: rgba(0,0,0,0.06); }
+
 /* 等级配置面板 */
 .horae-rpg-lv-entry {
     padding: 6px 0;
@@ -7801,7 +8037,17 @@ body .horae-context-menu {
     .horae-rpg-hud { padding: 4px 8px; }
     .horae-rpg-hud-name { font-size: 10px; min-width: 60px; }
     .horae-rpg-hud-lbl { font-size: 8px; }
-    .horae-rpg-hud-val { font-size: 8px; }
+    .horae-rpg-hud-val { font-size: 8px; min-width: 50px; }
+    .horae-rpg-hud-row:first-child .horae-rpg-hud-header { padding-right: 56px; }
+    .horae-rpg-hud-ctrl { width: 26px; height: 26px; font-size: 12px; opacity: 0.75; }
+    .horae-rpg-hud-effect-chip { font-size: 9px; padding: 1px 5px; max-width: 6em; gap: 2px; }
+    .horae-rpg-hud-effect-chip i { font-size: 9px; }
+    .horae-rpg-hud-status-compact { padding: 1px 5px; font-size: 9px; }
+    .horae-rpg-hud-status-count { font-size: 8px; min-width: 12px; height: 12px; line-height: 12px; }
+    .horae-rpg-hud-edit-input { width: 40px; height: 22px; font-size: 11px; }
+    .horae-rpg-hud-lv-input { width: 46px; height: 22px; font-size: 11px; }
+    .horae-rpg-hud-chip-del { width: 18px; height: 18px; font-size: 10px; }
+    .horae-rpg-hud-chip-add { width: 22px; height: 22px; font-size: 10px; }
 
     /* 时间线 */
     .horae-timeline-item { flex-wrap: wrap; row-gap: 4px; }
