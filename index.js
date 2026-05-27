@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.14.7
+ * 版本: 1.14.8
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -22,7 +22,7 @@ import { initPromptDefaults, ensurePromptDefaults, ensurePresetPrompts, getPromp
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.14.7';
+const VERSION = '1.14.8';
 
 // settings 来源标记。仅用于区分「上次写入是否本版本自身」，外部来源（旧版本/其他分发版）会触发一次确认弹窗
 const ENGINE_TAG = 'horae-official';
@@ -19335,11 +19335,14 @@ function _importAsInitialState(importObj, chat, options = {}) {
             target._rpgConfigs._deletedStrongholds = target.rpg._deletedStrongholds;
     }
 
-    // 自定义表格
+    // 自定义表格：tableContributions 是数组，按序拼接
     for (const meta of allMetas) {
-        if (meta.tableContributions) {
-            if (!target.tableContributions) target.tableContributions = {};
-            Object.assign(target.tableContributions, meta.tableContributions);
+        const src = Array.isArray(meta.tableContributions)
+            ? meta.tableContributions
+            : (meta.tableContributions ? Object.values(meta.tableContributions) : null);
+        if (src && src.length > 0) {
+            if (!Array.isArray(target.tableContributions)) target.tableContributions = [];
+            target.tableContributions.push(...src);
         }
     }
 

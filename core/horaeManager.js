@@ -3337,6 +3337,14 @@ class HoraeManager {
             resetTable(overlay);
         }
         
+        // 兜底：旧 carryover 路径曾把 tableContributions 写成对象映射，这里归一化成数组
+        for (let i = 0; i < limit; i++) {
+            const meta = chat[i]?.horae_meta;
+            if (meta?.tableContributions && !Array.isArray(meta.tableContributions)) {
+                meta.tableContributions = Object.values(meta.tableContributions);
+            }
+        }
+
         // 2. 预扫描：找到每个表格最后一个 _isUserEdit 所在的消息索引
         const lastUserEditIdx = new Map();
         for (let i = 0; i < limit; i++) {
