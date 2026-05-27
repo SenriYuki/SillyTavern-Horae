@@ -38,7 +38,11 @@
         "summaryExpanded": "Expanded to original events",
         "summaryBadge": "Summary",
         "autoSummary": "Auto",
-        "manualSummary": "Manual"
+        "manualSummary": "Manual",
+        "recap": "Recap",
+        "carryoverRecapTitle": "Previous Chat Recap",
+        "carryoverRecapHint": "Always read by AI, independent from current timeline",
+        "carryoverRecapCount": "items"
     },
     "characters": {
         "present": "Present Characters",

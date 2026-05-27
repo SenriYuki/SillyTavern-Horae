@@ -44,7 +44,11 @@
         "summaryExpanded": "元のイベントに展開しました",
         "summaryBadge": "要約",
         "autoSummary": "自動",
-        "manualSummary": "手動"
+        "manualSummary": "手動",
+        "recap": "回顧",
+        "carryoverRecapTitle": "旧チャット回顧",
+        "carryoverRecapHint": "AIは常に読み込みます。現在のタイムラインには影響しません",
+        "carryoverRecapCount": "件"
     },
     "characters": {
         "present": "登場キャラクター",

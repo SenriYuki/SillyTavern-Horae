@@ -42,7 +42,11 @@
         "summaryExpanded": "원본 이벤트로 확장됨",
         "summaryBadge": "요약",
         "autoSummary": "자동",
-        "manualSummary": "수동"
+        "manualSummary": "수동",
+        "recap": "회고",
+        "carryoverRecapTitle": "이전 대화 회고",
+        "carryoverRecapHint": "AI가 항상 읽으며 현재 타임라인에 영향 없음",
+        "carryoverRecapCount": "건"
     },
     "characters": {
         "present": "등장 캐릭터",

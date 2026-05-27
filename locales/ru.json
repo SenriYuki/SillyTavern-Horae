@@ -38,7 +38,11 @@
         "summaryExpanded": "Развёрнуто до исходных событий",
         "summaryBadge": "Конспект",
         "autoSummary": "Авто",
-        "manualSummary": "Ручной"
+        "manualSummary": "Ручной",
+        "recap": "Воспоминания",
+        "carryoverRecapTitle": "Воспоминания из прежнего чата",
+        "carryoverRecapHint": "ИИ всегда читает, не влияет на текущую таймлайн",
+        "carryoverRecapCount": "шт."
     },
     "characters": {
         "present": "Присутствующие персонажи",

@@ -38,7 +38,11 @@
         "summaryExpanded": "已展开为原始事件",
         "summaryBadge": "总结",
         "autoSummary": "自动",
-        "manualSummary": "手动"
+        "manualSummary": "手动",
+        "recap": "回顾",
+        "carryoverRecapTitle": "旧对话回顾",
+        "carryoverRecapHint": "AI 始终读取，不影响当前时间线",
+        "carryoverRecapCount": "条"
     },
     "characters": {
         "present": "在场角色",

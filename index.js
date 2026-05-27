@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.14.6
+ * 版本: 1.14.7
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -22,7 +22,7 @@ import { initPromptDefaults, ensurePromptDefaults, ensurePresetPrompts, getPromp
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.14.6';
+const VERSION = '1.14.7';
 
 // settings 来源标记。仅用于区分「上次写入是否本版本自身」，外部来源（旧版本/其他分发版）会触发一次确认弹窗
 const ENGINE_TAG = 'horae-official';
@@ -2250,10 +2250,40 @@ function updateTimelineDisplay() {
         return `<span class="horae-level-badge summary">${t('timeline.summaryBadge')} L${depth}</span>`;
     };
 
+    // 旧对话回顾（_carryoverSeed）的折叠 banner：折叠时单条隐藏，展开时正常列出
+    const carryoverSeedCount = events.filter(e => e.event?._carryoverSeed).length;
+    const recapCollapsed = chat?.[0]?.horae_meta?._carryoverRecapCollapsed !== false;
+    let recapBanner = '';
+    if (carryoverSeedCount > 0) {
+        const firstRecap = events.find(e => e.event?._carryoverSeed);
+        const previewSrc = (firstRecap?.event?.summary || '').replace(/\s+/g, ' ').trim();
+        const preview = previewSrc.slice(0, 80);
+        const hasMore = previewSrc.length > 80;
+        const stateClass = recapCollapsed ? 'collapsed' : 'expanded';
+        const arrowIcon = recapCollapsed ? 'fa-chevron-down' : 'fa-chevron-up';
+        recapBanner = `
+            <div class="horae-timeline-carryover-banner ${stateClass}" data-action="toggle-recap" role="button" tabindex="0">
+                <div class="horae-recap-icon">📚</div>
+                <div class="horae-recap-content">
+                    <div class="horae-recap-title">${t('timeline.carryoverRecapTitle')} · ${carryoverSeedCount} ${t('timeline.carryoverRecapCount')}</div>
+                    <div class="horae-recap-hint">${t('timeline.carryoverRecapHint')}</div>
+                    ${recapCollapsed ? `<div class="horae-recap-preview">${escapeHtml(preview)}${hasMore ? '…' : ''}</div>` : ''}
+                </div>
+                <div class="horae-recap-toggle"><i class="fa-solid ${arrowIcon}"></i></div>
+            </div>
+        `;
+    }
+
     listEl.innerHTML = events.reverse().map(e => {
         const isSummary = e.event?.isSummary || e.event?.level === '摘要';
         const compressedBy = e.event?._compressedBy;
         const summaryId = e.event?._summaryId;
+        const isCarryoverSeed = !!e.event?._carryoverSeed;
+
+        // 折叠态下跳过单条回顾，全部由 banner 承载
+        if (isCarryoverSeed && recapCollapsed) {
+            return '';
+        }
 
         // 已被压缩的事件：当对应摘要处于 active 状态时隐藏
         if (compressedBy && activeSummaryIds.has(compressedBy)) {
@@ -2304,6 +2334,27 @@ function updateTimelineDisplay() {
         // 被标记为已压缩但摘要为 inactive 的事件，显示虚线框
         const isRestoredFromCompress = compressedBy && !activeSummaryIds.has(compressedBy);
         const compressedClass = isRestoredFromCompress ? 'horae-compressed-restored' : '';
+
+        // 单条回顾事件：用独立 recap 样式，不显示日期/相对时间
+        if (isCarryoverSeed) {
+            const recapBadge = `<span class="horae-level-badge recap">${t('timeline.recap')}</span>`;
+            const summary = e.event?.summary || '';
+            return `
+            <div class="horae-timeline-item horae-editable-item recap ${selectedClass}" data-message-id="${e.messageIndex}" data-event-key="${eventKey}">
+                <div class="horae-item-checkbox" style="display: ${checkboxDisplay}">
+                    <input type="checkbox" ${isSelected ? 'checked' : ''}>
+                </div>
+                <div class="horae-timeline-summary-icon"><i class="fa-solid fa-book-open"></i></div>
+                <div class="horae-timeline-content">
+                    <div class="horae-timeline-summary">${recapBadge}${escapeHtml(summary)}</div>
+                    <div class="horae-timeline-meta">${t('timeline.carryoverRecapHint')}</div>
+                </div>
+                <button class="horae-item-edit-btn" data-edit-type="event" data-message-id="${e.messageIndex}" data-event-index="${e.eventIndex || 0}" title="${t('common.edit')}" style="${timelineMultiSelectMode ? 'display:none' : ''}">
+                    <i class="fa-solid fa-pen"></i>
+                </button>
+            </div>
+            `;
+        }
 
         if (isSummary) {
             const summaryContent = e.event?.summary || '';
@@ -2369,7 +2420,26 @@ function updateTimelineDisplay() {
                 </button>
             </div>
         `;
-    }).join('');
+    }).join('') + recapBanner;
+
+    // 旧对话回顾折叠 banner：点击切换折叠状态并持久化
+    listEl.querySelectorAll('[data-action="toggle-recap"]').forEach(el => {
+        el.addEventListener('click', async (ev) => {
+            ev.stopPropagation();
+            const targetChat = horaeManager.getChat();
+            const meta = targetChat?.[0]?.horae_meta;
+            if (!meta) return;
+            meta._carryoverRecapCollapsed = !(meta._carryoverRecapCollapsed !== false);
+            try { await getContext().saveChat(); } catch (e) { console.warn('[Horae] 保存回顾折叠状态失败:', e); }
+            updateTimelineDisplay();
+        });
+        el.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter' || ev.key === ' ') {
+                ev.preventDefault();
+                el.click();
+            }
+        });
+    });
 
     // 绑定事件
     listEl.querySelectorAll('.horae-timeline-item').forEach(item => {
@@ -12023,6 +12093,7 @@ function bindPanelEvents(panelEl) {
             if (parsed.scene?.scene_desc && parsed.scene?.location) {
                 horaeManager._updateLocationMemory(parsed.scene.location, parsed.scene.scene_desc);
             }
+            _preserveCarryoverEvents(existingMeta, newMeta);
             horaeManager.setMessageMeta(messageId, newMeta);
             injectHoraeTagToMessage(messageId, newMeta);
 
@@ -12278,6 +12349,9 @@ async function rescanMessageMeta(messageId, panelEl) {
         if (parsed.scene?.scene_desc && parsed.scene?.location) {
             horaeManager._updateLocationMemory(parsed.scene.location, parsed.scene.scene_desc);
         }
+
+        // 用 existingMeta 中的 carryover 事件覆盖解析结果（兼容老 mes 缺 * 标记的情况）
+        _preserveCarryoverEvents(existingMeta, newMeta);
 
         horaeManager.setMessageMeta(messageId, newMeta);
         injectHoraeTagToMessage(messageId, newMeta);
@@ -12636,9 +12710,14 @@ function buildHoraeEventTagFromMeta(meta) {
     const events = meta.events || (meta.event ? [meta.event] : []);
     if (events.length === 0) return '';
 
+    // carryover 回顾事件用 level 后缀 * 编码，解析端据此还原 _carryoverSeed/_skipTimestamp 等标记
     const lines = events
         .filter(e => e.summary)
-        .map(e => `event:${e.level || '一般'}|${e.summary}`);
+        .map(e => {
+            const lvl = e.level || '一般';
+            const suffix = e._carryoverSeed ? '*' : '';
+            return `event:${lvl}${suffix}|${e.summary}`;
+        });
 
     if (lines.length === 0) return '';
     return `<horaeevent>\n${lines.join('\n')}\n</horaeevent>`;
@@ -18658,6 +18737,17 @@ function _deepCloneData(value) {
     return value == null ? value : JSON.parse(JSON.stringify(value));
 }
 
+// 用 oldMeta 中的 carryover 回顾事件覆盖 newMeta 里的同类条目，避免重新解析丢失元数据
+function _preserveCarryoverEvents(oldMeta, newMeta) {
+    if (!newMeta) return;
+    const old = (oldMeta?.events || []).filter(e => e?._carryoverSeed);
+    if (old.length === 0) return;
+    const stripped = (newMeta.events || []).filter(e => !(
+        e?._carryoverSeed || e?.level === '回顾' || e?.level === '回顧'
+    ));
+    newMeta.events = [...old.map(e => ({ ...e })), ...stripped];
+}
+
 function _normalizeMetaEvents(meta) {
     if (!meta) return [];
     if (meta.event && !meta.events) {
@@ -18707,20 +18797,22 @@ function _buildCarryoverCompensationBlocks(events, chunkSize = 8) {
     return blocks;
 }
 
+// 收集来自旧对话的回顾条目，输出结构化 recap 列表（每项对应新 chat[0] 的一条 event）
+// 返回 [{ summary, source: 'autoSummary'|'standalone' }]，按时间顺序排列
 function _collectCarryoverRecapTexts(sourceChat, cutoffIndex) {
-    const recapTexts = [];
+    const recaps = [];
     const seen = new Set();
     const cutoff = Number.isInteger(cutoffIndex) ? cutoffIndex : sourceChat.length;
     const coveredMsgIndices = new Set();
     const coveredSummaryIds = new Set();
 
-    const pushRecap = (rawText) => {
+    const pushRecap = (rawText, source) => {
         const text = typeof rawText === 'string' ? rawText.trim() : '';
         if (!text) return;
         const key = text.replace(/\s+/g, ' ').trim();
         if (!key || seen.has(key)) return;
         seen.add(key);
-        recapTexts.push(text);
+        recaps.push({ summary: text, source });
     };
 
     const firstMeta = sourceChat?.[0]?.horae_meta;
@@ -18760,7 +18852,7 @@ function _collectCarryoverRecapTexts(sourceChat, cutoffIndex) {
             const rangeEnd = Number.isInteger(s.range[1]) ? s.range[1] : Number.MAX_SAFE_INTEGER;
             if (rangeEnd >= cutoff) continue;
         }
-        pushRecap(s.summaryText || s.summary || s.title || '');
+        pushRecap(s.summaryText || s.summary || s.title || '', 'autoSummary');
     }
 
     const upperBound = Math.max(1, cutoff);
@@ -18777,7 +18869,7 @@ function _collectCarryoverRecapTexts(sourceChat, cutoffIndex) {
 
             const isSummaryEvent = !!(evt.isSummary || evt.level === '摘要' || evt._summaryId);
             if (isSummaryEvent) {
-                pushRecap(summary);
+                pushRecap(summary, 'autoSummary');
                 continue;
             }
 
@@ -18802,16 +18894,10 @@ function _collectCarryoverRecapTexts(sourceChat, cutoffIndex) {
 
     const compensationBlocks = _buildCarryoverCompensationBlocks(standaloneEvents, 8);
     for (const block of compensationBlocks) {
-        pushRecap(block);
+        pushRecap(block, 'standalone');
     }
 
-    return recapTexts;
-}
-
-function _composeCarryoverRecapText(recapTexts) {
-    if (!Array.isArray(recapTexts) || recapTexts.length === 0) return '';
-    const lines = recapTexts.map((text, idx) => `${idx + 1}. ${text}`);
-    return `【承接旧对话剧情回顾（共${recapTexts.length}条）】\n${lines.join('\n')}`;
+    return recaps;
 }
 
 function _buildImportObjectFromChat(chat) {
@@ -18896,13 +18982,23 @@ async function createNewChatWithCarryover() {
     const carryAiCount = carryPlan.aiCount;
     const carryMessages = carryIndices.map(i => _sanitizeCarryMessage(sourceChat[i])).filter(Boolean);
     const carryStart = carryIndices.length > 0 ? carryIndices[0] : sourceChat.length;
-    const recapTexts = _collectCarryoverRecapTexts(sourceChat, carryStart);
-    const recapText = _composeCarryoverRecapText(recapTexts);
+    const recapItems = _collectCarryoverRecapTexts(sourceChat, carryStart);
     const importObj = _buildImportObjectFromChat(sourceChat);
 
-    if (importObj.data.length === 0 && carryMessages.length === 0 && !recapText) {
+    if (importObj.data.length === 0 && carryMessages.length === 0 && recapItems.length === 0) {
         showToast('当前对话没有可携带的数据', 'warning');
         return;
+    }
+
+    // 切换 chat 前先快照源对话的 NPC 年龄基准日，避免后续以 carryover 时间为基准导致年龄漂移
+    const sourceAgeRefMap = {};
+    try {
+        const srcState = horaeManager.getLatestState();
+        for (const [name, info] of Object.entries(srcState?.npcs || {})) {
+            if (info && info._ageRefDate) sourceAgeRefMap[name] = info._ageRefDate;
+        }
+    } catch (e) {
+        console.warn('[Horae] 提取源对话 _ageRefDate 失败:', e);
     }
 
     const confirmText = [
@@ -18910,7 +19006,7 @@ async function createNewChatWithCarryover() {
         '',
         `将携带AI楼层：${carryAiCount} 条`,
         `实际携带消息：${carryMessages.length} 条（含夹带User）`,
-        `旧剧情回顾：${recapTexts.length} 条`,
+        `旧剧情回顾：${recapItems.length} 条`,
         '',
         '继续吗？',
     ].join('\n');
@@ -18928,18 +19024,74 @@ async function createNewChatWithCarryover() {
 
         _importAsInitialState(importObj, targetChat, { includeTimeline: false });
 
-        if (!targetChat[0].horae_meta) targetChat[0].horae_meta = createEmptyMeta();
-        if (!Array.isArray(targetChat[0].horae_meta.events)) targetChat[0].horae_meta.events = [];
-        targetChat[0].horae_meta.events = targetChat[0].horae_meta.events.filter(evt => !evt?._carryoverSeed);
+        const seedMeta = targetChat[0].horae_meta || (targetChat[0].horae_meta = createEmptyMeta());
+        if (!Array.isArray(seedMeta.events)) seedMeta.events = [];
+        seedMeta.events = seedMeta.events.filter(evt => !evt?._carryoverSeed);
 
-        if (recapText) {
-            targetChat[0].horae_meta.events.unshift({
+        // 拆为多条独立 recap event：autoSummary 各占一条、standalone 按 8 条/块各占一条
+        if (recapItems.length > 0) {
+            const seedEvents = recapItems.map(item => ({
                 is_important: true,
-                level: '摘要',
-                summary: recapText,
+                level: '回顾',
+                summary: item.summary,
                 isSummary: true,
                 _carryoverSeed: true,
-            });
+                _skipTimestamp: true,
+            }));
+            seedMeta.events = [...seedEvents, ...seedMeta.events];
+            if (typeof seedMeta._carryoverRecapCollapsed !== 'boolean') {
+                seedMeta._carryoverRecapCollapsed = true;
+            }
+        }
+
+        // 防止 _rebuildGlobalDataForCurrentChat 清掉这些迁移过来的全局数据
+        // locationMemory 是 { [name]: info } 对象 map
+        if (seedMeta.locationMemory && typeof seedMeta.locationMemory === 'object') {
+            for (const loc of Object.values(seedMeta.locationMemory)) {
+                if (loc && typeof loc === 'object' && !loc._userEdited && !loc._deleted) {
+                    loc._userEdited = true;
+                }
+            }
+        }
+        if (Array.isArray(seedMeta.relationships)) {
+            for (const rel of seedMeta.relationships) {
+                if (rel && typeof rel === 'object' && !rel._userEdited) {
+                    rel._userEdited = true;
+                }
+            }
+        }
+        // rpg.skills 是 { [owner]: skill[] } 嵌套结构
+        if (seedMeta.rpg && seedMeta.rpg.skills && typeof seedMeta.rpg.skills === 'object') {
+            for (const arr of Object.values(seedMeta.rpg.skills)) {
+                if (!Array.isArray(arr)) continue;
+                for (const sk of arr) {
+                    if (sk && typeof sk === 'object' && !sk._userAdded) {
+                        sk._userAdded = true;
+                    }
+                }
+            }
+        }
+
+        // 用源对话快照补齐 NPC 年龄基准日，仅当目标尚无值时写入，避免覆盖后续用户编辑
+        if (Object.keys(sourceAgeRefMap).length > 0 && seedMeta.npcs && typeof seedMeta.npcs === 'object') {
+            for (const [name, ref] of Object.entries(sourceAgeRefMap)) {
+                const info = seedMeta.npcs[name];
+                if (info && typeof info === 'object' && !info._ageRefDate) {
+                    info._ageRefDate = ref;
+                }
+            }
+        }
+
+        // 把累积状态完整序列化到 chat[0].mes（含 <horaeevent>），重载时可由解析路径回填
+        try {
+            const seedHoraeTag = buildHoraeTagFromMeta(seedMeta);
+            const seedEventTag = buildHoraeEventTagFromMeta(seedMeta);
+            const combined = [seedHoraeTag, seedEventTag].filter(Boolean).join('\n\n');
+            if (combined) {
+                targetChat[0].mes = combined;
+            }
+        } catch (e) {
+            console.warn('[Horae] 写入 carryover seed mes 失败:', e);
         }
 
         for (const msg of carryMessages) {
@@ -18954,7 +19106,7 @@ async function createNewChatWithCarryover() {
         refreshAllDisplays();
         renderCustomTablesList();
 
-        showToast(`已创建新对话：AI ${carryAiCount} 条，实际消息 ${carryMessages.length} 条，旧剧情回顾 ${recapTexts.length} 条${removedPreludeCount > 0 ? `，已清理开场白 ${removedPreludeCount} 条` : ''}`, 'success');
+        showToast(`已创建新对话：AI ${carryAiCount} 条，实际消息 ${carryMessages.length} 条，旧剧情回顾 ${recapItems.length} 条${removedPreludeCount > 0 ? `，已清理开场白 ${removedPreludeCount} 条` : ''}`, 'success');
     } catch (error) {
         console.error('[Horae] 创建携带记忆新对话失败:', error);
         showToast(`创建新对话失败: ${error.message || error}`, 'error');
