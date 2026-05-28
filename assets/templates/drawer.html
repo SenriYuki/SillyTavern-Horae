@@ -10,7 +10,7 @@
                 <i class="fa-regular fa-clock"></i>
                 Horae 时光记忆
             </div>
-            <span class="horae-version">1.14.8</span>
+            <span class="horae-version">1.15.0</span>
         </div>
         
         <!-- 标签页导航 -->
@@ -1410,6 +1410,27 @@
                                     <span data-i18n="vector.clearIndex">清除索引</span>
                                 </button>
                             </div>
+                            <div class="horae-settings-section horae-vector-snapshot-section" style="margin-top:10px;">
+                                <div class="horae-section-header horae-collapse-header" id="horae-vector-snapshot-toggle">
+                                    <i class="fa-solid fa-box-archive"></i>
+                                    <span data-i18n="vector.snapshotTitle">历史记忆快照</span>
+                                    <i class="fa-solid fa-chevron-down horae-collapse-icon collapsed"></i>
+                                </div>
+                                <div id="horae-vector-snapshot-body" style="display: none;">
+                                    <span class="horae-setting-sub-hint" data-i18n="vector.snapshotHint">将旧对话的「原文 + Horae 数据 + 向量索引」打包成只读快照，挂载到新对话用于召回。适合千层楼用户把记忆迁移到新对话而不被渲染拖慢。</span>
+                                    <div class="horae-vector-buttons" style="margin-top:6px;">
+                                        <button id="horae-btn-snapshot-export" class="horae-vector-btn">
+                                            <i class="fa-solid fa-file-export"></i>
+                                            <span data-i18n="vector.snapshotExport">导出当前对话</span>
+                                        </button>
+                                        <button id="horae-btn-snapshot-import" class="horae-vector-btn">
+                                            <i class="fa-solid fa-file-import"></i>
+                                            <span data-i18n="vector.snapshotImport">导入快照</span>
+                                        </button>
+                                    </div>
+                                    <div id="horae-vector-snapshot-list" class="horae-snapshot-list" style="margin-top:8px;"></div>
+                                </div>
+                            </div>
                             <div class="horae-settings-section horae-vector-debug-section" style="margin-top:10px;">
                                 <div class="horae-section-header horae-collapse-header" id="horae-vector-debug-toggle">
                                     <i class="fa-solid fa-bug"></i>
@@ -1656,7 +1677,7 @@
                 </div>
 
                 <div class="horae-about">
-                    <p>Horae v1.14.8 | 作者: SenriYuki</p>
+                    <p>Horae v1.15.0 | 作者: SenriYuki</p>
                     <p>基于时间锚点的AI记忆增强系统</p>
                 </div>
             </div>

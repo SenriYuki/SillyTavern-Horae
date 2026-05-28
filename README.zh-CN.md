@@ -1,8 +1,8 @@
-# Horae - 时光记忆 v1.14.8 | SillyTavern 记忆增强插件
+# Horae - 时光记忆 v1.15.0 | SillyTavern 记忆增强插件
 
 [English](README.md) | **简体中文** | [繁體中文](README.zh-TW.md)
 
-Image
+![Image](https://github.com/SenriYuki/SillyTavern-Horae/blob/main/HoraeLogo.jpg)
 
 > *Horae（荷赖）— 希腊神话中掌管时序的女神*
 

@@ -38,11 +38,7 @@
         "summaryExpanded": "Развёрнуто до исходных событий",
         "summaryBadge": "Конспект",
         "autoSummary": "Авто",
-        "manualSummary": "Ручной",
-        "recap": "Воспоминания",
-        "carryoverRecapTitle": "Воспоминания из прежнего чата",
-        "carryoverRecapHint": "ИИ всегда читает, не влияет на текущую таймлайн",
-        "carryoverRecapCount": "шт."
+        "manualSummary": "Ручной"
     },
     "characters": {
         "present": "Присутствующие персонажи",
@@ -933,6 +929,9 @@
         "debugSettings": "Параметры выполнения",
         "debugStructured": "Структурные совпадения",
         "debugEmbedding": "Векторный поиск",
+        "debugSnapshot": "Поиск по снимкам",
+        "debugSnapshotCount": "Записей снимка",
+        "debugColOrigin": "Запись",
         "debugRerank": "Rerank",
         "debugRerankInfo": "Информация Rerank",
         "debugRerankError": "Сбой Rerank",
@@ -972,7 +971,11 @@
         "disabled": "Отключено",
         "modelNotLoaded": "Модель не загружена",
         "buildIndex": "Построить индекс",
-        "clearIndex": "Очистить индекс"
+        "clearIndex": "Очистить индекс",
+        "snapshotTitle": "Снимок памяти",
+        "snapshotHint": "Упакуйте «оригинальный текст + данные Horae + векторный индекс» старого чата в снимок только для чтения и подключите его к новому чату для воспроизведения. Подходит для пользователей с 1000+ ходами.",
+        "snapshotExport": "Экспортировать текущий чат",
+        "snapshotImport": "Импортировать снимок"
     },
     "vectorKeywords": {
         "intent": {
@@ -1021,7 +1024,10 @@
         "header": "[Воспоминание — фрагменты из прошлого, связанные с текущей сценой. Только для справки, не часть текущего контекста]",
         "fullText": "[Полный текст]",
         "scene": "Сцена",
-        "npc": "NPC"
+        "npc": "NPC",
+        "memoryTag": "[Прошлая память]",
+        "userTag": "[USER]",
+        "aiTag": "[AI]"
     },
     "prompts": {
         "title": "Пользовательские промпты",

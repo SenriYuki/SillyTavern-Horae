@@ -1,8 +1,8 @@
-# Horae v1.14.8 - Memory Engine for SillyTavern
+# Horae v1.15.0 - Memory Engine for SillyTavern
 
 **English** | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md)
 
-Image
+![Image](https://github.com/SenriYuki/SillyTavern-Horae/blob/main/HoraeLogo.jpg)
 
 > *Horae — Greek goddesses who governed the orderly progression of time*
 

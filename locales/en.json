@@ -38,11 +38,7 @@
         "summaryExpanded": "Expanded to original events",
         "summaryBadge": "Summary",
         "autoSummary": "Auto",
-        "manualSummary": "Manual",
-        "recap": "Recap",
-        "carryoverRecapTitle": "Previous Chat Recap",
-        "carryoverRecapHint": "Always read by AI, independent from current timeline",
-        "carryoverRecapCount": "items"
+        "manualSummary": "Manual"
     },
     "characters": {
         "present": "Present Characters",
@@ -936,6 +932,9 @@
         "debugSettings": "Runtime settings",
         "debugStructured": "Structured hits",
         "debugEmbedding": "Vector recall",
+        "debugSnapshot": "Snapshot recall",
+        "debugSnapshotCount": "Snapshot entries",
+        "debugColOrigin": "Entry",
         "debugRerank": "Rerank",
         "debugRerankInfo": "Rerank info",
         "debugRerankError": "Rerank failed",
@@ -975,7 +974,11 @@
         "disabled": "Disabled",
         "modelNotLoaded": "Model not loaded",
         "buildIndex": "Build Index",
-        "clearIndex": "Clear Index"
+        "clearIndex": "Clear Index",
+        "snapshotTitle": "Memory Snapshot",
+        "snapshotHint": "Pack the old chat's raw text + Horae data + vectors into a read-only snapshot and mount it on a new chat for recall. Useful for users with 1000+ turn chats who want to migrate memory without the rendering cost.",
+        "snapshotExport": "Export Current Chat",
+        "snapshotImport": "Import Snapshot"
     },
     "vectorKeywords": {
         "intent": {
@@ -1024,7 +1027,10 @@
         "header": "[Memory Recall — historical fragments related to the current scene, for reference only, not part of the current context]",
         "fullText": "[Full text recall]",
         "scene": "Scene",
-        "npc": "NPC"
+        "npc": "NPC",
+        "memoryTag": "[Past Memory]",
+        "userTag": "[USER]",
+        "aiTag": "[AI]"
     },
     "prompts": {
         "title": "Custom Prompts",

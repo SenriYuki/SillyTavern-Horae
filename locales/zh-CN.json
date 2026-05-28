@@ -38,11 +38,7 @@
         "summaryExpanded": "已展开为原始事件",
         "summaryBadge": "总结",
         "autoSummary": "自动",
-        "manualSummary": "手动",
-        "recap": "回顾",
-        "carryoverRecapTitle": "旧对话回顾",
-        "carryoverRecapHint": "AI 始终读取，不影响当前时间线",
-        "carryoverRecapCount": "条"
+        "manualSummary": "手动"
     },
     "characters": {
         "present": "在场角色",
@@ -933,6 +929,8 @@
         "debugSettings": "运行参数",
         "debugStructured": "结构化命中",
         "debugEmbedding": "向量召回",
+        "debugSnapshot": "快照召回",
+        "debugSnapshotCount": "快照条数",
         "debugRerank": "Rerank",
         "debugRerankInfo": "Rerank 信息",
         "debugRerankError": "Rerank 失败",
@@ -940,6 +938,7 @@
         "debugRecallText": "召回文本",
         "debugColScore": "分数",
         "debugColSource": "来源",
+        "debugColOrigin": "条目",
         "debugColPreview": "预览",
         "debugColPassed": "通过",
         "debugIndexedCount": "已索引",
@@ -972,7 +971,11 @@
         "disabled": "已关闭",
         "modelNotLoaded": "模型未加载",
         "buildIndex": "构建索引",
-        "clearIndex": "清除索引"
+        "clearIndex": "清除索引",
+        "snapshotTitle": "历史记忆快照",
+        "snapshotHint": "将旧对话的「原文 + Horae 数据 + 向量索引」打包成只读快照，挂载到新对话用于召回。适合千层楼用户把记忆迁移到新对话而不被渲染拖慢。",
+        "snapshotExport": "导出当前对话",
+        "snapshotImport": "导入快照"
     },
     "vectorKeywords": {
         "intent": {
@@ -1021,7 +1024,10 @@
         "header": "[记忆回溯——以下为与当前情境相关的历史片段，仅供参考，非当前上下文]",
         "fullText": "[全文回顾]",
         "scene": "场景",
-        "npc": "NPC"
+        "npc": "NPC",
+        "memoryTag": "[历史记忆]",
+        "userTag": "[USER]",
+        "aiTag": "[AI]"
     },
     "prompts": {
         "title": "自定义提示词",

@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.14.8
+ * 版本: 1.15.0
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -22,7 +22,7 @@ import { initPromptDefaults, ensurePromptDefaults, ensurePresetPrompts, getPromp
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.14.8';
+const VERSION = '1.15.0';
 
 // settings 来源标记。仅用于区分「上次写入是否本版本自身」，外部来源（旧版本/其他分发版）会触发一次确认弹窗
 const ENGINE_TAG = 'horae-official';
@@ -244,6 +244,7 @@ const DEFAULT_SETTINGS = {
     vectorRerankCandidates: 25,        // Rerank 候选条数（embedding 召回上限）
     vectorRerankRecallThreshold: 0.3,  // Rerank 路径的 embedding 召回阈值
     vectorRerankMinScore: 0.5,         // Rerank 最低分；低于此分丢弃
+    vectorRerankContextLimit: 32768,   // Rerank 上下文上限（8K/Cohere/Jina 类用户需手动改小）
     vectorDebugLog: false,             // 向量召回详细调试日志（默认关闭，开启后输出阈值/频率/去重等明细）
     vectorRecallPresets: [],           // 用户自定义召回参数预设
     vectorRecallPresetSelected: 'builtin:small',
@@ -282,6 +283,7 @@ const PRESERVED_KEYS_ON_RESET = [
     'vectorRerankEnabled', 'vectorRerankFullText',
     'vectorRerankModel', 'vectorRerankUrl', 'vectorRerankKey',
     'vectorRerankCandidates', 'vectorRerankRecallThreshold', 'vectorRerankMinScore',
+    'vectorRerankContextLimit',
     'vectorRecallPresets', 'vectorRecallPresetSelected',
     'vectorTopK', 'vectorThreshold', 'vectorFullTextCount', 'vectorFullTextThreshold',
     'vectorStripTags', 'vectorPureMode',
@@ -14780,6 +14782,15 @@ function initSettingsEvents() {
     $('#horae-btn-vector-debug-refresh').on('click', _renderVectorDebugInfo);
     $('#horae-btn-vector-debug-copy').on('click', _copyVectorDebugInfo);
 
+    $('#horae-vector-snapshot-toggle').on('click', function () {
+        const $body = $('#horae-vector-snapshot-body');
+        const $icon = $(this).find('.horae-collapse-icon');
+        const isHidden = $body.is(':hidden');
+        $body.slideToggle(160);
+        $icon.toggleClass('collapsed', !isHidden);
+        if (isHidden) _renderSnapshotList();
+    });
+
     $('#horae-setting-vector-topk').on('change', function () {
         settings.vectorTopK = parseInt(this.value) || 5;
         saveSettings();
@@ -14807,6 +14818,9 @@ function initSettingsEvents() {
 
     $('#horae-btn-vector-build').on('click', _buildVectorIndex);
     $('#horae-btn-vector-clear').on('click', _clearVectorIndex);
+    $('#horae-btn-snapshot-export').on('click', exportMemorySnapshot);
+    $('#horae-btn-snapshot-import').on('click', importMemorySnapshot);
+    _renderSnapshotList();
 }
 
 /** 自定义日历：把 textarea 每行 "月名:天数" 解析回 settings.customCalendar，并刷新提示词与状态 */
@@ -15264,7 +15278,19 @@ function _renderVectorDebugInfo() {
 
     const renderHits = (rows) => {
         if (!rows || rows.length === 0) return `<div class="horae-empty-hint">${escape(t('vector.debugNone') || '-')}</div>`;
-        return `<table class="horae-vector-debug-table"><thead><tr><th>#</th><th>${escape(t('vector.debugColScore'))}</th><th>${escape(t('vector.debugColSource'))}</th><th>${escape(t('vector.debugColPreview'))}</th></tr></thead><tbody>${rows.map(r => `<tr><td>${r.messageIndex}</td><td>${_formatDebugSimilarity(r.similarity)}</td><td>${escape(r.source || '-')}</td><td>${escape(r.docPreview || '')}</td></tr>`).join('')}</tbody></table>`;
+        return `<table class="horae-vector-debug-table"><thead><tr><th>#</th><th>${escape(t('vector.debugColScore'))}</th><th>${escape(t('vector.debugColSource'))}</th><th>${escape(t('vector.debugColPreview'))}</th></tr></thead><tbody>${rows.map(r => {
+            const idLabel = r.snapKey ? `snap#${r.messageIndex}` : `#${r.messageIndex}`;
+            return `<tr><td>${escape(idLabel)}</td><td>${_formatDebugSimilarity(r.similarity)}</td><td>${escape(r.source || '-')}</td><td>${escape(r.docPreview || '')}</td></tr>`;
+        }).join('')}</tbody></table>`;
+    };
+
+    const renderSnapshotHits = (rows) => {
+        if (!rows || rows.length === 0) return `<div class="horae-empty-hint">${escape(t('vector.debugNone') || '-')}</div>`;
+        return `<table class="horae-vector-debug-table"><thead><tr><th>${escape(t('vector.debugColOrigin'))}</th><th>${escape(t('vector.debugColScore'))}</th><th>${escape(t('vector.debugColSource'))}</th><th>${escape(t('vector.debugColPreview'))}</th></tr></thead><tbody>${rows.map(r => {
+            const snapId = r.snapshotId ? `${r.snapshotId.slice(-6)}` : '?';
+            const idLabel = `${snapId}#${r.messageIndex >= 0 ? r.messageIndex : '?'}`;
+            return `<tr><td>${escape(idLabel)}</td><td>${_formatDebugSimilarity(r.similarity)}</td><td>${escape(r.source || '-')}</td><td>${escape(r.docPreview || '')}</td></tr>`;
+        }).join('')}</tbody></table>`;
     };
 
     let rerankBlock = '';
@@ -15280,10 +15306,12 @@ function _renderVectorDebugInfo() {
         }
     }
 
+    const snapshotRows = info.snapshot || [];
     $box.html(`
         <div class="horae-vector-debug-meta">
             <span><i class="fa-regular fa-clock"></i> ${escape(ts)}</span>
             <span><i class="fa-solid fa-database"></i> ${escape(t('vector.debugIndexedCount'))}: ${info.indexedCount ?? '-'}</span>
+            <span><i class="fa-solid fa-layer-group"></i> ${escape(t('vector.debugSnapshotCount'))}: ${info.snapshotCount ?? 0}</span>
         </div>
         <div class="horae-vector-debug-section">
             <div class="horae-vector-debug-title">${escape(t('vector.debugQueryTitle'))}</div>
@@ -15297,6 +15325,10 @@ function _renderVectorDebugInfo() {
         <div class="horae-vector-debug-section">
             <div class="horae-vector-debug-title">${escape(t('vector.debugEmbedding'))} (${(info.embedding || []).length})</div>
             ${renderHits(info.embedding)}
+        </div>
+        <div class="horae-vector-debug-section">
+            <div class="horae-vector-debug-title">${escape(t('vector.debugSnapshot'))} (${snapshotRows.length})</div>
+            ${renderSnapshotHits(snapshotRows)}
         </div>
         ${rerankBlock ? `<div class="horae-vector-debug-section"><div class="horae-vector-debug-title">${escape(t('vector.debugRerank'))}</div>${rerankBlock}</div>` : ''}
         <div class="horae-vector-debug-section">
@@ -15585,9 +15617,14 @@ function _updateVectorStatus() {
         statusEl.textContent = settings.vectorEnabled ? t('vector.modelNotLoaded') : t('vector.disabled');
     }
     if (countEl) {
-        countEl.textContent = vectorManager.vectors.size > 0
+        const snapItems = Array.isArray(vectorManager.snapshots)
+            ? vectorManager.snapshots.reduce((a, s) => a + (s.items?.length || 0), 0)
+            : 0;
+        const indexPart = vectorManager.vectors.size > 0
             ? t('ui.vectorIndexCount', { n: vectorManager.vectors.size })
             : '';
+        const snapPart = snapItems > 0 ? `（+${snapItems} 历史记忆）` : '';
+        countEl.textContent = `${indexPart}${snapPart}`;
     }
 }
 
@@ -15634,7 +15671,9 @@ async function _pruneVectorUntrackableEntries(chat) {
     for (const [idx] of vectorManager.vectors) {
         const msg = chat[idx];
         const meta = msg?.horae_meta;
-        const doc = (!msg || msg.is_user || !meta || meta._skipHorae) ? '' : vectorManager.buildVectorDocument(meta);
+        // 番外/小剧场和 carryover 种子楼层都不该留向量
+        const excluded = !msg || msg.is_user || !meta || meta._skipHorae || meta._carryoverSeed;
+        const doc = excluded ? '' : vectorManager.buildVectorDocument(meta);
         if (!doc) staleIndices.push(idx);
     }
 
@@ -18761,6 +18800,7 @@ function _normalizeMetaEvents(meta) {
 function _sanitizeCarryMessage(rawMessage) {
     const msg = _deepCloneData(rawMessage);
     if (!msg) return null;
+    if (msg.horae_meta?._skipHorae) return null;
     msg.is_hidden = false;
 
     if (!msg.horae_meta) return msg;
@@ -18861,6 +18901,8 @@ function _collectCarryoverRecapTexts(sourceChat, cutoffIndex) {
     for (let i = 1; i < upperBound; i++) {
         const meta = sourceChat?.[i]?.horae_meta;
         if (!meta) continue;
+        // 番外/小剧场楼层的 events 不应进 recap，否则会把小剧场剧情写进主线“回顾”
+        if (meta._skipHorae) continue;
         const events = meta.events || (meta.event ? [meta.event] : []);
         for (const evt of events) {
             if (!evt || typeof evt !== 'object') continue;
@@ -18920,6 +18962,8 @@ function _getCarryVisibleIndices(chat, keepCount) {
         const msg = chat[i];
         if (!msg || msg.is_hidden) continue;
         if (msg.is_user) continue;
+        // 番外/小剧场不计入 keepCount，也不该被带过去：标记本意就是“跳过 Horae”
+        if (msg.horae_meta?._skipHorae) continue;
         selectedAiIndices.push(i);
         if (selectedAiIndices.length >= keepCount) break;
     }
@@ -18932,6 +18976,7 @@ function _getCarryVisibleIndices(chat, keepCount) {
     for (let i = carryStart; i < chat.length; i++) {
         const msg = chat[i];
         if (!msg || msg.is_hidden) continue;
+        if (msg.horae_meta?._skipHorae) continue;
         result.indices.push(i);
     }
 
@@ -19012,6 +19057,41 @@ async function createNewChatWithCarryover() {
     ].join('\n');
     if (!confirm(confirmText)) return;
 
+    // 询问是否携带向量记忆。索引在切换 chat 后会被重置，需在此预先打包
+    let preparedSnapshot = null;
+    // 源对话已挂载的历史快照（来自更早世代），doNewChat 后会丢访问入口，须先抓
+    let inheritedSnapshots = [];
+    if (vectorManager.isReady && vectorManager.vectors.size > 0) {
+        const ctxNow = getContext();
+        const chatName = ctxNow?.name2 || ctxNow?.characters?.[ctxNow?.characterId]?.name || 'chat';
+        const snapMsg = [
+            `检测到 ${vectorManager.vectors.size} 条向量记忆。`,
+            '',
+            '是否一并携带到新对话？',
+            '将自动挂载到新对话用于召回，并同时下载一份 JSON 备份。',
+        ].join('\n');
+        if (confirm(snapMsg)) {
+            try {
+                preparedSnapshot = vectorManager.buildSnapshotFromCurrent(sourceChat, {
+                    sourceChatId: _deriveChatId(ctxNow),
+                    sourceChatName: chatName,
+                    label: `${chatName} ${new Date().toLocaleString()}`,
+                });
+            } catch (err) {
+                console.warn('[Horae] 构建向量快照失败:', err);
+                showToast(`向量快照构建失败：${err.message || err}，将继续创建新对话`, 'warning');
+            }
+            try {
+                const sourceChatId = _deriveChatId(ctxNow);
+                if (sourceChatId && sourceChatId !== 'unknown') {
+                    inheritedSnapshots = await vectorManager.exportSnapshotsForChat(sourceChatId);
+                }
+            } catch (err) {
+                console.warn('[Horae] 读取源对话历史快照失败:', err);
+            }
+        }
+    }
+
     try {
         await getContext().saveChat();
         await doNewChat({ deleteCurrentChat: false });
@@ -19025,6 +19105,9 @@ async function createNewChatWithCarryover() {
         _importAsInitialState(importObj, targetChat, { includeTimeline: false });
 
         const seedMeta = targetChat[0].horae_meta || (targetChat[0].horae_meta = createEmptyMeta());
+        // 标记整条种子楼层：阻止向量索引/结构化命中/召回结果命中 chat[0]
+        // 时间线侧仍按 events[i]._carryoverSeed 走 banner 折叠路径，不受此 flag 影响
+        seedMeta._carryoverSeed = true;
         if (!Array.isArray(seedMeta.events)) seedMeta.events = [];
         seedMeta.events = seedMeta.events.filter(evt => !evt?._carryoverSeed);
 
@@ -19106,11 +19189,201 @@ async function createNewChatWithCarryover() {
         refreshAllDisplays();
         renderCustomTablesList();
 
-        showToast(`已创建新对话：AI ${carryAiCount} 条，实际消息 ${carryMessages.length} 条，旧剧情回顾 ${recapItems.length} 条${removedPreludeCount > 0 ? `，已清理开场白 ${removedPreludeCount} 条` : ''}`, 'success');
+        let snapshotNote = '';
+        let inheritedAttached = 0;
+        if (preparedSnapshot) {
+            try {
+                const newCtx = getContext();
+                const newChatId = _deriveChatId(newCtx);
+                if (newChatId && newChatId !== 'unknown') {
+                    if (vectorManager.chatId !== newChatId) {
+                        await vectorManager.loadChat(newChatId, horaeManager.getChat());
+                    }
+                    await vectorManager.importSnapshot(preparedSnapshot, newChatId);
+                    // 把源对话的祖先快照按时间顺序原样挂到新对话名下，保证多代“带记忆创建新对话”不丢链
+                    for (const snap of inheritedSnapshots) {
+                        try {
+                            await vectorManager.importSnapshot(snap, newChatId);
+                            inheritedAttached++;
+                        } catch (err) {
+                            console.warn('[Horae] 历史快照转移失败:', err);
+                        }
+                    }
+                    _renderSnapshotList();
+                    _updateVectorStatus();
+                }
+                const json = JSON.stringify(preparedSnapshot);
+                const useGzip = typeof CompressionStream !== 'undefined';
+                const blob = useGzip ? await _gzipEncodeBlob(json) : new Blob([json], { type: 'application/json' });
+                const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                const ext = useGzip ? '.json.gz' : '.json';
+                _triggerDownload(blob, `horae_memory_${_sanitizeForFilename(preparedSnapshot.sourceChatName)}_${ts}${ext}`);
+                snapshotNote = `，已挂载向量记忆 ${preparedSnapshot.count} 条并下载备份`;
+                if (inheritedAttached > 0) {
+                    snapshotNote += `（含转移祖先快照 ${inheritedAttached} 份）`;
+                }
+            } catch (err) {
+                console.warn('[Horae] 挂载/下载快照失败:', err);
+                snapshotNote = `，向量记忆处理失败：${err.message || err}`;
+            }
+        }
+
+        showToast(`已创建新对话：AI ${carryAiCount} 条，实际消息 ${carryMessages.length} 条，旧剧情回顾 ${recapItems.length} 条${removedPreludeCount > 0 ? `，已清理开场白 ${removedPreludeCount} 条` : ''}${snapshotNote}`, 'success');
     } catch (error) {
         console.error('[Horae] 创建携带记忆新对话失败:', error);
         showToast(`创建新对话失败: ${error.message || error}`, 'error');
     }
+}
+
+async function _gzipEncodeBlob(jsonString) {
+    if (typeof CompressionStream === 'undefined') {
+        return new Blob([jsonString], { type: 'application/json' });
+    }
+    const stream = new Blob([jsonString]).stream().pipeThrough(new CompressionStream('gzip'));
+    const buf = await new Response(stream).arrayBuffer();
+    return new Blob([buf], { type: 'application/gzip' });
+}
+
+async function _gzipDecodeArrayBuffer(buf) {
+    if (typeof DecompressionStream === 'undefined') {
+        throw new Error('当前浏览器不支持 gzip 解压');
+    }
+    const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return await new Response(stream).text();
+}
+
+function _triggerDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function _sanitizeForFilename(s) {
+    return String(s || '').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 60) || 'horae';
+}
+
+async function exportMemorySnapshot() {
+    if (!vectorManager.isReady) {
+        showToast('向量模型未就绪', 'warning');
+        return;
+    }
+    if (vectorManager.vectors.size === 0) {
+        showToast('当前对话没有可导出的向量索引', 'warning');
+        return;
+    }
+
+    const ctx = getContext();
+    const chat = horaeManager.getChat();
+    const chatName = ctx?.name2 || ctx?.characters?.[ctx?.characterId]?.name || 'chat';
+
+    let snapshot;
+    try {
+        snapshot = vectorManager.buildSnapshotFromCurrent(chat, {
+            sourceChatId: _deriveChatId(ctx),
+            sourceChatName: chatName,
+            label: `${chatName} ${new Date().toLocaleString()}`,
+        });
+    } catch (err) {
+        showToast(`导出失败：${err.message}`, 'error');
+        return;
+    }
+
+    const json = JSON.stringify(snapshot);
+    const useGzip = typeof CompressionStream !== 'undefined';
+    const blob = useGzip ? await _gzipEncodeBlob(json) : new Blob([json], { type: 'application/json' });
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const ext = useGzip ? '.json.gz' : '.json';
+    _triggerDownload(blob, `horae_memory_${_sanitizeForFilename(chatName)}_${ts}${ext}`);
+
+    const sizeKB = (blob.size / 1024).toFixed(1);
+    showToast(`已导出向量记忆快照：${snapshot.count} 条，${sizeKB} KB`, 'success');
+}
+
+async function _readSnapshotFile(file) {
+    const isGz = /\.gz$/i.test(file.name);
+    if (isGz) {
+        const buf = await file.arrayBuffer();
+        const text = await _gzipDecodeArrayBuffer(buf);
+        return JSON.parse(text);
+    }
+    return JSON.parse(await file.text());
+}
+
+function importMemorySnapshot() {
+    if (!vectorManager.chatId) {
+        showToast('请先打开一个对话再导入', 'warning');
+        return;
+    }
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,.gz';
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+            const snapshot = await _readSnapshotFile(file);
+            const id = await vectorManager.importSnapshot(snapshot);
+            const list = vectorManager.listSnapshots();
+            const cur = list.find(s => s.id === id);
+            showToast(`已挂载历史记忆：${snapshot.count} 条${cur?.sourceChatName ? `（来自 ${cur.sourceChatName}）` : ''}`, 'success');
+            _renderSnapshotList();
+            _updateVectorStatus();
+        } catch (err) {
+            console.error('[Horae] 导入快照失败:', err);
+            showToast(`导入失败：${err.message || err}`, 'error');
+        }
+    };
+    input.click();
+}
+
+async function removeMountedSnapshot(snapshotId) {
+    if (!snapshotId) return;
+    if (!confirm('确定卸载这份历史记忆？')) return;
+    try {
+        const ok = await vectorManager.removeSnapshot(snapshotId);
+        if (ok) {
+            showToast('已卸载历史记忆', 'success');
+            _renderSnapshotList();
+            _updateVectorStatus();
+        }
+    } catch (err) {
+        showToast(`卸载失败：${err.message || err}`, 'error');
+    }
+}
+
+function _renderSnapshotList() {
+    const container = document.getElementById('horae-vector-snapshot-list');
+    if (!container) return;
+    const list = vectorManager.listSnapshots ? vectorManager.listSnapshots() : [];
+    if (list.length === 0) {
+        container.innerHTML = '<div class="horae-setting-sub-hint" style="opacity:.65;">未挂载历史记忆</div>';
+        return;
+    }
+    const rows = list.map(s => {
+        const sub = [
+            s.sourceChatName || '(未命名)',
+            `${s.count} 条`,
+            s.exportTime ? new Date(s.exportTime).toLocaleString() : '',
+        ].filter(Boolean).join(' · ');
+        const safeId = (s.id || '').replace(/[^a-zA-Z0-9_\-]/g, '');
+        return `
+            <div class="horae-snapshot-row">
+                <div class="horae-snapshot-meta">
+                    <div class="horae-snapshot-label">${s.label || s.id}</div>
+                    <div class="horae-snapshot-sub">${sub}</div>
+                </div>
+                <button class="horae-vector-btn clear" data-snap-id="${safeId}" title="卸载">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>`;
+    }).join('');
+    container.innerHTML = rows;
+    container.querySelectorAll('button[data-snap-id]').forEach(btn => {
+        btn.addEventListener('click', () => removeMountedSnapshot(btn.getAttribute('data-snap-id')));
+    });
 }
 
 /**

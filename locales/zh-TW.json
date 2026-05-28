@@ -38,11 +38,7 @@
         "summaryExpanded": "已展開為原始事件",
         "summaryBadge": "總結",
         "autoSummary": "自動",
-        "manualSummary": "手動",
-        "recap": "回顧",
-        "carryoverRecapTitle": "舊對話回顧",
-        "carryoverRecapHint": "AI 始終讀取，不影響目前時間線",
-        "carryoverRecapCount": "條"
+        "manualSummary": "手動"
     },
     "characters": {
         "present": "在場角色",
@@ -781,6 +777,9 @@
         "debugSettings": "執行參數",
         "debugStructured": "結構化命中",
         "debugEmbedding": "向量召回",
+        "debugSnapshot": "快照召回",
+        "debugSnapshotCount": "快照條數",
+        "debugColOrigin": "條目",
         "debugRerank": "Rerank",
         "debugRerankInfo": "Rerank 資訊",
         "debugRerankError": "Rerank 失敗",
@@ -796,7 +795,11 @@
         "topKHint": "控制每條訊息最終注入上下文的記憶數量。未開啟 Rerank 時直接取向量召回前 K 條；開啟 Rerank 時則從 Rerank 精排後的結果取前 K 條。",
         "debugLog": "詳細調試日誌",
         "debugLogHint": "開啟後向主控台輸出閾值、頻率、去重、Rerank 等召回明細。僅排查問題時開啟，正常使用請關閉。",
-        "testApi": "測試向量 API 連線"
+        "testApi": "測試向量 API 連線",
+        "snapshotTitle": "歷史記憶快照",
+        "snapshotHint": "將舊對話的「原文 + Horae 資料 + 向量索引」打包成唯讀快照，掛載到新對話用於召回。適合千層樓使用者把記憶遷移到新對話而不被渲染拖慢。",
+        "snapshotExport": "匯出目前對話",
+        "snapshotImport": "匯入快照"
     },
     "vectorKeywords": {
         "intent": {
@@ -845,7 +848,10 @@
         "header": "[記憶回溯——以下為與目前情境相關的歷史片段，僅供參考，非目前上下文]",
         "fullText": "[全文回顧]",
         "scene": "場景",
-        "npc": "NPC"
+        "npc": "NPC",
+        "memoryTag": "[歷史記憶]",
+        "userTag": "[USER]",
+        "aiTag": "[AI]"
     },
     "prompts": {
         "title": "自訂提示詞",

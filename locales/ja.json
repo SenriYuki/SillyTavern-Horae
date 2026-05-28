@@ -44,11 +44,7 @@
         "summaryExpanded": "元のイベントに展開しました",
         "summaryBadge": "要約",
         "autoSummary": "自動",
-        "manualSummary": "手動",
-        "recap": "回顧",
-        "carryoverRecapTitle": "旧チャット回顧",
-        "carryoverRecapHint": "AIは常に読み込みます。現在のタイムラインには影響しません",
-        "carryoverRecapCount": "件"
+        "manualSummary": "手動"
     },
     "characters": {
         "present": "登場キャラクター",
@@ -942,6 +938,9 @@
         "debugSettings": "実行パラメータ",
         "debugStructured": "構造化ヒット",
         "debugEmbedding": "ベクトル検索",
+        "debugSnapshot": "スナップショット検索",
+        "debugSnapshotCount": "スナップショット件数",
+        "debugColOrigin": "項目",
         "debugRerank": "Rerank",
         "debugRerankInfo": "Rerank 情報",
         "debugRerankError": "Rerank 失敗",
@@ -981,7 +980,11 @@
         "disabled": "無効",
         "modelNotLoaded": "モデル未読み込み",
         "buildIndex": "インデックス構築",
-        "clearIndex": "インデックスクリア"
+        "clearIndex": "インデックスクリア",
+        "snapshotTitle": "記憶スナップショット",
+        "snapshotHint": "旧チャットの「原文 + Horae データ + ベクトルインデックス」を読み取り専用スナップショットにまとめ、新規チャットにマウントして呼び出します。1000階以上のヘビーユーザーに最適。",
+        "snapshotExport": "現在のチャットをエクスポート",
+        "snapshotImport": "スナップショットを読み込む"
     },
     "vectorKeywords": {
         "intent": {
@@ -1030,7 +1033,10 @@
         "header": "[記憶想起——以下は現在のシーンに関連する過去の断片です。参考用であり、現在のコンテキストではありません]",
         "fullText": "[全文リコール]",
         "scene": "場面",
-        "npc": "NPC"
+        "npc": "NPC",
+        "memoryTag": "[過去の記憶]",
+        "userTag": "[USER]",
+        "aiTag": "[AI]"
     },
     "prompts": {
         "title": "カスタムプロンプト",

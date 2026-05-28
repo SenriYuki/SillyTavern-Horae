@@ -11,9 +11,12 @@ import { tNodeForLang, detectEffectiveAiLang } from './i18n.js';
 import { getPromptDefaultSync } from './promptDefaults.js';
 
 const DB_NAME = 'HoraeVectors';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'vectors';
+const SNAPSHOT_STORE = 'memorySnapshots';
 const RECALL_CACHE_LIMIT = 16;
+const SNAPSHOT_FORMAT = 'horae-memory-snapshot';
+const SNAPSHOT_VERSION = '1.0';
 
 const MODEL_CONFIG = {
     'Xenova/bge-small-zh-v1.5': { dimensions: 512, prefix: null },
@@ -33,6 +36,12 @@ const EMPTY_KEYWORD_TABLE = {
     costumeFiller: [],
     eventLevels: { important: [], key: [] },
 };
+
+// 番外/小剧场 (_skipHorae) 与 carryover 种子楼层 (_carryoverSeed) 共用排除规则：
+// 不进向量索引、不参与结构化命中、不出现在召回结果里
+function isMetaExcluded(meta) {
+    return !meta || meta._skipHorae || meta._carryoverSeed;
+}
 
 export class VectorManager {
     constructor() {
@@ -63,6 +72,8 @@ export class VectorManager {
         // 召回结果 LRU 缓存：相同查询条件下避免重复 embedding/rerank 调用
         this._recallCache = new Map();
         this._recallCacheLimit = RECALL_CACHE_LIMIT;
+        // 当前 chat 挂载的历史记忆快照：[{ id, label, modelName, dimensions, items: [{vector, document, mes, meta, originalIndex, ...}] }]
+        this.snapshots = [];
     }
 
     /**
@@ -177,6 +188,7 @@ export class VectorManager {
         this.vectors.clear();
         this.termCounts.clear();
         this.totalDocuments = 0;
+        this.snapshots = [];
         this.chatId = null;
         this.isReady = false;
         this.isApiMode = false;
@@ -238,12 +250,14 @@ export class VectorManager {
         this.vectors.clear();
         this.termCounts.clear();
         this.totalDocuments = 0;
+        this.snapshots = [];
         this.clearRecallCache('loadChat');
 
         if (!chatId) return;
 
         try {
             await this._openDB();
+            await this._loadSnapshotsForChat(chatId);
             const stored = await this._loadAllVectors();
             const staleKeys = [];
             for (const item of stored) {
@@ -271,7 +285,9 @@ export class VectorManager {
                 for (const idx of staleKeys) await this._deleteVector(idx);
                 console.log(`[Horae Vector] 清理了 ${staleKeys.length} 条过期/分支外向量`);
             }
-            console.log(`[Horae Vector] 已加载 ${this.vectors.size} 条向量 (chatId: ${chatId})`);
+            const snapCount = this.snapshots.reduce((a, s) => a + s.items.length, 0);
+            const snapTxt = snapCount > 0 ? ` (+${snapCount} 条历史记忆, ${this.snapshots.length} 份快照)` : '';
+            console.log(`[Horae Vector] 已加载 ${this.vectors.size} 条向量 (chatId: ${chatId})${snapTxt}`);
         } catch (err) {
             console.warn('[Horae Vector] 加载向量索引失败:', err);
         }
@@ -291,8 +307,7 @@ export class VectorManager {
      * - RPG 变更使用中文短句
      */
     buildVectorDocument(meta) {
-        if (!meta) return '';
-        if (meta._skipHorae) return '';
+        if (isMetaExcluded(meta)) return '';
 
         const eventTexts = [];
         if (meta.events?.length > 0) {
@@ -349,7 +364,7 @@ export class VectorManager {
 
     async addMessage(messageIndex, meta) {
         if (!this.isReady || !this.chatId) return;
-        if (meta?._skipHorae) return;
+        if (isMetaExcluded(meta)) return;
 
         const idx = this._normalizeMessageIndex(messageIndex);
         if (idx === null) return;
@@ -403,7 +418,7 @@ export class VectorManager {
         for (let i = 0; i < chat.length; i++) {
             const meta = chat[i].horae_meta;
             if (!meta || chat[i].is_user) continue;
-            if (meta._skipHorae) continue;
+            if (isMetaExcluded(meta)) continue;
             const doc = this.buildVectorDocument(meta);
             if (!doc) continue;
             const hash = this._hashString(doc);
@@ -520,15 +535,18 @@ export class VectorManager {
     }
 
     /**
-     * 向量检索
+     * 向量检索：当前对话向量与已挂载的历史快照走同一池子、同阈值竞争
+     * 命中条目用 snapKey 区分来源（快照），无 snapKey 即为当前对话条目
      * @param {string} queryText
      * @param {number} topK
      * @param {number} threshold
-     * @param {Set<number>} excludeIndices - 排除的消息索引（已在上下文中）
-     * @returns {Promise<Array<{messageIndex: number, similarity: number, document: string}>>}
+     * @param {Set<number>} excludeIndices
+     * @returns {Promise<Array>}
      */
     async search(queryText, topK = 5, threshold = 0.72, excludeIndices = new Set(), pureMode = false) {
-        if (!this.isReady || !queryText || this.vectors.size === 0) return [];
+        const hasVectors = this.vectors.size > 0;
+        const hasSnapshots = this.snapshots.length > 0;
+        if (!this.isReady || !queryText || (!hasVectors && !hasSnapshots)) return [];
 
         const prepared = this._prepareText(queryText, true);
         this._debug('[Horae Vector] 开始 embedding 查询...');
@@ -540,29 +558,48 @@ export class VectorManager {
         }
 
         const queryVec = result.vectors[0];
-        this._debug(`[Horae Vector] 查询向量维度: ${queryVec.length}，开始对比 ${this.vectors.size} 条...`);
+        const snapEntries = hasSnapshots ? this._iterateSnapshotEntries() : [];
+        this._debug(`[Horae Vector] 查询向量维度: ${queryVec.length}，开始对比 当前=${this.vectors.size} 条 + 快照=${snapEntries.length} 条`);
 
         const scored = [];
         const allScored = [];
-        let searchedCount = 0;
+        let currentSearched = 0;
+        let currentHit = 0;
+        let snapHit = 0;
 
         for (const [msgIdx, entry] of this.vectors) {
             if (this._isExcludedMessageIndex(excludeIndices, msgIdx)) continue;
-            searchedCount++;
+            currentSearched++;
             const sim = this._dotProduct(queryVec, entry.vector);
-            allScored.push({ messageIndex: msgIdx, similarity: sim, document: entry.document });
-            if (sim >= threshold) {
-                scored.push({ messageIndex: msgIdx, similarity: sim, document: entry.document });
-            }
+            const hit = { messageIndex: msgIdx, similarity: sim, document: entry.document };
+            allScored.push(hit);
+            if (sim >= threshold) { scored.push(hit); currentHit++; }
+        }
+
+        // 快照与当前对话同池竞争：相同阈值、相同打分逻辑，仅以 snapKey 区分来源
+        for (const f of snapEntries) {
+            const sim = this._dotProduct(queryVec, f.entry.vector);
+            const hit = {
+                snapKey: f.snapKey,
+                snapshotId: f.snapshotId,
+                indexInSnap: f.indexInSnap,
+                messageIndex: f.entry.originalIndex,
+                similarity: sim,
+                document: f.entry.document,
+                source: 'snapshot',
+            };
+            allScored.push(hit);
+            if (sim >= threshold) { scored.push(hit); snapHit++; }
         }
 
         allScored.sort((a, b) => b.similarity - a.similarity);
         const bestSim = allScored.length > 0 ? allScored[0].similarity : 0;
-        this._debug(`[Horae Vector] 搜索了 ${searchedCount} 条 | 最高相似度=${bestSim.toFixed(4)} | 超过阈值(${threshold}): ${scored.length} 条`);
+        this._debug(`[Horae Vector] 扫描 当前=${currentSearched}/快照=${snapEntries.length} | 最高=${bestSim.toFixed(4)} | 阈值(${threshold}) 命中 当前=${currentHit}/快照=${snapHit}`);
         if (this._debugLog && scored.length === 0 && allScored.length > 0) {
             console.log(`[Horae Vector] 阈值下 Top-5 候选:`);
             for (const c of allScored.slice(0, 5)) {
-                console.log(`  #${c.messageIndex} sim=${c.similarity.toFixed(4)} | ${c.document.substring(0, 60)}`);
+                const tag = c.snapKey ? `[snap ${c.snapshotId}#${c.messageIndex}]` : `#${c.messageIndex}`;
+                console.log(`  ${tag} sim=${c.similarity.toFixed(4)} | ${c.document.substring(0, 60)}`);
             }
         }
 
@@ -586,6 +623,8 @@ export class VectorManager {
 
         const N = this.totalDocuments;
         return results.filter(r => {
+            // 快照条目不参与当前对话的 IDF 统计，直接保留
+            if (r.snapKey) return true;
             const terms = this._extractKeyTerms(r.document);
             if (terms.length === 0) return true;
 
@@ -612,15 +651,18 @@ export class VectorManager {
     _deduplicateResults(results) {
         if (results.length <= 1) return results;
 
+        const getVec = (r) => {
+            if (r.snapKey) return this._getSnapshotEntry(r.snapKey)?.vector || [];
+            return this.vectors.get(r.messageIndex)?.vector || [];
+        };
+
         const kept = [results[0]];
         for (let i = 1; i < results.length; i++) {
             const candidate = results[i];
+            const candVec = getVec(candidate);
             let isDuplicate = false;
             for (const existing of kept) {
-                const mutualSim = this._dotProduct(
-                    this.vectors.get(existing.messageIndex)?.vector || [],
-                    this.vectors.get(candidate.messageIndex)?.vector || []
-                );
+                const mutualSim = this._dotProduct(getVec(existing), candVec);
                 if (mutualSim > 0.92) {
                     isDuplicate = true;
                     break;
@@ -740,10 +782,13 @@ export class VectorManager {
                 rerankCandidates: settings.vectorRerankCandidates,
                 rerankRecallThreshold: settings.vectorRerankRecallThreshold,
                 rerankMinScore: this._effectiveRerankMinScore(settings),
+                rerankContextLimit: settings.vectorRerankContextLimit || 32768,
+                snapMounted: this.snapshots.length,
                 fullTextCount: settings.vectorFullTextCount,
                 fullTextThreshold: settings.vectorFullTextThreshold,
                 stripTags: settings.vectorStripTags || '',
                 keywordLang: this._activeKeywordLang || '',
+                antiParaphrase: !!settings.antiParaphraseMode,
             })),
             qr: queryRewriteEnabled ? `1|${queryRewriteSysHash}` : '0',
             m: this._hashString(`${this.modelName || ''}|${this.isApiMode ? this._apiUrl : ''}|${this.isApiMode ? this._apiModel : ''}`),
@@ -775,6 +820,8 @@ export class VectorManager {
         }
 
         const merged = new Map();
+        // snapshot 条目用 snapKey 作主键，当前对话用 messageIndex，两者不重叠
+        const keyOf = r => r.snapKey || r.messageIndex;
 
         if (pureMode) this._debug('[Horae Vector] 纯向量模式已启用，跳过关键词启发式');
         if (useRerank) this._debug(`[Horae Vector] Rerank 模式：embedding 召回阈值=${recallThreshold} / 候选=${recallTopK}`);
@@ -782,18 +829,17 @@ export class VectorManager {
         const structuredResults = this._structuredQuery(userQuery, chat, state, excludeIndices, topK, pureMode);
         this._debug(`[Horae Vector] 结构化查询: ${structuredResults.length} 条命中`);
         for (const r of structuredResults) {
-            merged.set(r.messageIndex, r);
+            merged.set(keyOf(r), r);
         }
 
+        // hybridResults 同池产出，当前对话与已挂载快照按同一阈值竞争
         const hybridResults = await this._hybridSearch(userQuery, state, horaeManager, skipLast, settings, excludeIndices, recallTopK, recallThreshold, pureMode);
-        this._debug(`[Horae Vector] 向量混合搜索: ${hybridResults.length} 条命中`);
+        const hybridSnapCount = hybridResults.filter(r => r.snapKey).length;
+        this._debug(`[Horae Vector] 向量混合搜索: ${hybridResults.length} 条命中 (含快照 ${hybridSnapCount} 条)`);
         for (const r of hybridResults) {
-            if (!merged.has(r.messageIndex)) {
-                merged.set(r.messageIndex, r);
-            }
+            if (!merged.has(keyOf(r))) merged.set(keyOf(r), r);
         }
 
-        // Query 重写产出的 5 条独立查询：各跑一次 search，结果并入 merged 后续走 RRF
         const rewriteHits = [];
         if (rewriteResult?.queries?.length) {
             for (let qi = 0; qi < rewriteResult.queries.length; qi++) {
@@ -802,9 +848,9 @@ export class VectorManager {
                 try {
                     const subResults = await this.search(q, recallTopK, recallThreshold, excludeIndices, pureMode);
                     for (const r of subResults) {
-                        const tagged = { ...r, source: `rewrite#${qi + 1}` };
+                        const tagged = { ...r, source: r.snapKey ? `rewrite#${qi + 1}+snap` : `rewrite#${qi + 1}` };
                         rewriteHits.push(tagged);
-                        if (!merged.has(r.messageIndex)) merged.set(r.messageIndex, tagged);
+                        if (!merged.has(keyOf(tagged))) merged.set(keyOf(tagged), tagged);
                     }
                 } catch (err) {
                     this._debug(`[Horae Vector] Query 重写第 ${qi + 1} 条召回失败：${err?.message || err}`);
@@ -822,20 +868,29 @@ export class VectorManager {
             (m.scene?.characters_present || []).forEach(c => allKnownChars.add(c));
             if (m.npcs) Object.keys(m.npcs).forEach(c => allKnownChars.add(c));
         }
+        for (const f of this._iterateSnapshotEntries()) {
+            const m = f.entry.meta;
+            if (!m) continue;
+            (m.scene?.characters_present || []).forEach(c => allKnownChars.add(c));
+            if (m.npcs) Object.keys(m.npcs).forEach(c => allKnownChars.add(c));
+        }
         for (const c of allKnownChars) {
             if (userQuery && userQuery.includes(c)) relevantChars.add(c);
         }
 
-        let results = Array.from(merged.values())
-            .filter(r => !chat[r.messageIndex]?.horae_meta?._skipHorae);
+        let results = Array.from(merged.values()).filter(r => {
+            if (r.snapKey) return true;
+            return !isMetaExcluded(chat[r.messageIndex]?.horae_meta);
+        });
 
         // RRF 融合：结构化、向量、角色相关三路独立排名，score = Σ 1/(K+rank)
         const RRF_K = 60;
         const fusionScore = new Map();
         const addRanker = (list, weight = 1) => {
             list.forEach((r, idx) => {
-                const cur = fusionScore.get(r.messageIndex) || 0;
-                fusionScore.set(r.messageIndex, cur + weight / (RRF_K + idx));
+                const k = keyOf(r);
+                const cur = fusionScore.get(k) || 0;
+                fusionScore.set(k, cur + weight / (RRF_K + idx));
             });
         };
         addRanker(structuredResults, 1.0);
@@ -847,8 +902,10 @@ export class VectorManager {
         }
         if (relevantChars.size > 0) {
             for (const r of results) {
-                const meta = chat[r.messageIndex]?.horae_meta;
-                if (!meta || meta._skipHorae) continue;
+                const meta = r.snapKey
+                    ? this._getSnapshotMeta(r.snapKey)
+                    : chat[r.messageIndex]?.horae_meta;
+                if (isMetaExcluded(meta)) continue;
                 const docChars = new Set([
                     ...(meta.scene?.characters_present || []),
                     ...Object.keys(meta.npcs || {}),
@@ -858,15 +915,16 @@ export class VectorManager {
                     if (docChars.has(c)) { hasRelevant = true; break; }
                 }
                 if (hasRelevant) {
-                    const cur = fusionScore.get(r.messageIndex) || 0;
-                    fusionScore.set(r.messageIndex, cur + 1 / (RRF_K + 0));
+                    const k = keyOf(r);
+                    const cur = fusionScore.get(k) || 0;
+                    fusionScore.set(k, cur + 1 / (RRF_K + 0));
                     r.source = (r.source || '') + '+char';
                 }
             }
             this._debug(`[Horae Vector] 角色相关性 RRF bonus: 相关角色=[${[...relevantChars].join(',')}]`);
         }
 
-        for (const r of results) r._fusionScore = fusionScore.get(r.messageIndex) || 0;
+        for (const r of results) r._fusionScore = fusionScore.get(keyOf(r)) || 0;
         results.sort((a, b) => (b._fusionScore - a._fusionScore) || (b.similarity - a.similarity));
 
         // Rerank：对候选结果做二次精排
@@ -878,17 +936,27 @@ export class VectorManager {
                 try {
                     const useFullText = !!settings.vectorRerankFullText;
                     const _stripTags = settings.vectorStripTags || '';
+                    const useUserContext = useFullText && !!settings.antiParaphraseMode;
                     const currentDateForRerank = state.timestamp?.story_date;
-                    // Rerank 文档 = 时间头 + 结构化 metadata + 可选全文片段（全文模式下使用整段，由分批 plan 处理超长）
                     const rerankDocs = rerankCandidates.map(r => {
-                        const meta = chat[r.messageIndex]?.horae_meta;
+                        const snapEntry = r.snapKey ? this._getSnapshotEntry(r.snapKey) : null;
+                        const meta = snapEntry ? snapEntry.meta : chat[r.messageIndex]?.horae_meta;
                         const timeTag = this._buildTimeTag(meta?.timestamp, currentDateForRerank);
                         const head = timeTag ? `${timeTag}\n` : '';
                         const baseDoc = r.document || '';
                         if (useFullText) {
-                            const fullText = this._extractCleanText(chat[r.messageIndex]?.mes, _stripTags);
+                            const rawMes = snapEntry ? snapEntry.mes : chat[r.messageIndex]?.mes;
+                            const fullText = this._extractCleanText(rawMes, _stripTags);
+                            // 反转述模式开关下，rerank 输入贴回 USER 上一条；其它模式保持原状不污染评分语境
+                            let userBlock = '';
+                            if (useUserContext) {
+                                const userMes = snapEntry
+                                    ? (snapEntry.userPrecedingMes || '')
+                                    : this._getPrecedingUserText(chat, r.messageIndex, _stripTags);
+                                if (userMes) userBlock = `[USER]\n${userMes}\n[AI]\n`;
+                            }
                             const snippet = fullText || '';
-                            if (snippet) return `${head}${baseDoc}\n---\n${snippet}`;
+                            if (snippet) return `${head}${baseDoc}\n---\n${userBlock}${snippet}`;
                             return `${head}${baseDoc}`;
                         }
                         return `${head}${baseDoc}`;
@@ -900,7 +968,8 @@ export class VectorManager {
                     let reranked = [];
                     if (useFullText) {
                         // 全文模式按估算 token 预算分批，避免超出 reranker 上下文上限
-                        rerankPlan = this._buildRerankBatchPlan(rerankQuery, rerankDocs, 32768);
+                        const ctxLimit = Math.max(2048, parseInt(settings.vectorRerankContextLimit, 10) || 32768);
+                        rerankPlan = this._buildRerankBatchPlan(rerankQuery, rerankDocs, ctxLimit);
                         rerankDocsForDebug = rerankPlan.documents;
                         if (rerankPlan.batches.length > 1 || rerankPlan.truncatedCount > 0) {
                             console.log(`[Horae Vector] Rerank 分批: batches=${rerankPlan.batches.length} / budget=${rerankPlan.docBudget} tokens / query=${rerankPlan.queryTokens} tokens / truncated=${rerankPlan.truncatedCount}`);
@@ -1004,7 +1073,8 @@ export class VectorManager {
         console.log(`[Horae Vector] === 最终合并: ${results.length} 条 ===`);
         if (this._debugLog) {
             for (const r of results) {
-                console.log(`  #${r.messageIndex} sim=${r.similarity.toFixed(3)} [${r.source}]`);
+                const tag = r.snapKey ? `[snap]#${r.messageIndex}` : `#${r.messageIndex}`;
+                console.log(`  ${tag} sim=${r.similarity.toFixed(3)} [${r.source}]`);
             }
         }
 
@@ -1013,13 +1083,14 @@ export class VectorManager {
         const fullTextThreshold = settings.vectorFullTextThreshold ?? 0.9;
         const recallText = results.length === 0
             ? ''
-            : this._buildRecallText(results, currentDate, chat, fullTextCount, fullTextThreshold, settings.vectorStripTags || '');
+            : this._buildRecallText(results, currentDate, chat, fullTextCount, fullTextThreshold, settings.vectorStripTags || '', !!settings.antiParaphraseMode);
         if (recallText) this._debug(`[Horae Vector] 召回文本 (${recallText.length}字):\n${recallText}`);
 
         this._lastDebugInfo = {
             timestamp: Date.now(),
             chatId: this.chatId,
             indexedCount: this.vectors.size,
+            snapshotCount: this.snapshots.reduce((a, s) => a + s.items.length, 0),
             query: {
                 user: userQuery,
                 state: stateQueryForRecall,
@@ -1041,12 +1112,29 @@ export class VectorManager {
                 source: r.source,
                 docPreview: (r.document || '').substring(0, 120),
             })),
-            embedding: hybridResults.map(r => ({
+            embedding: hybridResults.filter(r => !r.snapKey).map(r => ({
                 messageIndex: r.messageIndex,
                 similarity: r.similarity,
                 source: r.source,
                 docPreview: (r.document || '').substring(0, 120),
             })),
+            snapshot: (() => {
+                const seen = new Map();
+                for (const r of [...hybridResults, ...rewriteHits]) {
+                    if (!r.snapKey || seen.has(r.snapKey)) continue;
+                    seen.set(r.snapKey, r);
+                }
+                return [...seen.values()]
+                    .sort((a, b) => b.similarity - a.similarity)
+                    .map(r => ({
+                        snapKey: r.snapKey,
+                        snapshotId: r.snapshotId,
+                        messageIndex: r.messageIndex,
+                        similarity: r.similarity,
+                        source: r.source,
+                        docPreview: (r.document || '').substring(0, 120),
+                    }));
+            })(),
             relevantChars: [...relevantChars],
             rerank: rerankDebug,
             queryRewrite: rewriteResult ? {
@@ -1055,6 +1143,7 @@ export class VectorManager {
                 hits: rewriteHits.length,
             } : null,
             final: results.map(r => ({
+                snapKey: r.snapKey || null,
                 messageIndex: r.messageIndex,
                 similarity: r.similarity,
                 source: r.source,
@@ -1237,6 +1326,9 @@ export class VectorManager {
             fullText: pick('fullText', '[Full text recall]'),
             scene: pick('scene', 'Scene'),
             npc: pick('npc', 'NPC'),
+            memoryTag: pick('memoryTag', '[Past Memory]'),
+            userTag: pick('userTag', '[USER]'),
+            aiTag: pick('aiTag', '[AI]'),
         };
     }
 
@@ -1256,6 +1348,13 @@ export class VectorManager {
         for (let i = 0; i < chat.length; i++) {
             const m = chat[i].horae_meta;
             if (!m || m._skipHorae) continue;
+            (m.scene?.characters_present || []).forEach(c => knownChars.add(c));
+            if (m.npcs) Object.keys(m.npcs).forEach(c => knownChars.add(c));
+        }
+        // 把快照里出现过的角色名也并进 knownChars，否则仅在历史里登场的角色无法触发结构化通道
+        for (const f of this._iterateSnapshotEntries()) {
+            const m = f.entry.meta;
+            if (!m) continue;
             (m.scene?.characters_present || []).forEach(c => knownChars.add(c));
             if (m.npcs) Object.keys(m.npcs).forEach(c => knownChars.add(c));
         }
@@ -1439,23 +1538,24 @@ export class VectorManager {
         this._debug(`[Horae Vector] 事件搜索: 检测到=[${detected.join(',')}] 扩展后=[${expanded.join(',')}]`);
 
         const scored = [];
+        const matchHit = (searchText) => {
+            const matched = [];
+            for (const kw of expanded) {
+                if (searchText.includes(kw)) matched.push(kw);
+            }
+            return matched;
+        };
+
         for (let i = 0; i < chat.length; i++) {
             if (excludeIndices.has(i) || skipIds.has(i)) continue;
             const meta = chat[i].horae_meta;
-            if (!meta || meta._skipHorae) continue;
+            if (isMetaExcluded(meta)) continue;
 
             const searchText = this._buildSearchableText(meta);
             if (!searchText) continue;
 
-            let matchCount = 0;
-            const matched = [];
-            for (const kw of expanded) {
-                if (searchText.includes(kw)) {
-                    matchCount++;
-                    matched.push(kw);
-                }
-            }
-
+            const matched = matchHit(searchText);
+            const matchCount = matched.length;
             if (matchCount >= 2 || (matchCount >= 1 && mentionedChars.some(c => searchText.includes(c)))) {
                 scored.push({
                     messageIndex: i,
@@ -1467,12 +1567,38 @@ export class VectorManager {
             }
         }
 
+        // 同步扫描已挂载快照：跨对话的关键词命中也能进入结构化通道
+        for (const f of this._iterateSnapshotEntries()) {
+            const meta = f.entry.meta;
+            if (isMetaExcluded(meta)) continue;
+            const searchText = this._buildSearchableText(meta);
+            if (!searchText) continue;
+
+            const matched = matchHit(searchText);
+            const matchCount = matched.length;
+            if (matchCount >= 2 || (matchCount >= 1 && mentionedChars.some(c => searchText.includes(c)))) {
+                scored.push({
+                    snapKey: f.snapKey,
+                    snapshotId: f.snapshotId,
+                    indexInSnap: f.indexInSnap,
+                    messageIndex: f.entry.originalIndex,
+                    similarity: 0.85 + matchCount * 0.02,
+                    document: `[Event match snap] ${matched.join(',')}`,
+                    source: 'structured-snap',
+                    _matchCount: matchCount,
+                });
+            }
+        }
+
         scored.sort((a, b) => b._matchCount - a._matchCount || b.similarity - a.similarity);
         const top = scored.slice(0, limit);
         if (top.length > 0) {
             this._debug(`[Horae Vector] 事件搜索命中 ${top.length} 条:`);
             if (this._debugLog) {
-                for (const r of top) console.log(`  #${r.messageIndex} matches=${r._matchCount} [${r.document}]`);
+                for (const r of top) {
+                    const tag = r.snapKey ? `[snap ${r.snapshotId}#${r.messageIndex}]` : `#${r.messageIndex}`;
+                    console.log(`  ${tag} matches=${r._matchCount} [${r.document}]`);
+                }
             }
         }
         return top;
@@ -1542,7 +1668,7 @@ export class VectorManager {
         for (let i = 0; i < chat.length; i++) {
             if (excludeIndices.has(i)) continue;
             const m = chat[i].horae_meta;
-            if (!m || m._skipHorae) continue;
+            if (isMetaExcluded(m)) continue;
             if (m.npcs && m.npcs[charName]) return i;
             if (m.scene?.characters_present?.includes(charName)) return i;
         }
@@ -1553,7 +1679,7 @@ export class VectorManager {
         for (let i = chat.length - 1; i >= 0; i--) {
             if (excludeIndices.has(i)) continue;
             const meta = chat[i].horae_meta;
-            if (!meta || meta._skipHorae) continue;
+            if (isMetaExcluded(meta)) continue;
             const costume = meta.costumes?.[charName];
             if (costume && costume.includes(costumeKw)) return i;
         }
@@ -1565,7 +1691,7 @@ export class VectorManager {
         for (let i = chat.length - 1; i >= 0 && matches.length < limit; i--) {
             if (excludeIndices.has(i)) continue;
             const meta = chat[i].horae_meta;
-            if (!meta || meta._skipHorae) continue;
+            if (isMetaExcluded(meta)) continue;
             const costumes = meta.costumes;
             if (!costumes) continue;
             for (const v of Object.values(costumes)) {
@@ -1579,7 +1705,7 @@ export class VectorManager {
         for (let i = chat.length - 1; i >= 0; i--) {
             if (excludeIndices.has(i)) continue;
             const meta = chat[i].horae_meta;
-            if (!meta || meta._skipHorae) continue;
+            if (isMetaExcluded(meta)) continue;
             const mood = meta.mood;
             if (!mood) continue;
             if (charName) {
@@ -1627,7 +1753,7 @@ export class VectorManager {
         for (let i = chat.length - 1; i >= 0 && results.length < limit; i--) {
             if (excludeIndices.has(i) || seen.has(i)) continue;
             const meta = chat[i].horae_meta;
-            if (!meta || meta._skipHorae) continue;
+            if (isMetaExcluded(meta)) continue;
 
             let matched = false;
             const matchedItems = [];
@@ -1679,7 +1805,7 @@ export class VectorManager {
         for (let i = chat.length - 1; i >= 0 && results.length < limit; i--) {
             if (excludeIndices.has(i)) continue;
             const meta = chat[i].horae_meta;
-            if (!meta || meta._skipHorae || !meta.items) continue;
+            if (isMetaExcluded(meta) || !meta.items) continue;
 
             const importantNames = [];
             for (const [name, info] of Object.entries(meta.items)) {
@@ -1710,7 +1836,7 @@ export class VectorManager {
         for (let i = chat.length - 1; i >= 0 && results.length < limit; i--) {
             if (excludeIndices.has(i)) continue;
             const meta = chat[i].horae_meta;
-            if (!meta || meta._skipHorae || !meta.events) continue;
+            if (isMetaExcluded(meta) || !meta.events) continue;
 
             for (const evt of meta.events) {
                 if (evt.isSummary || evt.level === '摘要' || evt._summaryId) continue;
@@ -1754,7 +1880,7 @@ export class VectorManager {
         for (let i = chat.length - 1; i >= 0 && results.length < limit; i--) {
             if (excludeIndices.has(i)) continue;
             const meta = chat[i].horae_meta;
-            if (!meta || meta._skipHorae || !meta.events) continue;
+            if (isMetaExcluded(meta) || !meta.events) continue;
 
             for (const evt of meta.events) {
                 if (evt.isSummary || evt.level === '摘要' || evt._summaryId) continue;
@@ -1780,7 +1906,8 @@ export class VectorManager {
     // ========================================
 
     async _hybridSearch(userQuery, state, horaeManager, skipLast, settings, excludeIndices, topK, threshold, pureMode = false) {
-        if (!this.isReady || this.vectors.size === 0) return [];
+        if (!this.isReady) return [];
+        if (this.vectors.size === 0 && this.snapshots.length === 0) return [];
 
         // 跳过 user 消息，取最近一条 AI 消息的完整 meta（含 events）
         const chat = horaeManager.getChat();
@@ -1800,7 +1927,7 @@ export class VectorManager {
         const mergedThreshold = threshold;
 
         let results = await this.search(mergedQuery, topK * 2, mergedThreshold, excludeIndices, pureMode);
-        results = results.map(r => ({ ...r, source: 'merged' }));
+        results = results.map(r => ({ ...r, source: r.source || 'merged' }));
         this._debug(`[Horae Vector] 合并查询搜索: ${results.length} 条 | threshold=${mergedThreshold.toFixed(2)}`);
 
         results.sort((a, b) => b.similarity - a.similarity);
@@ -1809,38 +1936,53 @@ export class VectorManager {
         this._debug(`[Horae Vector] 混合搜索结果: ${results.length} 条`);
         if (this._debugLog) {
             for (const r of results) {
-                console.log(`  #${r.messageIndex} sim=${r.similarity.toFixed(4)} [${r.source}] | ${r.document.substring(0, 80)}`);
+                const tag = r.snapKey ? `[snap ${r.snapshotId}#${r.messageIndex}]` : `#${r.messageIndex}`;
+                console.log(`  ${tag} sim=${r.similarity.toFixed(4)} [${r.source}] | ${r.document.substring(0, 80)}`);
             }
         }
 
         return results;
     }
 
-    _buildRecallText(results, currentDate, chat, fullTextCount = 3, fullTextThreshold = 0.9, stripTags = '') {
+    _buildRecallText(results, currentDate, chat, fullTextCount = 3, fullTextThreshold = 0.9, stripTags = '', antiParaphrase = false) {
         const labels = this._getRecallLabels();
         const lines = [labels.header];
         const eventLevels = this._getKeywordTable().eventLevels || {};
         const importantLevels = new Set(eventLevels.important || []);
         const keyLevels = new Set(eventLevels.key || []);
+        const memTag = labels.memoryTag || '[历史记忆]';
+        const userTag = labels.userTag || '[USER]';
+        const aiTag = labels.aiTag || '[AI]';
 
         for (let rank = 0; rank < results.length; rank++) {
             const r = results[rank];
-            const meta = chat[r.messageIndex]?.horae_meta;
-            if (!meta || meta._skipHorae) continue;
+            const snapEntry = r.snapKey ? this._getSnapshotEntry(r.snapKey) : null;
+            const meta = snapEntry ? snapEntry.meta : chat[r.messageIndex]?.horae_meta;
+            if (isMetaExcluded(meta)) continue;
 
+            const prefix = snapEntry ? `${memTag} ` : '';
+            const idLabel = snapEntry ? `#${snapEntry.originalIndex >= 0 ? snapEntry.originalIndex : '?'}` : `#${r.messageIndex}`;
             const isFullText = fullTextCount > 0 && rank < fullTextCount && r.similarity >= fullTextThreshold;
 
             if (isFullText) {
-                const rawText = this._extractCleanText(chat[r.messageIndex]?.mes, stripTags);
+                const rawMes = snapEntry ? snapEntry.mes : chat[r.messageIndex]?.mes;
+                const rawText = this._extractCleanText(rawMes, stripTags);
                 if (rawText) {
                     const timeTag = this._buildTimeTag(meta?.timestamp, currentDate);
-                    lines.push(`#${r.messageIndex} ${timeTag ? timeTag + ' ' : ''}${labels.fullText}\n${rawText}`);
+                    // 反转述模式专用：把紧邻的 USER 文本贴回原文头部，避免“只看到 AI 一面之词”
+                    let userBlock = '';
+                    if (antiParaphrase) {
+                        const userMes = snapEntry
+                            ? (snapEntry.userPrecedingMes || '')
+                            : this._getPrecedingUserText(chat, r.messageIndex, stripTags);
+                        if (userMes) userBlock = `${userTag}\n${userMes}\n${aiTag}\n`;
+                    }
+                    lines.push(`${prefix}${idLabel} ${timeTag ? timeTag + ' ' : ''}${labels.fullText}\n${userBlock}${rawText}`);
                     continue;
                 }
             }
 
             const parts = [];
-
             const timeTag = this._buildTimeTag(meta?.timestamp, currentDate);
             if (timeTag) parts.push(timeTag);
 
@@ -1877,11 +2019,34 @@ export class VectorManager {
             }
 
             if (parts.length > 0) {
-                lines.push(`#${r.messageIndex} ${parts.join(' | ')}`);
+                lines.push(`${prefix}${idLabel} ${parts.join(' | ')}`);
             }
         }
 
         return lines.length > 1 ? lines.join('\n') : '';
+    }
+
+    _getSnapshotEntry(snapKey) {
+        if (!snapKey || typeof snapKey !== 'string') return null;
+        const m = snapKey.match(/^snap_(.+?)_(-?\d+)_(\d+)$/);
+        if (!m) return null;
+        const [, sid, , idxInSnap] = m;
+        const snap = this.snapshots.find(s => s.id === sid);
+        if (!snap) return null;
+        return snap.items[parseInt(idxInSnap, 10)] || null;
+    }
+
+    _getPrecedingUserText(chat, aiIndex, stripTags = '') {
+        if (!Array.isArray(chat) || typeof aiIndex !== 'number' || aiIndex <= 0) return '';
+        const prev = chat[aiIndex - 1];
+        if (!prev || !prev.is_user) return '';
+        const text = this._extractCleanText(prev.mes || '', stripTags);
+        return text ? text.substring(0, 800) : '';
+    }
+
+    _getSnapshotMeta(snapKey) {
+        const entry = this._getSnapshotEntry(snapKey);
+        return entry ? entry.meta : null;
     }
 
     _stripVolatileHoraeLines(text) {
@@ -2294,11 +2459,16 @@ export class VectorManager {
         }
         return new Promise((resolve, reject) => {
             const req = indexedDB.open(DB_NAME, DB_VERSION);
-            req.onupgradeneeded = () => {
+            req.onupgradeneeded = (event) => {
                 const db = req.result;
                 if (!db.objectStoreNames.contains(STORE_NAME)) {
                     const store = db.createObjectStore(STORE_NAME, { keyPath: 'key' });
                     store.createIndex('chatId', 'chatId', { unique: false });
+                }
+                // V1→V2：新增独立 store 存放快照，按 chatId 索引
+                if (event.oldVersion < 2 && !db.objectStoreNames.contains(SNAPSHOT_STORE)) {
+                    const snap = db.createObjectStore(SNAPSHOT_STORE, { keyPath: 'key' });
+                    snap.createIndex('chatId', 'chatId', { unique: false });
                 }
             };
             req.onblocked = () => {
@@ -2382,11 +2552,293 @@ export class VectorManager {
     }
 
     // ========================================
+    // 历史记忆快照（导出/导入/加载/管理）
+    // ========================================
+
+    /**
+     * 把当前 chat 的全部向量打包成快照对象（不含 IO）
+     * sourceChat 用于补齐每条向量对应的原文与 meta；缺失则跳过该条
+     * @param {Array} sourceChat ST chat 数组
+     * @param {{ label?: string, sourceChatId?: string, sourceChatName?: string }} [info]
+     */
+    buildSnapshotFromCurrent(sourceChat, info = {}) {
+        if (!Array.isArray(sourceChat)) throw new Error('无效的对话数据');
+        if (!this.isReady) throw new Error('向量模型未就绪');
+        if (this.vectors.size === 0) throw new Error('当前对话没有可导出的向量索引');
+
+        const items = [];
+        const sorted = [...this.vectors.entries()].sort((a, b) => a[0] - b[0]);
+        for (const [idx, entry] of sorted) {
+            const msg = sourceChat[idx];
+            if (!msg || msg.is_user) continue;
+            const meta = msg.horae_meta;
+            if (isMetaExcluded(meta)) continue;
+            // 原文剥掉 volatile 标签以减小体积；保留剧情文本
+            const cleanedMes = this._stripVolatileHoraeLines(msg.mes || '').trim();
+            // 顺手记下紧邻的上一条 USER 文本——反转述模式开启时 rerank/全文召回可借此还原玩家上下文
+            // 读取侧自带开关判断，普通模式下不会用，仅做数据保留
+            let userPrecedingMes = '';
+            const prev = sourceChat[idx - 1];
+            if (prev && prev.is_user) {
+                userPrecedingMes = this._stripVolatileHoraeLines(prev.mes || '').trim().substring(0, 800);
+            }
+            const item = {
+                originalIndex: idx,
+                mes: cleanedMes,
+                meta: this._cloneMetaForSnapshot(meta),
+                document: entry.document,
+                hash: entry.hash,
+                vector: Array.from(entry.vector),
+            };
+            if (userPrecedingMes) item.userPrecedingMes = userPrecedingMes;
+            items.push(item);
+        }
+
+        if (items.length === 0) throw new Error('没有可导出的有效条目');
+
+        return {
+            format: SNAPSHOT_FORMAT,
+            version: SNAPSHOT_VERSION,
+            exportTime: new Date().toISOString(),
+            sourceChatId: info.sourceChatId || this.chatId || '',
+            sourceChatName: info.sourceChatName || '',
+            label: info.label || '',
+            modelName: this.modelName || '',
+            dimensions: this.dimensions || 0,
+            isApiMode: !!this.isApiMode,
+            count: items.length,
+            items,
+        };
+    }
+
+    _cloneMetaForSnapshot(meta) {
+        // 只带召回展示需要的字段，避免把整份 horae_meta 塞进文件
+        const out = {};
+        if (meta.timestamp) {
+            out.timestamp = {
+                story_date: meta.timestamp.story_date || '',
+                story_time: meta.timestamp.story_time || '',
+            };
+        }
+        if (meta.scene) {
+            out.scene = {
+                location: meta.scene.location || '',
+                characters_present: Array.isArray(meta.scene.characters_present)
+                    ? [...meta.scene.characters_present]
+                    : [],
+            };
+        }
+        if (meta.costumes && Object.keys(meta.costumes).length) {
+            out.costumes = { ...meta.costumes };
+        }
+        if (Array.isArray(meta.events) && meta.events.length) {
+            out.events = meta.events
+                .filter(e => e && !e.isSummary && e.level !== '摘要' && !e._summaryId)
+                .map(e => ({
+                    summary: e.summary || '',
+                    level: e.level || '',
+                    is_important: !!e.is_important,
+                }));
+        }
+        if (meta.npcs && Object.keys(meta.npcs).length) {
+            out.npcs = {};
+            for (const [name, info] of Object.entries(meta.npcs)) {
+                if (!info) continue;
+                const n = {};
+                if (info.relationship) n.relationship = info.relationship;
+                if (info.description) n.description = info.description.substring(0, 200);
+                if (Object.keys(n).length) out.npcs[name] = n;
+            }
+        }
+        if (meta.items && Object.keys(meta.items).length) {
+            out.items = {};
+            for (const [name, info] of Object.entries(meta.items)) {
+                if (!info) continue;
+                const it = {};
+                if (info.icon) it.icon = info.icon;
+                if (info.holder) it.holder = info.holder;
+                if (info.importance) it.importance = info.importance;
+                if (Object.keys(it).length) out.items[name] = it;
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 校验外部传入的 snapshot 数据合法性
+     */
+    _validateSnapshot(obj) {
+        if (!obj || typeof obj !== 'object') throw new Error('快照文件格式无效');
+        if (obj.format !== SNAPSHOT_FORMAT) throw new Error('不是 Horae 记忆快照文件');
+        if (!Array.isArray(obj.items) || obj.items.length === 0) throw new Error('快照内容为空');
+        if (!obj.dimensions || obj.dimensions <= 0) throw new Error('快照缺少维度信息');
+        for (const it of obj.items) {
+            if (!Array.isArray(it.vector) || it.vector.length !== obj.dimensions) {
+                throw new Error('快照向量维度与声明不一致');
+            }
+        }
+    }
+
+    /**
+     * 把快照写入当前 chat 名下；返回写入的 snapshotId
+     * @param {object} snapshotObj 来自 buildSnapshotFromCurrent 或外部文件的对象
+     * @param {string} [targetChatId] 默认当前 chatId
+     */
+    async importSnapshot(snapshotObj, targetChatId = null) {
+        this._validateSnapshot(snapshotObj);
+        const chatId = targetChatId || this.chatId;
+        if (!chatId) throw new Error('未指定目标对话');
+
+        if (this.isReady && this.dimensions && snapshotObj.dimensions !== this.dimensions) {
+            throw new Error(`维度不匹配：快照 ${snapshotObj.dimensions} 维，当前模型 ${this.dimensions} 维。请切换到匹配的模型或重新导出快照。`);
+        }
+
+        await this._openDB();
+        const snapshotId = `snap_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+        const key = `${chatId}__${snapshotId}`;
+        const record = {
+            key,
+            chatId,
+            snapshotId,
+            payload: snapshotObj,
+            importTime: Date.now(),
+        };
+        await new Promise((resolve, reject) => {
+            const tx = this.db.transaction(SNAPSHOT_STORE, 'readwrite');
+            tx.objectStore(SNAPSHOT_STORE).put(record);
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+        });
+
+        if (chatId === this.chatId) {
+            this.snapshots.push(this._buildSnapshotRuntime(record));
+            this.clearRecallCache('importSnapshot');
+        }
+        return snapshotId;
+    }
+
+    /**
+     * 列出当前 chat 已挂载的快照（用于 UI 展示）
+     */
+    listSnapshots() {
+        return this.snapshots.map(s => ({
+            id: s.id,
+            label: s.label,
+            sourceChatName: s.sourceChatName,
+            modelName: s.modelName,
+            dimensions: s.dimensions,
+            count: s.items.length,
+            exportTime: s.exportTime,
+            importTime: s.importTime,
+        }));
+    }
+
+    async removeSnapshot(snapshotId) {
+        if (!this.chatId) return false;
+        await this._openDB();
+        const key = `${this.chatId}__${snapshotId}`;
+        await new Promise((resolve, reject) => {
+            const tx = this.db.transaction(SNAPSHOT_STORE, 'readwrite');
+            tx.objectStore(SNAPSHOT_STORE).delete(key);
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+        });
+        const before = this.snapshots.length;
+        this.snapshots = this.snapshots.filter(s => s.id !== snapshotId);
+        if (this.snapshots.length !== before) this.clearRecallCache('removeSnapshot');
+        return this.snapshots.length !== before;
+    }
+
+    /**
+     * 读取目标 chat 名下的所有快照原始 payload，供链式传递（带记忆创建新对话）使用
+     * 直接读 DB 不依赖当前已挂载的 snapshots，避免依赖 chat 切换时机
+     */
+    async exportSnapshotsForChat(chatId) {
+        if (!chatId) return [];
+        await this._openDB();
+        const records = await new Promise((resolve, reject) => {
+            const tx = this.db.transaction(SNAPSHOT_STORE, 'readonly');
+            const req = tx.objectStore(SNAPSHOT_STORE).index('chatId').getAll(chatId);
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => reject(req.error);
+        });
+        return records.map(r => r.payload).filter(Boolean);
+    }
+
+    async _loadSnapshotsForChat(chatId) {
+        if (!chatId) return;
+        await this._openDB();
+        const records = await new Promise((resolve, reject) => {
+            const tx = this.db.transaction(SNAPSHOT_STORE, 'readonly');
+            const req = tx.objectStore(SNAPSHOT_STORE).index('chatId').getAll(chatId);
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => reject(req.error);
+        });
+        this.snapshots = records
+            .map(r => this._buildSnapshotRuntime(r))
+            .filter(Boolean);
+        // 维度跟当前模型不一致的快照直接禁用（点积会失效），日志提示
+        if (this.dimensions && this.isReady) {
+            const before = this.snapshots.length;
+            this.snapshots = this.snapshots.filter(s => {
+                if (s.dimensions === this.dimensions) return true;
+                console.warn(`[Horae Vector] 快照「${s.label || s.id}」维度 ${s.dimensions} 与当前模型 ${this.dimensions} 不一致，已跳过`);
+                return false;
+            });
+            if (before !== this.snapshots.length) this.clearRecallCache('snapshot-dim-mismatch');
+        }
+    }
+
+    _buildSnapshotRuntime(record) {
+        const p = record?.payload;
+        if (!p || !Array.isArray(p.items)) return null;
+        return {
+            id: record.snapshotId,
+            label: p.label || '',
+            sourceChatName: p.sourceChatName || '',
+            modelName: p.modelName || '',
+            dimensions: p.dimensions || 0,
+            exportTime: p.exportTime || '',
+            importTime: record.importTime || 0,
+            items: p.items.map(it => ({
+                originalIndex: typeof it.originalIndex === 'number' ? it.originalIndex : -1,
+                mes: it.mes || '',
+                meta: it.meta || {},
+                document: it.document || '',
+                hash: it.hash || '',
+                vector: Array.isArray(it.vector) ? it.vector : [],
+                userPrecedingMes: it.userPrecedingMes || '',
+            })),
+        };
+    }
+
+    /**
+     * 拿到全部快照的扁平条目，供召回阶段使用
+     * 返回的 key 为 `snap_<snapshotId>_<originalIndex>`，避免与正常 messageIndex 数字冲突
+     */
+    _iterateSnapshotEntries() {
+        const out = [];
+        for (const snap of this.snapshots) {
+            for (let i = 0; i < snap.items.length; i++) {
+                const it = snap.items[i];
+                if (!it.vector || it.vector.length === 0) continue;
+                out.push({
+                    snapshotId: snap.id,
+                    indexInSnap: i,
+                    snapKey: `snap_${snap.id}_${it.originalIndex}_${i}`,
+                    entry: it,
+                });
+            }
+        }
+        return out;
+    }
+
+    // ========================================
     // 工具函数
     // ========================================
 
     _hasOriginalEvents(meta) {
-        if (meta?._skipHorae) return false;
+        if (isMetaExcluded(meta)) return false;
         if (!meta?.events?.length) return false;
         return meta.events.some(e => !e.isSummary && e.level !== '摘要' && !e._summaryId);
     }

@@ -6349,6 +6349,38 @@ body .horae-context-menu {
     font-size: 12px;
     color: var(--horae-text);
 }
+.horae-snapshot-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.horae-snapshot-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: var(--horae-bg-secondary, rgba(255,255,255,0.03));
+    border: 1px solid var(--horae-border, rgba(255,255,255,0.06));
+}
+.horae-snapshot-meta {
+    flex: 1;
+    min-width: 0;
+}
+.horae-snapshot-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--horae-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.horae-snapshot-sub {
+    font-size: 11px;
+    color: var(--horae-text-secondary);
+    margin-top: 2px;
+}
 .horae-vector-debug-content .horae-vector-debug-section {
     padding: 6px 8px;
     border-radius: 6px;

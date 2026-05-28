@@ -541,7 +541,7 @@ class HoraeManager {
                 events.push({
                     messageIndex: i,
                     eventIndex: j,
-                    timestamp: evt._skipTimestamp ? null : meta.timestamp,
+                    timestamp: meta.timestamp,
                     event: evt
                 });
                 
@@ -1157,11 +1157,6 @@ class HoraeManager {
 
                 for (const e of allToShow) {
                     const isSummary = e.event?.isSummary || e.event?.level === '摘要';
-                    // 回顾条目（来自带记忆建新对话）不参与相对时间换算，时间信息已在 summary 文本里
-                    if (e.event?._skipTimestamp || e.event?._carryoverSeed) {
-                        lines.push(`★ [${L('回顾','Recap','回顧','회고','Воспоминания')}]: ${e.event.summary}`);
-                        continue;
-                    }
                     if (isSummary) {
                         const dateRange = e.event?._summaryId ? _sumDateRanges[e.event._summaryId] : '';
                         const dateTag = dateRange ? `·${dateRange}` : '';
@@ -1476,35 +1471,21 @@ class HoraeManager {
                 const eventStr = trimmedLine.substring(6).trim();
                 const parts = eventStr.split('|');
                 if (parts.length >= 2) {
-                    let levelRaw = parts[0].trim();
+                    const levelRaw = parts[0].trim();
                     const summary = parts.slice(1).join('|').trim();
-
-                    // carryover 回顾事件用 * 后缀编码，剥离后还原元数据标记
-                    const isCarryover = levelRaw.endsWith('*');
-                    if (isCarryover) levelRaw = levelRaw.slice(0, -1).trim();
-
+                    
                     let level = '一般';
                     if (levelRaw === '关键' || levelRaw === '關鍵' || levelRaw.toLowerCase() === 'critical') {
                         level = '关键';
                     } else if (levelRaw === '重要' || levelRaw.toLowerCase() === 'important') {
                         level = '重要';
-                    } else if (levelRaw === '回顾' || levelRaw === '回顧' || levelRaw.toLowerCase() === 'recap') {
-                        level = '回顾';
                     }
-
-                    const evt = {
-                        is_important: level === '重要' || level === '关键' || isCarryover,
+                    
+                    result.events.push({
+                        is_important: level === '重要' || level === '关键',
                         level: level,
-                        summary: summary,
-                    };
-                    if (isCarryover || level === '回顾') {
-                        evt.level = '回顾';
-                        evt._carryoverSeed = true;
-                        evt.isSummary = true;
-                        evt._skipTimestamp = true;
-                        evt.is_important = true;
-                    }
-                    result.events.push(evt);
+                        summary: summary
+                    });
                 }
             }
             // affection:鲍勃=65 或 affection:鲍勃+5（兼容新旧格式）
@@ -3337,14 +3318,6 @@ class HoraeManager {
             resetTable(overlay);
         }
         
-        // 兜底：旧 carryover 路径曾把 tableContributions 写成对象映射，这里归一化成数组
-        for (let i = 0; i < limit; i++) {
-            const meta = chat[i]?.horae_meta;
-            if (meta?.tableContributions && !Array.isArray(meta.tableContributions)) {
-                meta.tableContributions = Object.values(meta.tableContributions);
-            }
-        }
-
         // 2. 预扫描：找到每个表格最后一个 _isUserEdit 所在的消息索引
         const lastUserEditIdx = new Map();
         for (let i = 0; i < limit; i++) {
@@ -3417,7 +3390,7 @@ class HoraeManager {
                 }
                 if (existing.events?.length > 0) {
                     for (const evt of existing.events) {
-                        if (evt._compressedBy || evt._summaryId || evt.isSummary || evt._carryoverSeed) {
+                        if (evt._compressedBy || evt._summaryId || evt.isSummary) {
                             oldEvents.push(evt);
                         }
                     }
@@ -3429,10 +3402,8 @@ class HoraeManager {
                 if (wasSkipped) meta._skipHorae = true;
                 if (oldEvents.length > 0) {
                     if (!meta.events) meta.events = [];
-                    const nonSummaryFlags = oldEvents.filter(e => !e.isSummary && !e._carryoverSeed);
-                    const summaryEvts = oldEvents.filter(e => e.isSummary && !e._carryoverSeed);
-                    const carryoverEvts = oldEvents.filter(e => e._carryoverSeed);
-
+                    const nonSummaryFlags = oldEvents.filter(e => !e.isSummary);
+                    const summaryEvts = oldEvents.filter(e => e.isSummary);
                     for (const flag of nonSummaryFlags) {
                         if (!flag._compressedBy) continue;
                         const match = meta.events.find(e =>
@@ -3453,13 +3424,6 @@ class HoraeManager {
                                 _summaryId: sEvt._summaryId,
                             });
                         }
-                    }
-                    if (carryoverEvts.length > 0) {
-                        // 解析回来的同语义条目去掉，再把携带完整元数据的原版前置回去
-                        meta.events = meta.events.filter(e => !(
-                            e?._carryoverSeed || e?.level === '回顾' || e?.level === '回顧'
-                        ));
-                        meta.events = [...carryoverEvts.map(e => ({ ...e })), ...meta.events];
                     }
                 }
             };

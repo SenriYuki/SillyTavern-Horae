@@ -42,11 +42,7 @@
         "summaryExpanded": "원본 이벤트로 확장됨",
         "summaryBadge": "요약",
         "autoSummary": "자동",
-        "manualSummary": "수동",
-        "recap": "회고",
-        "carryoverRecapTitle": "이전 대화 회고",
-        "carryoverRecapHint": "AI가 항상 읽으며 현재 타임라인에 영향 없음",
-        "carryoverRecapCount": "건"
+        "manualSummary": "수동"
     },
     "characters": {
         "present": "등장 캐릭터",
@@ -937,6 +933,9 @@
         "debugSettings": "실행 매개변수",
         "debugStructured": "구조화 적중",
         "debugEmbedding": "벡터 검색",
+        "debugSnapshot": "스냅샷 검색",
+        "debugSnapshotCount": "스냅샷 항목",
+        "debugColOrigin": "항목",
         "debugRerank": "Rerank",
         "debugRerankInfo": "Rerank 정보",
         "debugRerankError": "Rerank 실패",
@@ -976,7 +975,11 @@
         "disabled": "비활성화됨",
         "modelNotLoaded": "모델이 로드되지 않음",
         "buildIndex": "인덱스 구축",
-        "clearIndex": "인덱스 초기화"
+        "clearIndex": "인덱스 초기화",
+        "snapshotTitle": "기억 스냅샷",
+        "snapshotHint": "이전 채팅의 원문 + Horae 데이터 + 벡터 인덱스를 읽기 전용 스냅샷으로 묶어 새 채팅에 마운트하여 회상에 사용합니다. 1000층 이상의 헤비 유저에게 적합합니다.",
+        "snapshotExport": "현재 채팅 내보내기",
+        "snapshotImport": "스냅샷 가져오기"
     },
     "vectorKeywords": {
         "intent": {
@@ -1025,7 +1028,10 @@
         "header": "[기억 회상——다음은 현재 상황과 관련된 과거 단편입니다. 참고용이며 현재 컨텍스트가 아닙니다]",
         "fullText": "[전문 회상]",
         "scene": "장면",
-        "npc": "NPC"
+        "npc": "NPC",
+        "memoryTag": "[과거 기억]",
+        "userTag": "[USER]",
+        "aiTag": "[AI]"
     },
     "prompts": {
         "title": "커스텀 프롬프트",
