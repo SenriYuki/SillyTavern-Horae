@@ -8501,3 +8501,179 @@ body .horae-context-menu {
         text-align: center !important;
     }
 }
+
+/* 角色卡设置档（Card Profile）—— 自命名空间，所有属性显式覆盖以隔离酒馆全局美化 */
+.horae-cardprofile-section {
+    margin-top: 12px !important;
+    padding: 10px 12px !important;
+    border: 1px solid var(--horae-border, rgba(255, 255, 255, 0.08)) !important;
+    border-radius: 8px !important;
+    background: rgba(124, 58, 237, 0.04) !important;
+}
+
+.horae-cardprofile-section-title {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    margin-bottom: 6px !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    color: var(--horae-text, #e2e8f0) !important;
+    letter-spacing: 0.3px !important;
+}
+
+.horae-cardprofile-section-title i {
+    color: var(--horae-primary-light, #a78bfa) !important;
+}
+
+.horae-cardprofile-status {
+    font-size: 11px !important;
+    line-height: 1.6 !important;
+    color: var(--horae-text-muted, #94a3b8) !important;
+    margin: 4px 0 6px 0 !important;
+    padding: 4px 8px !important;
+    border-radius: 4px !important;
+    background: rgba(0, 0, 0, 0.18) !important;
+    min-height: 14px !important;
+}
+
+.horae-cardprofile-status[data-card-profile-state="pending"] {
+    color: var(--horae-warning, #f59e0b) !important;
+    background: rgba(245, 158, 11, 0.08) !important;
+}
+
+.horae-cardprofile-status[data-card-profile-state="applied"] {
+    color: var(--horae-success, #10b981) !important;
+    background: rgba(16, 185, 129, 0.08) !important;
+}
+
+.horae-cardprofile-status[data-card-profile-state="suppressed"] {
+    color: var(--horae-text-muted, #94a3b8) !important;
+    opacity: 0.85 !important;
+}
+
+#horae_drawer_icon.horae-cardprofile-has-update::after {
+    content: "" !important;
+    position: absolute !important;
+    top: 4px !important;
+    right: 4px !important;
+    width: 8px !important;
+    height: 8px !important;
+    background: var(--horae-info, #3b82f6) !important;
+    border: 1.5px solid var(--horae-bg, #1e1e28) !important;
+    border-radius: 50% !important;
+    pointer-events: none !important;
+}
+
+/* 设置档建议弹窗 */
+.horae-cardprofile-modal .horae-cardprofile-content {
+    max-width: 520px !important;
+    width: 92% !important;
+}
+
+.horae-cardprofile-modal .horae-cardprofile-body {
+    font-size: 13px !important;
+    line-height: 1.65 !important;
+}
+
+.horae-cardprofile-modal .horae-cardprofile-intro {
+    margin: 0 0 10px 0 !important;
+    color: var(--horae-text, #e2e8f0) !important;
+}
+
+.horae-cardprofile-modal .horae-cardprofile-intro strong {
+    color: var(--horae-primary-light, #a78bfa) !important;
+}
+
+.horae-cardprofile-modal .horae-cardprofile-diff {
+    background: rgba(127, 127, 127, 0.08) !important;
+    border-radius: 6px !important;
+    padding: 10px 12px !important;
+    margin: 8px 0 !important;
+}
+
+.horae-cardprofile-modal .horae-cardprofile-diff-title {
+    font-weight: 600 !important;
+    margin-bottom: 6px !important;
+    color: var(--horae-text, #e2e8f0) !important;
+    font-size: 12px !important;
+}
+
+.horae-cardprofile-modal .horae-cardprofile-diff-list {
+    margin: 0 !important;
+    padding-left: 4px !important;
+    list-style: none !important;
+}
+
+.horae-cardprofile-modal .horae-cardprofile-diff-item {
+    margin: 2px 0 !important;
+    padding: 1px 0 !important;
+    font-size: 12px !important;
+    color: var(--horae-text, #e2e8f0) !important;
+    display: flex !important;
+    align-items: baseline !important;
+    gap: 6px !important;
+}
+
+.horae-cardprofile-modal .horae-cardprofile-diff-sym {
+    display: inline-block !important;
+    width: 14px !important;
+    text-align: center !important;
+    font-weight: 700 !important;
+    flex-shrink: 0 !important;
+}
+
+.horae-cardprofile-modal .horae-cardprofile-diff-item.on .horae-cardprofile-diff-sym {
+    color: var(--horae-success, #10b981) !important;
+}
+
+.horae-cardprofile-modal .horae-cardprofile-diff-item.off .horae-cardprofile-diff-sym {
+    color: var(--horae-danger, #ef4444) !important;
+}
+
+.horae-cardprofile-modal .horae-cardprofile-diff-item.replace .horae-cardprofile-diff-sym {
+    color: var(--horae-primary-light, #a78bfa) !important;
+}
+
+.horae-cardprofile-modal .horae-cardprofile-diff-more {
+    margin-top: 4px !important;
+    color: var(--horae-text-muted, #94a3b8) !important;
+    font-style: italic !important;
+    font-size: 11px !important;
+}
+
+.horae-cardprofile-modal .horae-cardprofile-diff-empty {
+    color: var(--horae-text-muted, #94a3b8) !important;
+    font-size: 12px !important;
+    font-style: italic !important;
+}
+
+.horae-cardprofile-modal .horae-cardprofile-hint {
+    margin: 8px 0 0 0 !important;
+    padding: 6px 10px !important;
+    background: rgba(16, 185, 129, 0.08) !important;
+    border-radius: 4px !important;
+    font-size: 11px !important;
+    color: var(--horae-text-muted, #94a3b8) !important;
+}
+
+.horae-cardprofile-modal .horae-cardprofile-footer {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+}
+
+.horae-cardprofile-modal .horae-cardprofile-dismiss {
+    color: var(--horae-text-muted, #94a3b8) !important;
+    opacity: 0.85 !important;
+}
+
+.horae-cardprofile-modal .horae-cardprofile-dismiss:hover {
+    color: var(--horae-danger, #ef4444) !important;
+    opacity: 1 !important;
+}
+
+@media screen and (max-width: 600px) {
+    .horae-cardprofile-modal .horae-cardprofile-content {
+        width: 95% !important;
+    }
+}

@@ -1,4 +1,4 @@
-# Horae v1.15.0 - Memory Engine for SillyTavern
+# Horae v1.15.1 - Memory Engine for SillyTavern
 
 **English** | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md)
 
@@ -148,4 +148,10 @@ Bug reports and suggestions are welcome!
 ### Credits
 
 - [@baibai-git](https://github.com/baibai-git) — PR #5 integration contribution
+
+---
+
+### Buy me a boba?
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/B8B620XPCL)
 

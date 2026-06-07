@@ -10,7 +10,7 @@
                 <i class="fa-regular fa-clock"></i>
                 Horae 时光记忆
             </div>
-            <span class="horae-version">1.15.0</span>
+            <span class="horae-version">1.15.1</span>
         </div>
         
         <!-- 标签页导航 -->
@@ -451,6 +451,40 @@
                         <button id="horae-settings-export" class="horae-rpg-btn-sm" data-i18n="settings.exportConfig" data-i18n-title="tooltip.exportGlobalConfig" title=""><i class="fa-solid fa-file-export"></i> 导出配置</button>
                         <button id="horae-settings-import" class="horae-rpg-btn-sm" data-i18n="settings.importConfig" data-i18n-title="tooltip.importConfigFile" title=""><i class="fa-solid fa-file-import"></i> 导入配置</button>
                         <button id="horae-settings-reset" class="horae-rpg-btn-sm" data-i18n="settings.restoreDefaults" data-i18n-title="tooltip.restoreAllDefaults" title="" style="color:#ef4444;"><i class="fa-solid fa-rotate-left"></i> 恢复默认</button>
+                    </div>
+
+                    <div class="horae-cardprofile-section">
+                        <div class="horae-cardprofile-section-title">
+                            <i class="fa-solid fa-id-card-clip"></i>
+                            <span data-i18n="settings.cardProfileTitle">随角色卡保存设置</span>
+                        </div>
+                        <span class="horae-setting-hint" data-i18n="settings.cardProfileHint" style="margin-bottom:8px;">
+                            <i class="fa-solid fa-circle-info"></i>
+                            把当前 Horae 配置存进角色卡（不含 API 凭据）。切换到这张卡时按下方处理方式自动套用，让西幻 / 现代 / 武侠等不同主题的卡各带各的 RPG 与提示词配置。
+                        </span>
+                        <div id="horae-cardprofile-status" class="horae-cardprofile-status" data-card-profile-state="none"></div>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+                            <button id="horae-cardprofile-save" class="horae-rpg-btn-sm" data-i18n="settings.cardProfileSave" data-i18n-title="tooltip.cardProfileSave" title=""><i class="fa-solid fa-floppy-disk"></i> 存入角色卡</button>
+                            <button id="horae-cardprofile-load" class="horae-rpg-btn-sm" data-i18n="settings.cardProfileLoad" data-i18n-title="tooltip.cardProfileLoad" title=""><i class="fa-solid fa-download"></i> 读取角色卡</button>
+                            <button id="horae-cardprofile-unbind" class="horae-rpg-btn-sm" data-i18n="settings.cardProfileUnbind" data-i18n-title="tooltip.cardProfileUnbind" title="" style="color:#ef4444;"><i class="fa-solid fa-link-slash"></i> 解除卡绑</button>
+                        </div>
+                        <div class="horae-setting-item" style="margin-top:10px;">
+                            <label data-i18n="settings.cardProfileMode">
+                                <i class="fa-solid fa-arrows-spin"></i>
+                                切卡时处理方式
+                                <select id="horae-cardprofile-mode" class="horae-select">
+                                    <option value="" data-i18n="settings.cardProfileModeUnset" selected>未设定</option>
+                                    <option value="ask" data-i18n="settings.cardProfileModeAsk">弹窗询问</option>
+                                    <option value="auto" data-i18n="settings.cardProfileModeAuto">静默套用</option>
+                                    <option value="badge" data-i18n="settings.cardProfileModeBadge">仅在面板显示提示</option>
+                                    <option value="never" data-i18n="settings.cardProfileModeNever">不处理</option>
+                                </select>
+                            </label>
+                            <span class="horae-setting-hint" data-i18n="settings.cardProfileModeHint">
+                                <i class="fa-solid fa-circle-info"></i>
+                                弹窗询问最安全（默认）；静默套用适合信任卡作者；仅显示提示会在抽屉头部挂横幅，不主动打扰；不处理则完全跳过自动检测。
+                            </span>
+                        </div>
                     </div>
                 </div>
                 <div class="horae-settings-section">
@@ -1677,7 +1711,7 @@
                 </div>
 
                 <div class="horae-about">
-                    <p>Horae v1.15.0 | 作者: SenriYuki</p>
+                    <p>Horae v1.15.1 | 作者: SenriYuki</p>
                     <p>基于时间锚点的AI记忆增强系统</p>
                 </div>
             </div>

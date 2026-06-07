@@ -3,7 +3,7 @@
  * 基于时间锚点的AI记忆增强系统
  * 
  * 作者: SenriYuki
- * 版本: 1.15.0
+ * 版本: 1.15.1
  */
 
 import { renderExtensionTemplateAsync, getContext, extension_settings } from '/scripts/extensions.js';
@@ -22,7 +22,7 @@ import { initPromptDefaults, ensurePromptDefaults, ensurePresetPrompts, getPromp
 const EXTENSION_NAME = 'horae';
 const EXTENSION_FOLDER = `third-party/SillyTavern-Horae`;
 const TEMPLATE_PATH = `${EXTENSION_FOLDER}/assets/templates`;
-const VERSION = '1.15.0';
+const VERSION = '1.15.1';
 
 // settings 来源标记。仅用于区分「上次写入是否本版本自身」，外部来源（旧版本/其他分发版）会触发一次确认弹窗
 const ENGINE_TAG = 'horae-official';
@@ -255,6 +255,11 @@ const DEFAULT_SETTINGS = {
     vectorStripTags: '',
     vectorQueryRewriteEnabled: false,    // 多角度 Query 重写；默认关，强制走辅助 API 避免阻塞主回合
     vectorQueryRewriteSystemPrompt: '',  // 自定义重写提示词（空=使用默认按语言加载）
+    // 角色卡设置档：把 Horae 配置随卡保存，切卡时按模式套用
+    // ''=未设定（默认，不做任何处理直到用户选定）；ask=切卡时弹窗确认；auto=静默套用；badge=不弹窗只在抽屉挂提示；never=完全不处理
+    cardProfileMode: '',
+    // key=avatar 文件名，value=已忽略的 profile.savedAt；卡作者更新设置档（savedAt 变了）会重新提示
+    _cardProfileHintDismissed: {},
 };
 
 const PROMPT_SETTING_KEYS = [
@@ -290,6 +295,29 @@ const PRESERVED_KEYS_ON_RESET = [
     'vectorQueryRewriteEnabled',
     'customThemes', 'globalTables',
     'uiLanguage', 'aiOutputLanguage',
+    'cardProfileMode', '_cardProfileHintDismissed',
+];
+
+// 配置档导出/导入/角色卡同步共用的字段白名单。
+// 故意排除 API URL/Key/Model、向量召回参数等本地敏感/环境相关字段，避免随卡分享时泄露凭据。
+const _SETTINGS_EXPORT_KEYS = [
+    'enabled', 'autoParse', 'autoFillPrevTimelineOnSend', 'injectContext', 'useMainPresetForAiTasks', 'showMessagePanel', 'showTopIcon',
+    'injectionDepthSource', 'injectionPosition', 'timelineInjectionMode',
+    'sendTimeline', 'contextDepth', 'sendCharacters', 'sendItems',
+    'sendLocationMemory', 'sendRelationships', 'sendMood',
+    'antiParaphraseMode', 'sideplayMode',
+    'aiScanIncludeNpc', 'aiScanIncludeAffection', 'aiScanIncludeScene', 'aiScanIncludeRelationship',
+    'rpgMode', 'sendRpgBars', 'sendRpgSkills', 'sendRpgAttributes', 'sendRpgReputation',
+    'sendRpgEquipment', 'sendRpgLevel', 'sendRpgCurrency', 'sendRpgStronghold', 'rpgDiceEnabled',
+    'rpgStrictPresentOnly', 'rpgBarsUserOnly', 'rpgSkillsUserOnly', 'rpgAttrsUserOnly', 'rpgReputationUserOnly',
+    'rpgEquipmentUserOnly', 'rpgLevelUserOnly', 'rpgCurrencyUserOnly', 'rpgUserOnly',
+    'rpgBarConfig', 'rpgAttributeConfig', 'rpgAttrViewMode', 'equipmentTemplates',
+    'autoSummaryEnabled', 'autoSummaryKeepRecent', 'autoSummarySourceMode',
+    'autoSummaryBufferMode', 'autoSummaryBufferMsgLimit', 'autoSummaryBufferTokenLimit',
+    'autoSummaryResummaryThreshold', 'autoSummaryResummaryMinChars',
+    'autoSummaryBatchMaxMsgs', 'autoSummaryBatchMaxTokens',
+    'cardProfileMode',
+    ...PROMPT_SETTING_KEYS,
 ];
 
 // ============================================
@@ -13773,31 +13801,8 @@ function initSettingsEvents() {
     });
 
     // ── Horae 全局配置 导出/导入/重置 ──
-    const _SETTINGS_EXPORT_KEYS = [
-        'enabled', 'autoParse', 'autoFillPrevTimelineOnSend', 'injectContext', 'useMainPresetForAiTasks', 'showMessagePanel', 'showTopIcon',
-        'injectionDepthSource', 'injectionPosition', 'timelineInjectionMode',
-        'sendTimeline', 'contextDepth', 'sendCharacters', 'sendItems',
-        'sendLocationMemory', 'sendRelationships', 'sendMood',
-        'antiParaphraseMode', 'sideplayMode',
-        'aiScanIncludeNpc', 'aiScanIncludeAffection', 'aiScanIncludeScene', 'aiScanIncludeRelationship',
-        'rpgMode', 'sendRpgBars', 'sendRpgSkills', 'sendRpgAttributes', 'sendRpgReputation',
-        'sendRpgEquipment', 'sendRpgLevel', 'sendRpgCurrency', 'sendRpgStronghold', 'rpgDiceEnabled',
-        'rpgStrictPresentOnly', 'rpgBarsUserOnly', 'rpgSkillsUserOnly', 'rpgAttrsUserOnly', 'rpgReputationUserOnly',
-        'rpgEquipmentUserOnly', 'rpgLevelUserOnly', 'rpgCurrencyUserOnly', 'rpgUserOnly',
-        'rpgBarConfig', 'rpgAttributeConfig', 'rpgAttrViewMode', 'equipmentTemplates',
-        // 自动总结：之前漏掉，导致「恢复默认」无法重置自动总结开关与相关阈值
-        'autoSummaryEnabled', 'autoSummaryKeepRecent', 'autoSummarySourceMode',
-        'autoSummaryBufferMode', 'autoSummaryBufferMsgLimit', 'autoSummaryBufferTokenLimit',
-        'autoSummaryResummaryThreshold', 'autoSummaryResummaryMinChars',
-        'autoSummaryBatchMaxMsgs', 'autoSummaryBatchMaxTokens',
-        ..._PRESET_PROMPT_KEYS,
-    ];
-
     $('#horae-settings-export').on('click', () => {
-        const payload = {};
-        for (const k of _SETTINGS_EXPORT_KEYS) {
-            if (settings[k] !== undefined) payload[k] = JSON.parse(JSON.stringify(settings[k]));
-        }
+        const payload = _collectSettingsPayload();
         const data = { type: 'horae-settings', version: VERSION, settings: payload };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const a = document.createElement('a');
@@ -13822,31 +13827,15 @@ function initSettingsEvents() {
                     showToast(t('toast.invalidFile'), 'error');
                     return;
                 }
-                const imported = data.settings;
-                const keys = Object.keys(imported).filter(k => _SETTINGS_EXPORT_KEYS.includes(k));
-                if (keys.length === 0) {
+                const filtered = _filterSettingsPayload(data.settings);
+                const keyCount = Object.keys(filtered).length;
+                if (keyCount === 0) {
                     showToast(t('toast.invalidFile'), 'warning');
                     return;
                 }
-                if (!confirm(t('confirm.importSettings', { n: keys.length }))) return;
-                for (const k of keys) {
-                    settings[k] = JSON.parse(JSON.stringify(imported[k]));
-                }
-                _normalizeAutoSummarySettingsInPlace(imported);
-                _normalizePromptSettingsInPlace();
-                _normalizeVectorRecallPresetsInPlace();
-                _migrateLegacyVectorSettings(settings);
-                _ensureLocalizedRpgDefaults();
-                _normalizeRpgSettingsInPlace();
-                await ensurePromptDefaults(detectEffectiveAiLang(settings));
-                saveSettings();
-                syncSettingsToUI();
-                try { renderBarConfig(); } catch (_) { }
-                try { renderAttrConfig(); } catch (_) { }
-                horaeManager.init(getContext(), settings);
-                _refreshSystemPromptDisplay();
-                updateTokenCounter();
-                showToast(t('toast.settingsImported', { n: keys.length }), 'success');
+                if (!confirm(t('confirm.importSettings', { n: keyCount }))) return;
+                const n = await _applySettingsPayload(filtered);
+                showToast(t('toast.settingsImported', { n }), 'success');
             } catch (err) {
                 console.error('[Horae] 导入配置失败:', err);
                 showToast(t('toast.importFailed', { error: err.message }), 'error');
@@ -13872,6 +13861,74 @@ function initSettingsEvents() {
         updateTokenCounter();
         showToast(t('toast.settingsRestored'), 'success');
     });
+
+    // ── 角色卡设置档（Card Profile）──
+    $('#horae-cardprofile-save').on('click', async () => {
+        const ctx = getContext();
+        if (ctx?.characterId == null) {
+            showToast(t('toast.cardProfileNoCard'), 'warning');
+            return;
+        }
+        const charName = ctx.characters?.[ctx.characterId]?.name || '';
+        if (!confirm(t('confirm.cardProfileSave', { name: charName }))) return;
+        const payload = _collectSettingsPayload();
+        const ok = await _writeCardProfile(payload);
+        if (ok) {
+            // 写入后无需手动 dismiss：当下 settings 与 profile 一致，差异检测自然不会弹窗；
+            // 旧逻辑会把当前 savedAt 加入忽略表，导致从其他卡切回来时即使 settings 已被覆盖也不再提示
+            showToast(t('toast.cardProfileSaved', { name: charName }), 'success');
+        } else {
+            showToast(t('toast.cardProfileSaveFailed'), 'error');
+        }
+        _refreshCardProfileBanner();
+    });
+
+    $('#horae-cardprofile-load').on('click', async () => {
+        const r = _readCardProfile();
+        if (!r.ok) {
+            showToast(t(r.reason === 'noCard' ? 'toast.cardProfileNoCard' : 'toast.cardProfileNotFound'), 'warning');
+            return;
+        }
+        if (!confirm(t('confirm.cardProfileLoad', { name: r.charName }))) return;
+        try {
+            _isApplyingCardProfile = true;
+            const n = await _applySettingsPayload(r.profile.settings);
+            showToast(t('toast.cardProfileLoaded', { n }), 'success');
+        } catch (err) {
+            console.error('[Horae] 套用设置档失败:', err);
+            showToast(t('toast.importFailed', { error: err.message }), 'error');
+        } finally {
+            _isApplyingCardProfile = false;
+            _refreshCardProfileBanner();
+        }
+    });
+
+    $('#horae-cardprofile-unbind').on('click', async () => {
+        const ctx = getContext();
+        if (ctx?.characterId == null) {
+            showToast(t('toast.cardProfileNoCard'), 'warning');
+            return;
+        }
+        if (!confirm(t('confirm.cardProfileUnbind'))) return;
+        const ok = await _clearCardProfile();
+        // 顺手清理对应 avatar 的忽略指纹，避免下次重存又被忽略
+        const avatar = ctx.characters?.[ctx.characterId]?.avatar;
+        if (avatar && settings._cardProfileHintDismissed?.[avatar]) {
+            delete settings._cardProfileHintDismissed[avatar];
+            saveSettings();
+        }
+        showToast(t(ok ? 'toast.cardProfileCleared' : 'toast.cardProfileClearFailed'), ok ? 'success' : 'warning');
+        _refreshCardProfileBanner();
+    });
+
+    $('#horae-cardprofile-mode').on('change', function () {
+        const v = String(this.value || '');
+        settings.cardProfileMode = ['', 'ask', 'auto', 'badge', 'never'].includes(v) ? v : '';
+        saveSettings();
+        _refreshCardProfileBanner();
+    });
+
+    _refreshCardProfileBanner();
 
     $('#horae-btn-agenda-select-all').on('click', selectAllAgenda);
     $('#horae-btn-agenda-delete').on('click', deleteSelectedAgenda);
@@ -14977,6 +15034,378 @@ function _sanitizeInheritedThemes(themes) {
     });
 }
 
+// ============================================
+// 配置档：导出/导入/角色卡同步
+// ============================================
+
+let _cardProfilePromptOpen = false;
+let _lastCardProfileCheckedAt = 0;
+let _isApplyingCardProfile = false;
+const CARD_PROFILE_DEBOUNCE_MS = 1500;
+
+function _collectSettingsPayload() {
+    const payload = {};
+    for (const k of _SETTINGS_EXPORT_KEYS) {
+        if (settings[k] !== undefined) payload[k] = JSON.parse(JSON.stringify(settings[k]));
+    }
+    return payload;
+}
+
+function _filterSettingsPayload(raw) {
+    const out = {};
+    if (!raw || typeof raw !== 'object') return out;
+    for (const k of Object.keys(raw)) {
+        if (_SETTINGS_EXPORT_KEYS.includes(k)) out[k] = raw[k];
+    }
+    return out;
+}
+
+// 套用一份打包好的设置。设置档与全局导入共用同一条规范化链路。
+async function _applySettingsPayload(payload, opts = {}) {
+    const filtered = _filterSettingsPayload(payload);
+    const keys = Object.keys(filtered);
+    if (keys.length === 0) return 0;
+
+    for (const k of keys) {
+        settings[k] = JSON.parse(JSON.stringify(filtered[k]));
+    }
+    _normalizeAutoSummarySettingsInPlace(filtered);
+    _normalizePromptSettingsInPlace();
+    _normalizeVectorRecallPresetsInPlace();
+    _migrateLegacyVectorSettings(settings);
+    _ensureLocalizedRpgDefaults();
+    _normalizeRpgSettingsInPlace();
+    await ensurePromptDefaults(detectEffectiveAiLang(settings));
+
+    if (!opts.skipSave) saveSettings();
+    if (!opts.skipUI) {
+        try { syncSettingsToUI(); } catch (_) { }
+        try { renderBarConfig(); } catch (_) { }
+        try { renderAttrConfig(); } catch (_) { }
+        try { horaeManager.init(getContext(), settings); } catch (_) { }
+        try { _refreshSystemPromptDisplay(); } catch (_) { }
+        try { updateTokenCounter(); } catch (_) { }
+    }
+    return keys.length;
+}
+
+// 比较两个 payload，返回有差异的字段列表
+function _diffSettingsPayload(payload) {
+    const changed = [];
+    if (!payload || typeof payload !== 'object') return { changed };
+    for (const k of Object.keys(payload)) {
+        if (!_SETTINGS_EXPORT_KEYS.includes(k)) continue;
+        const a = JSON.stringify(payload[k]);
+        const b = JSON.stringify(settings[k]);
+        if (a !== b) {
+            changed.push({ key: k, before: settings[k], after: payload[k] });
+        }
+    }
+    return { changed };
+}
+
+function _hasSettingsDifferences(payload) {
+    return _diffSettingsPayload(payload).changed.length > 0;
+}
+
+// ── 角色卡 I/O ──
+function _readCardProfile() {
+    const ctx = getContext();
+    const charId = ctx?.characterId;
+    if (charId == null) return { ok: false, reason: 'noCard' };
+    const char = ctx.characters?.[charId];
+    if (!char?.avatar) return { ok: false, reason: 'noCard', charId };
+    const profile = char?.data?.extensions?.horae?.profile;
+    // 严格校验：避免空对象 / 历史脏数据被当成有效档
+    if (
+        !profile ||
+        typeof profile !== 'object' ||
+        !profile.settings ||
+        typeof profile.settings !== 'object' ||
+        !Object.keys(profile.settings).length ||
+        typeof profile.savedAt !== 'string' ||
+        !profile.savedAt
+    ) {
+        return { ok: false, reason: 'noProfile', charId, avatar: char.avatar };
+    }
+    const charName = char.name || char.data?.name || '';
+    return { ok: true, profile, charId, avatar: char.avatar, charName };
+}
+
+async function _writeCardProfile(payload) {
+    const ctx = getContext();
+    const charId = ctx?.characterId;
+    if (charId == null) return false;
+    const char = ctx.characters?.[charId];
+    if (!char?.data || !char.avatar) return false;
+
+    const charData = char.data;
+    if (!charData.extensions) charData.extensions = {};
+    if (!charData.extensions.horae) charData.extensions.horae = {};
+
+    const profile = {
+        version: VERSION,
+        savedAt: new Date().toISOString(),
+        settings: payload,
+    };
+    charData.extensions.horae.profile = profile;
+
+    try {
+        const resp = await fetch('/api/characters/merge-attributes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                avatar: char.avatar,
+                data: { extensions: { horae: { profile } } },
+            }),
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return true;
+    } catch (err) {
+        console.warn('[Horae] 写入角色卡设置档失败:', err);
+        return false;
+    }
+}
+
+async function _clearCardProfile() {
+    const ctx = getContext();
+    const charId = ctx?.characterId;
+    if (charId == null) return false;
+    const char = ctx.characters?.[charId];
+    if (!char?.data?.extensions?.horae?.profile) return false;
+
+    delete char.data.extensions.horae.profile;
+    try {
+        const resp = await fetch('/api/characters/merge-attributes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                avatar: char.avatar,
+                data: { extensions: { horae: { profile: null } } },
+            }),
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return true;
+    } catch (err) {
+        console.warn('[Horae] 清除角色卡设置档失败:', err);
+        return false;
+    }
+}
+
+function _dismissCardProfileHint(avatar, savedAt) {
+    if (!avatar) return;
+    if (!settings._cardProfileHintDismissed) settings._cardProfileHintDismissed = {};
+    settings._cardProfileHintDismissed[avatar] = savedAt || '';
+    saveSettings();
+}
+
+// 切卡触发：根据 cardProfileMode 决定弹窗 / 静默套用 / 仅徽章
+async function _maybeSuggestCardProfile() {
+    if (!settings.enabled) return;
+    if (_cardProfilePromptOpen || _isApplyingCardProfile) return;
+    const mode = settings.cardProfileMode || '';
+    // 未设定 / 不处理：完全跳过自动检测，banner / 红点也保持隐藏
+    if (!mode || mode === 'never') {
+        _refreshCardProfileBanner();
+        return;
+    }
+    // 后续 mode 为 ask/auto/badge 才走差异检测
+
+    const now = Date.now();
+    if (now - _lastCardProfileCheckedAt < CARD_PROFILE_DEBOUNCE_MS) return;
+    _lastCardProfileCheckedAt = now;
+
+    const result = _readCardProfile();
+    if (!result.ok) {
+        _refreshCardProfileBanner({ has: false });
+        return;
+    }
+    if (!_hasSettingsDifferences(result.profile.settings)) {
+        _refreshCardProfileBanner({ has: true, applied: true, name: result.charName });
+        return;
+    }
+
+    const dismissedAt = settings._cardProfileHintDismissed?.[result.avatar];
+    if (dismissedAt && dismissedAt === result.profile.savedAt) {
+        _refreshCardProfileBanner({ has: true, applied: false, name: result.charName, suppressed: true });
+        return;
+    }
+
+    if (mode === 'auto') {
+        try {
+            _isApplyingCardProfile = true;
+            const n = await _applySettingsPayload(result.profile.settings);
+            showToast(t('toast.cardProfileAutoApplied', { n }), 'success');
+        } finally {
+            _isApplyingCardProfile = false;
+        }
+        _refreshCardProfileBanner({ has: true, applied: true, name: result.charName });
+        return;
+    }
+    if (mode === 'badge') {
+        _refreshCardProfileBanner({ has: true, applied: false, name: result.charName });
+        return;
+    }
+    _showCardProfileSuggestModal(result.profile, result.avatar, result.charName);
+}
+
+// 用 horae-cardprofile-* 命名空间，所有属性显式覆盖以隔离酒馆全局美化
+function _showCardProfileSuggestModal(profile, avatar, cardName) {
+    if (document.getElementById('horae-cardprofile-modal')) return;
+    _cardProfilePromptOpen = true;
+
+    const diff = _diffSettingsPayload(profile.settings);
+    const diffHtml = _renderCardProfileDiffHtml(diff);
+    const time = (() => {
+        try { return new Date(profile.savedAt).toLocaleString(); }
+        catch (_) { return profile.savedAt || ''; }
+    })();
+
+    const html = `
+        <div id="horae-cardprofile-modal" class="horae-modal horae-cardprofile-modal${isLightMode() ? ' horae-light' : ''}">
+            <div class="horae-modal-content horae-cardprofile-content">
+                <div class="horae-modal-header">
+                    <i class="fa-solid fa-id-card"></i> ${escapeHtml(t('settings.cardProfileSuggestTitle'))}
+                </div>
+                <div class="horae-modal-body horae-cardprofile-body">
+                    <p class="horae-cardprofile-intro">${t('settings.cardProfileSuggestIntro', { name: escapeHtml(cardName), time: escapeHtml(time) })}</p>
+                    <div class="horae-cardprofile-diff">
+                        <div class="horae-cardprofile-diff-title">${escapeHtml(t('settings.cardProfileDiffTitle', { n: diff.changed.length }))}</div>
+                        ${diffHtml}
+                    </div>
+                    <p class="horae-cardprofile-hint">
+                        <i class="fa-solid fa-shield-halved"></i> ${escapeHtml(t('settings.cardProfileSuggestSafe'))}
+                    </p>
+                </div>
+                <div class="horae-modal-footer horae-cardprofile-footer">
+                    <button id="horae-cardprofile-apply" class="horae-btn primary">
+                        <i class="fa-solid fa-check"></i> ${escapeHtml(t('settings.cardProfileApply'))}
+                    </button>
+                    <button id="horae-cardprofile-skip" class="horae-btn">
+                        ${escapeHtml(t('settings.cardProfileSkipOnce'))}
+                    </button>
+                    <button id="horae-cardprofile-dismiss" class="horae-btn horae-cardprofile-dismiss">
+                        ${escapeHtml(t('settings.cardProfileDismissThisVersion'))}
+                    </button>
+                </div>
+            </div>
+        </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+    const modal = document.getElementById('horae-cardprofile-modal');
+    preventModalBubble(modal);
+
+    const close = () => {
+        _cardProfilePromptOpen = false;
+        modal?.remove();
+        _refreshCardProfileBanner();
+    };
+
+    modal.addEventListener('click', (e) => {
+        if (e.target.id === 'horae-cardprofile-modal') close();
+    });
+    document.getElementById('horae-cardprofile-skip').addEventListener('click', (e) => {
+        e.stopPropagation();
+        close();
+    });
+    document.getElementById('horae-cardprofile-dismiss').addEventListener('click', (e) => {
+        e.stopPropagation();
+        _dismissCardProfileHint(avatar, profile.savedAt);
+        close();
+    });
+    document.getElementById('horae-cardprofile-apply').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+            _isApplyingCardProfile = true;
+            const n = await _applySettingsPayload(profile.settings);
+            showToast(t('toast.cardProfileLoaded', { n }), 'success');
+        } catch (err) {
+            console.error('[Horae] 套用设置档失败:', err);
+            showToast(t('toast.importFailed', { error: err.message }), 'error');
+        } finally {
+            _isApplyingCardProfile = false;
+            close();
+        }
+    });
+}
+
+// 把 diff 渲染成可读列表。布尔翻转用 ✓/✗，其他类别只描述会被替换
+function _renderCardProfileDiffHtml(diff) {
+    if (!diff.changed.length) {
+        return `<div class="horae-cardprofile-diff-empty">${escapeHtml(t('settings.cardProfileDiffNone'))}</div>`;
+    }
+    const MAX = 12;
+    const lines = diff.changed.slice(0, MAX).map(d => {
+        const label = _humanSettingLabel(d.key);
+        if (typeof d.after === 'boolean') {
+            const cls = d.after ? 'on' : 'off';
+            const verb = d.after ? t('settings.cardProfileEnable') : t('settings.cardProfileDisable');
+            const sym = d.after ? '✓' : '✗';
+            return `<li class="horae-cardprofile-diff-item ${cls}"><span class="horae-cardprofile-diff-sym">${sym}</span>${escapeHtml(verb)} ${escapeHtml(label)}</li>`;
+        }
+        if (Array.isArray(d.after)) {
+            const tail = ` (${d.after.length})`;
+            return `<li class="horae-cardprofile-diff-item replace"><span class="horae-cardprofile-diff-sym">↻</span>${escapeHtml(label)}${tail}</li>`;
+        }
+        if (typeof d.after === 'string' && d.after.length > 24) {
+            const tail = ` (${d.after.length} ${t('settings.cardProfileChars')})`;
+            return `<li class="horae-cardprofile-diff-item replace"><span class="horae-cardprofile-diff-sym">↻</span>${escapeHtml(label)}${tail}</li>`;
+        }
+        return `<li class="horae-cardprofile-diff-item replace"><span class="horae-cardprofile-diff-sym">↻</span>${escapeHtml(label)}</li>`;
+    });
+    const overflow = diff.changed.length > MAX
+        ? `<li class="horae-cardprofile-diff-more">${escapeHtml(t('settings.cardProfileDiffMore', { n: diff.changed.length - MAX }))}</li>`
+        : '';
+    return `<ul class="horae-cardprofile-diff-list">${lines.join('')}${overflow}</ul>`;
+}
+
+// 字段名 → 人类可读标签。命中 i18n 就用 i18n，否则回退原 key
+function _humanSettingLabel(key) {
+    const tryKey = `settingKeys.${key}`;
+    const localized = t(tryKey);
+    if (localized && localized !== tryKey) return localized;
+    return key;
+}
+
+// 仅刷新面板内 status 文字 + 抽屉图标红点（mode=badge 时亮起）
+function _refreshCardProfileBanner(state = null) {
+    const status = document.getElementById('horae-cardprofile-status');
+    const drawerIcon = document.getElementById('horae_drawer_icon');
+
+    let info = state;
+    if (!info) {
+        const r = _readCardProfile();
+        if (!r.ok) info = { has: false };
+        else {
+            const diff = _hasSettingsDifferences(r.profile.settings);
+            const dismissedAt = settings._cardProfileHintDismissed?.[r.avatar];
+            const suppressed = dismissedAt && dismissedAt === r.profile.savedAt;
+            info = { has: true, applied: !diff, name: r.charName, suppressed };
+        }
+    }
+
+    const mode = settings.cardProfileMode || '';
+    const silent = !mode || mode === 'never';
+
+    if (status) {
+        let text = '';
+        if (!info.has) text = t('settings.cardProfileStatusNone');
+        else if (info.applied) text = t('settings.cardProfileStatusApplied');
+        else if (info.suppressed) text = t('settings.cardProfileStatusSuppressed');
+        else text = t('settings.cardProfileStatusPending');
+        status.textContent = text;
+        status.dataset.cardProfileState = info.has
+            ? (info.applied ? 'applied' : (info.suppressed ? 'suppressed' : 'pending'))
+            : 'none';
+    }
+    if (drawerIcon) {
+        if (!silent && info.has && !info.applied && !info.suppressed) {
+            drawerIcon.classList.add('horae-cardprofile-has-update');
+        } else {
+            drawerIcon.classList.remove('horae-cardprofile-has-update');
+        }
+    }
+}
+
 function _applyExternalSettings(raw) {
     settings = { ...DEFAULT_SETTINGS, ...raw };
     if (Array.isArray(settings.customThemes)) {
@@ -15381,6 +15810,7 @@ function syncSettingsToUI() {
     $('#horae-setting-auto-fill-prev-timeline').prop('checked', settings.autoFillPrevTimelineOnSend === true);
     $('#horae-setting-inject-context').prop('checked', settings.injectContext);
     $('#horae-setting-use-main-preset').prop('checked', !!settings.useMainPresetForAiTasks);
+    $('#horae-cardprofile-mode').val(settings.cardProfileMode ?? '');
     $('#horae-setting-show-panel').prop('checked', settings.showMessagePanel);
     $('#horae-setting-show-top-icon').prop('checked', settings.showTopIcon !== false);
     $('#horae-ext-show-top-icon').prop('checked', settings.showTopIcon !== false);
@@ -20795,8 +21225,12 @@ async function onChatChanged() {
                 const count = _pending.msgIndices.length;
                 setTimeout(() => _showPendingScanRecoveryModal(_pChat, _pending, count), 1000);
             }
-            // 跟 pending-scan 错开，避免两个弹窗叠在一起
-            setTimeout(() => _maybeSuggestCustomCalendar(), 2200);
+            setTimeout(() => {
+                try { _maybeSuggestCardProfile(); }
+                catch (err) { console.warn('[Horae] 卡片设置档检测失败:', err); }
+            }, 1500);
+            // 跟 pending-scan / cardprofile 错开，避免多个弹窗叠在一起
+            setTimeout(() => _maybeSuggestCustomCalendar(), 2400);
         } catch (err) {
             console.error('[Horae] onChatChanged 面板渲染失败:', err);
         }
